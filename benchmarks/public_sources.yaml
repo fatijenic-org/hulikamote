@@ -1,0 +1,482 @@
+# Public clips / datasets that other studies used to test traffic-violation systems (research done 2026-10-29: each page was opened and read).
+# Fetch them with:   python tools/benchmark/fetch_public_clips.py --list        (see the top of that script for every option)
+#
+# EVALUATION ONLY. Never train on these and keep them out of training_lab/datasets/, or the test stops being honest.
+# Licences are mostly NON-COMMERCIAL: fine for a thesis, credit the authors, do not redistribute. Sizes and licences are read again
+# from the host at run time (--dry-run shows them without downloading).
+#
+# Per source:  id, title, kind (video | images | mixed), camera, violations (keys of the 20), has, caveat, license, page,
+#              host (http | hf | osf | mendeley | zenodo | figshare | kaggle | roboflow | manual), tier (small | medium | large | huge | manual),
+#              ready (folder name under ready/: <origin>__<violations>), default (true = part of the lean core set a plain run downloads, with sample files only), + the host's own fields (see the script).
+#
+# Not every violation can be tested with public data. `--coverage` says which can, which can use ANY fixed-camera clip (a zone rule
+# is defined by the zone you draw), and which need your own footage (benchmarks/CLIP_CHECKLIST.md).
+
+sources:
+  - id: idiap_traffic_junction
+    ready: idiap-junction__red-light_pedestrian-lane_blocking-intersection
+    title: "IDIAP Traffic Junction (Varadarajan and Odobez, 2009)"
+    kind: video
+    camera: "fixed junction camera, 360x288 at 25 fps, 44 minutes"
+    violations: [red_light, pedestrian_lane, blocking_intersection]
+    has: "One signalised junction. Annotated rare events: a vehicle stopping after the stop line, a car entering the pedestrian area, people crossing away from the zebra."
+    caveat: "Old, low-resolution footage. The labels are 'abnormal event' labels, not our violation definitions."
+    license: "Non-commercial research only. Cite: Varadarajan and Odobez, Topic Models for Scene Analysis and Abnormality Detection, ICCV-VS 2009."
+    page: http://www.idiap.ch/~odobez/RESSOURCES/DataRelease-TrafficJunction.php
+    host: http
+    tier: small
+    default: true
+    files:
+      - {name: traffic-junction.avi, url: "http://www.idiap.ch/~odobez/RESSOURCES/TRAFFIC-JUNCTION-DATA/traffic-junction.avi"}
+      - {name: traffic-junction-sample.avi, url: "http://www.idiap.ch/~odobez/RESSOURCES/TRAFFIC-JUNCTION-DATA/traffic-junction-sample.avi"}
+      - {name: Annotations.txt, url: "http://www.idiap.ch/~odobez/RESSOURCES/TRAFFIC-JUNCTION-DATA/Annotations.txt"}
+
+  - id: atg_pvd
+    title: "ATG-PVD: ticketing parking violations on a drone"
+    kind: images
+    camera: "drone (aerial), 7 sequences, 9,322 images with 2D car boxes"
+    violations: [illegal_parking]
+    has: "Parked cars with bounding boxes for parking-violation detection, split into train and test sequences."
+    caveat: "Aerial view, not a CCTV pole camera. Boxes only: no 'violation' time labels."
+    license: "Research use (stated on the project page). Cite the ATG-PVD paper, arXiv 2008.09305."
+    page: https://sites.google.com/view/atg-pvd/dataset
+    host: manual
+    tier: manual
+    default: false
+    how: "The project page links a Google Drive file (id 1orINCQdm1vmvncZJvj5koP6brOkQ-IeQ) but on 2026-10-29 it answered 404 (removed). Ask the authors for a new link through the contact page https://sites.google.com/view/atg-pvd/contact"
+
+  - id: dhaka_helmet_triple
+    ready: dhaka-univ__no-helmet_overloading
+    title: "Traffic Rule Violation Detection Dataset, Dhaka (Mendeley Data, 2026)"
+    kind: images
+    camera: "street photos, about 1,100 raw images (4,839 with augmentation), COCO boxes"
+    violations: [no_helmet, overloading]
+    has: "Classes Rider, No_helmet, Bike, Helmet_On and Trippling (a box around a motorcycle with three or more people). Raw test split: 78 frames, 497 boxes."
+    caveat: "Still images from Bangladesh, not video. The augmented folder must NOT be used for testing (copies of training pictures)."
+    license: "CC BY-NC 4.0. Cite: Bar, Biswas, Hasan, Mithu, Ahmad, Das; University of Dhaka; DOI 10.17632/ycv2mbph4b.1"
+    page: https://data.mendeley.com/datasets/ycv2mbph4b/1
+    host: mendeley
+    dataset: ycv2mbph4b
+    version: 1
+    tier: small
+    default: true
+    extract: true
+
+  - id: ridesafe_400
+    ready: ridesafe400-dashcop-dashcam__no-helmet_overloading_no-plate
+    title: "RideSafe-400 (DashCop, WACV 2025)"
+    kind: video
+    camera: "dashcam (moving camera), 400 videos: 300 train, 50 val, 50 test"
+    violations: [no_helmet, overloading, no_plate]
+    has: "Two-wheelers with rider, motorcycle, helmet, no-helmet and plate boxes (CVAT video XML), balanced between helmet and triple-riding cases."
+    caveat: "Moving dashcam from India, not a fixed pole camera. Whole set is about 38 GB in zip parts: a plain run fetches only the notes, the annotation text files and the first video part (see sample_include)."
+    license: "CC BY-NC-SA 4.0. Cite: Rawat, Gupta, Basu Roy, Sarvadevabhatla, DashCop, WACV 2025."
+    page: https://huggingface.co/datasets/DeepBug/RideSafe-400
+    host: hf
+    repo: DeepBug/RideSafe-400
+    sample_include: ["README.md", "constructor_cvat_videoset1.txt", "vids_names_videoset1.txt", "videoset1_xml_annots_with_rider_motor_poly.zip", "videoset1_videos_part1.zip"]
+    tier: large
+    default: true            # in a plain run only the sample files above are fetched (about 4.8 GB); --only ridesafe_400 --max-gb 40 = everything
+
+  - id: helmet_myanmar
+    ready: helmet-myanmar__no-helmet_overloading
+    title: "HELMET: motorcycle helmet use on roadside video clips (Myanmar, 2020)"
+    kind: video
+    camera: "FIXED roadside cameras at 12 sites: 910 clips of 10 s (100 frames at 10 fps, 1920x1080), delivered as frames"
+    violations: [no_helmet, overloading]
+    has: "Tracked motorcycles (a track id per frame) with the helmet-use class for each rider position (driver and passengers): the nearest public match to a fixed pole camera in Southeast Asia."
+    caveat: "Frames, not mp4 (join them with ffmpeg to get a clip). The whole set is 28.9 GB in 7 zip parts; a plain run takes the annotations, the split list and the smallest part only (about 1.1 GB). No plates. Highways in Myanmar, mostly daylight."
+    license: "CC BY 4.0 (OSF project licence). Cite: the HELMET dataset, OSF osf.io/4pwj8, and its paper Detecting motorcycle helmet use with deep learning, arXiv 1910.13232."
+    page: https://osf.io/4pwj8/
+    host: osf
+    node: 4pwj8
+    sample_include: ["HELMET_DATASET/annotation.zip", "HELMET_DATASET/data_split.csv", "HELMET_DATASET/Readme.txt", "HELMET_DATASET/image/part_7.zip"]
+    tier: large
+    default: true            # a plain run fetches only the sample files above (about 1.1 GB); --only helmet_myanmar --max-gb 30 = all 7 parts
+
+  - id: wrong_way_cycling
+    ready: wwc-cattac__counterflow
+    title: "Wrong-way cycling benchmark in CCTV videos (WWC-Predictor, IEEE T-ITS)"
+    kind: video
+    camera: "fixed CCTV, 35 minutes of video with minute-level labels"
+    violations: [counterflow]
+    has: "Bicycles and e-bikes riding against the designated flow, with a labelled wrong-way ratio per minute."
+    caveat: "Bicycles and e-bikes only, not cars or motorcycles. Only final_validation.zip (4 .mov videos, 1.5 GB) is evaluation material; the repo has no per-minute label file, so the truth must come from the paper or by watching. The other zips are training data."
+    license: "Apache-2.0 on the Hugging Face dataset card (the code repository is BSD-3-Clause). Cite: Xu et al., Fast Wrong-way Cycling Detection in CCTV Videos, IEEE T-ITS."
+    page: https://huggingface.co/datasets/CATTAC/wrong-way-cycling
+    host: hf
+    repo: CATTAC/wrong-way-cycling
+    include: ["README.md", "final_validation.zip"]      # the other two zips are TRAINING data (detection_data, orientation_data): not fetched
+    tier: small
+    default: true
+
+  - id: zigzag_cadiz
+    ready: cadiz-sequences__swerving
+    title: "Risky-driving sequences with a zigzag class (Universidad de Cadiz, Zenodo)"
+    kind: images
+    camera: "434 vehicle-level sequences of 20 frames, 160x160, from 94 source videos"
+    violations: [swerving]
+    has: "Labels: normal driving, brake check, cut off, hard braking, zigzag."
+    caveat: "Only 4 zigzag sequences and tiny frames: a sanity check for swerving, not a benchmark."
+    license: "CC BY 4.0. Zenodo DOI 10.5281/zenodo.21427132 (record number = the DOI suffix; checked at run time)."
+    page: https://doi.org/10.5281/zenodo.21427132
+    host: zenodo
+    record: "21427132"
+    tier: small
+    default: true
+
+  - id: medellin_pedestrian_cctv
+    ready: medellin-cctv__sidewalk-driving_pedestrian-lane
+    title: "Dataset for Detecting Motorcyclists in Pedestrian Areas (Medellin CCTV, Zenodo 2023)"
+    kind: images
+    camera: "6,324 HD (1280x720) frames from about 80 FIXED public traffic cameras in Medellin, Colombia, mostly daylight"
+    violations: [sidewalk_driving, pedestrian_lane]
+    has: "Boxes for four classes: motorcycle with rider in a pedestrian area, motorcycle with rider outside one, motorcycle without rider in one, pedestrian in a crosswalk."
+    caveat: "Still frames (no time), Colombian streets, riders are not boxed separately. The closest public match for a motorcycle on the sidewalk; good for the detection part of the rule, not for timing."
+    license: "CC BY 4.0. Cite: the Medellin pedestrian-area dataset, Zenodo record 7935298 (Data in Brief 2023)."
+    page: https://zenodo.org/records/7935298
+    host: zenodo
+    record: "7935298"
+    tier: small
+    default: true
+
+  - id: inatrc_toll_trucks
+    ready: inatrc-toll-road__truck-ban
+    title: "InaTRC: Indonesia Toll Road Vehicle Classification (Mendeley Data)"
+    kind: images
+    camera: "3,250 fixed CCTV images (YOLO labels) from Indonesian toll roads, 2022"
+    violations: [truck_ban]
+    has: "Vehicles in five toll classes: non-truck vehicles (cars, pick-ups, minibuses, buses) and trucks by axle count."
+    caveat: "Stills, not video, and no lane-restriction labels. It tests whether trucks are told apart from other vehicles on a fixed camera, which is the detection half of truck_ban."
+    license: "CC BY 4.0. Cite: InaTRC, Mendeley Data, DOI 10.17632/kddgphck3b.1"
+    page: https://data.mendeley.com/datasets/kddgphck3b/1
+    host: mendeley
+    dataset: kddgphck3b
+    version: 1
+    tier: small
+    default: true
+    extract: true
+
+  - id: htv_highway
+    title: "Highway Traffic Videos Dataset (Kaggle, CC0)"
+    kind: video
+    camera: "254 fixed highway clips (AVI), about 60 MB"
+    violations: [counterflow, truck_ban]
+    has: "Ordinary highway traffic in light and heavy flow."
+    caveat: "No violations. Use it as normal-traffic negatives: any counterflow ticket here is a false alarm, and it is a quick source for the 60 s the learned-flow mode needs. For truck_ban, check by eye which clips show trucks (not verified), then draw the banned lane over them. Needs your own Kaggle login, so it is not in a plain run."
+    license: "CC0 (public domain)."
+    page: https://www.kaggle.com/datasets/aryashah2k/highway-traffic-videos-dataset
+    host: kaggle
+    slug: aryashah2k/highway-traffic-videos-dataset
+    tier: small
+    default: false
+
+  - id: meteor
+    ready: meteor-india-dashcam__swerving_red-light_counterflow
+    title: "METEOR: dense, heterogeneous, unstructured traffic with rare behaviours (India)"
+    kind: video
+    camera: "dashcam, more than 1,000 one-minute clips, about 93 GB in 5 split chunks"
+    violations: [swerving, red_light, counterflow]
+    has: "Mixed Indian traffic (autorickshaws and similar, close to our tricycles) with labelled behaviours: cut-ins, overtaking, zigzagging, rule-breaking such as running signals."
+    caveat: "Huge. The chunks are one split archive: all five are needed. Dashcam, behaviour labels, not our definitions."
+    license: "CC BY-NC-SA 4.0 on the project page (the Hugging Face card says MIT: use the stricter one). Cite: Chandra et al., METEOR, ICRA 2023."
+    page: https://gamma.umd.edu/researchdirections/autonomousdriving/meteor
+    host: hf
+    repo: XijunWang/METEOR
+    tier: huge
+    default: false
+
+  - id: wrong_way_driving_rf
+    title: "wrong-way-driving-detection (Roboflow Universe)"
+    kind: images
+    camera: "images, size and source not described on the page"
+    violations: [counterflow]
+    has: "Labelled wrong-way driving pictures."
+    caveat: "No project description: look at the labels before using it. Needs your own Roboflow key."
+    license: "CC BY 4.0 (as listed)."
+    page: https://universe.roboflow.com/imageprocessingworkspace/wrong-way-driving-detection-3hzo7
+    host: roboflow
+    workspace: imageprocessingworkspace
+    project: wrong-way-driving-detection-3hzo7
+    tier: small
+    default: false
+
+  - id: triple_riding_rf
+    title: "triple riding detection 3 class (Roboflow Universe)"
+    kind: images
+    camera: "images, size not described"
+    violations: [overloading]
+    has: "Classes person_1, person_2, person_more_2."
+    caveat: "No description; check labels. Needs your own Roboflow key."
+    license: "As listed on the page (read it before use)."
+    page: https://universe.roboflow.com/krokky/triple-riding-detection-3-class
+    host: roboflow
+    workspace: krokky
+    project: triple-riding-detection-3-class
+    tier: small
+    default: false
+
+  - id: seatbelt_rf
+    title: "Seatbelt-detection (Roboflow Universe)"
+    kind: images
+    camera: "1,186 images (version 1)"
+    violations: [no_seatbelt]
+    has: "People with and without a seatbelt."
+    caveat: "Close-up cabin photos, probably not a road camera view. Needs your own Roboflow key."
+    license: "CC BY 4.0 (as listed)."
+    page: https://universe.roboflow.com/recommendationsystemlivecamerafeed/seatbelt-detection-4plfy
+    host: roboflow
+    workspace: recommendationsystemlivecamerafeed
+    project: seatbelt-detection-4plfy
+    tier: small
+    default: false
+
+  # ---- not downloadable by a script: the script prints how to get each one ----
+  - id: runningredlight_vn
+    title: "Red-light running videos, Vietnam (RunningRedlight, 2022)"
+    kind: video
+    camera: "108 traffic videos from three intersections, 628 red-light-running vehicles"
+    violations: [red_light]
+    has: "The only public red-light-running video set found that is built for this violation."
+    caveat: "Hosted as a Google Drive FOLDER (a folder cannot be fetched by a plain script). Licence not stated."
+    license: "Not stated: ask the authors before reuse beyond testing."
+    page: https://github.com/namnv78/RunningRedlight
+    host: manual
+    tier: manual
+    default: false
+    how: "Open the Google Drive folder linked in the repository README (https://drive.google.com/drive/folders/1fbfE1pcY46cFzlx1Q-uBxoST-CFds6Ur), download it, and put the files in benchmarks/public_clips/runningredlight_vn/. Or in a separate Python (NOT the backend venv): pip install gdown, then gdown --folder <that link>."
+
+  - id: tld_tail_lights
+    title: "TLD: vehicle tail-light (brake and turn signal) dataset"
+    kind: video
+    camera: "17.8 hours of driving videos from the internet, 152k labelled frames"
+    violations: [signal_light]
+    has: "Brake lights and turn signals annotated separately."
+    caveat: "About 64 GB and GATED: you must log in to Hugging Face and accept the terms. Cars, not motorcycles."
+    license: "See the dataset card after accepting the terms."
+    page: https://huggingface.co/datasets/ChaiJohn/TLD
+    host: manual
+    tier: manual
+    default: false
+    how: "Log in on Hugging Face, accept the terms on the page, then download only the zip you need (TLD-LOKI.zip is 11.7 GB) with your own account."
+
+  - id: ai_city_helmet
+    title: "AI City Challenge 2023 / 2024 Track 5: helmet-rule violations"
+    kind: video
+    camera: "traffic cameras in India (2023: 100 training videos)"
+    violations: [no_helmet, overloading]
+    has: "Motorcycle riders and passengers with and without helmets (driver and up to two passengers)."
+    caveat: "Needs registration with the challenge organisers and acceptance of their terms."
+    license: "Challenge terms."
+    page: https://www.aicitychallenge.org/
+    host: manual
+    tier: manual
+    default: false
+    how: "Register on the AI City Challenge site, accept the data terms, download Track 5. Never upload it elsewhere."
+
+  - id: sps_malaysia_2021
+    title: "IEEE SPS Signal and Image Processing Challenge Malaysia 2021"
+    kind: video
+    camera: "21 dashcam videos compiled from a YouTube channel, temporally annotated"
+    violations: [illegal_u_turn, illegal_turn]
+    has: "Events such as a U-turn where it is not allowed, wrong lane, sudden lane change, illegal crossing."
+    caveat: "Access and licence not confirmed (YouTube-sourced): read the challenge page first."
+    license: "Check the challenge page."
+    page: https://sps.ieeemy.org/sipc/
+    host: manual
+    tier: manual
+    default: false
+    how: "Open the page, follow its data link if it is still online, and respect the YouTube terms."
+
+  # ---- added 2026-11-03 (second scouting pass: Zenodo, Figshare and Hugging Face APIs searched, each record opened and read) ----
+  - id: peshawar_roundabout_wrongturn
+    ready: peshawar-roundabout__illegal-turn_counterflow
+    title: "Annotated Dataset for Detecting Wrong-Turn Violations at Urban Roundabouts (Peshawar, Figshare)"
+    kind: images
+    camera: "roadside cameras at several roundabouts in Peshawar, Pakistan; frames taken from video ('video-pic' archives), 15.6 GB"
+    violations: [illegal_turn, counterflow]
+    has: "Cars and bikes/rickshaws with bounding boxes, plus wrong-turn violation instances at roundabouts."
+    caveat: "Frames, not video: the script keeps real consecutive frames as a clip and dissolves unrelated ones. Pakistani roundabouts, not Zamboanga."
+    license: "CC BY 4.0. Figshare article 31572715."
+    page: https://figshare.com/articles/dataset/31572715
+    host: figshare
+    article: "31572715"
+    tier: large
+    default: false
+
+  - id: motorcycle_violation_hetero
+    ready: motorcycle-violation-heterogeneous__no-helmet_overloading_no-plate
+    title: "Motorcycle Safety Violation Dataset in Heterogeneous Traffic (Figshare)"
+    kind: images
+    camera: "high-angled urban surveillance and ANPR keyframes, 1.5 GB"
+    violations: [no_helmet, overloading, no_plate]
+    has: "Helmet non-compliance and triple riding in dense scenes with occlusion; number plates blurred."
+    caveat: "Keyframes of separate events, so each photo is a spot check. Plates are blurred: not a plate-reading test."
+    license: "CC BY 4.0. Figshare article 32310867."
+    page: https://figshare.com/articles/dataset/32310867
+    host: figshare
+    article: "32310867"
+    tier: small
+    default: false
+
+  - id: keke_counting
+    ready: keke-counting__tricycle-on-highway
+    title: "Keke-Aware Vehicle Counting Dataset (Figshare)"
+    kind: images
+    camera: "roadside video frames with a keke (auto-rickshaw / tricycle) class, YOLO labels, 1.2 GB"
+    violations: [tricycle_on_highway]
+    has: "Vehicle detection and ROI counting with a dedicated tricycle class, which common benchmarks lack."
+    caveat: "Frames, no violation labels: use it for the tricycle detection half, you draw the highway zone."
+    license: "CC BY 4.0. Figshare article 31968651."
+    page: https://figshare.com/articles/dataset/31968651
+    host: figshare
+    article: "31968651"
+    tier: small
+    default: false
+
+  - id: fluid_signalized_drone
+    ready: fluid-drone-intersections__red-light_blocking-intersection
+    title: "FLUID: signalized-intersection drone dataset with dense conflicts (Figshare)"
+    kind: video
+    camera: "drone hovering over three signalized urban intersections, about 5 hours, raw videos plus trajectories and signal timings, 17.7 GB"
+    violations: [red_light, blocking_intersection]
+    has: "Traffic-light cycles and every vehicle's trajectory, so a red-light crossing or a vehicle stuck in the box can be derived."
+    caveat: "Aerial, not a pole camera. The raw videos are used as they are; the labels are trajectories, not violation tags."
+    license: "CC BY 4.0. Figshare article 29974954 (Scientific Data descriptor)."
+    page: https://figshare.com/articles/dataset/29974954
+    host: figshare
+    article: "29974954"
+    tier: large
+    default: false
+
+  - id: nancy_multiperspective
+    ready: nancy-multiperspective__zone-rules
+    title: "Multi-perspective Traffic Video Recording (NANCY project, Zenodo)"
+    kind: video
+    camera: "three scenarios, each filmed by a vehicle-mounted unit, a roadside unit and a drone facing the same area, 10 GB"
+    violations: [restricted_lane, crossing_solid_line, disregarding_signs, double_parking, illegal_loading]
+    has: "Real traffic from three angles at once: a fixed roadside view to draw zones on."
+    caveat: "No violation labels: a fixed-camera substrate for the zone rules (label the events yourself)."
+    license: "CC BY 4.0. Zenodo record 18375218."
+    page: https://zenodo.org/records/18375218
+    host: zenodo
+    record: "18375218"
+    tier: large
+    default: false
+
+  - id: avdl_latvia
+    ready: avdl-latvia-cctv__zone-rules
+    title: "Annotated Virtual Detection Line (AVDL) dataset, 50 road cameras (Latvia, Zenodo)"
+    kind: images
+    camera: "74,108 frames from 50 fixed road cameras, six classes (vehicles, trucks, pedestrians, bicycles, motorcycles, scooters), 2.3 GB"
+    violations: [restricted_lane, crossing_solid_line, disregarding_signs, double_parking, truck_ban]
+    has: "Frames from many fixed cameras in different weather, with boxes for six road-user classes."
+    caveat: "No violation labels: a fixed-camera substrate."
+    license: "CC BY 4.0. Zenodo record 6274296 (Data 2022, 7(4), 40)."
+    page: https://zenodo.org/records/6274296
+    host: zenodo
+    record: "6274296"
+    tier: small
+    default: false
+
+  - id: road_anomaly_cctv
+    ready: road-anomaly-cctv__zone-rules_counterflow
+    title: "Comprehensive Dataset for Detecting Road Anomalies in Diverse Real-World Situations (Zenodo)"
+    kind: mixed
+    camera: "CCTV road scenes with anomalies, 1.8 GB"
+    violations: [counterflow, restricted_lane, crossing_solid_line]
+    has: "CCTV traffic scenes including abnormal events."
+    caveat: "Anomaly labels, not violation labels: read the description of each clip before using it as truth."
+    license: "CC BY 4.0. Zenodo record 13832363."
+    page: https://zenodo.org/records/13832363
+    host: zenodo
+    record: "13832363"
+    tier: small
+    default: false
+
+  - id: hanoi_motorbike_tracking
+    ready: hanoi-motorbike-traffic__zone-rules
+    title: "Vehicle Tracking Dataset (Hanoi motorbike traffic and AI City 2022 video, Zenodo)"
+    kind: mixed
+    camera: "a Hanoi TV-station video of motorbike-heavy traffic plus an AI City Challenge 2022 video, with track ids, 39 MB"
+    violations: [sidewalk_driving, restricted_lane, crossing_solid_line]
+    has: "Motorbike-dominated Vietnamese traffic with tracked cars and motorbikes."
+    caveat: "Small and not fixed CCTV (YouTube-sourced). A look at how the tracker copes with dense motorbikes."
+    license: "CC BY 4.0. Zenodo record 18195750."
+    page: https://zenodo.org/records/18195750
+    host: zenodo
+    record: "18195750"
+    tier: small
+    default: false
+
+  - id: road_lane_quality_dashcam
+    ready: road-lane-quality-dashcam__crossing-solid-line
+    title: "Road Lane Quality Data set (smartphone dashcam video, Zenodo)"
+    kind: video
+    camera: "smartphone dashcam drives with GPS and time metadata, 6.6 GB in two archives (Road_Quality, Traffic)"
+    violations: [crossing_solid_line, restricted_lane]
+    has: "Dashcam video with lane markings of different quality."
+    caveat: "Moving camera and no violation labels: for lane-marking and swerving checks only."
+    license: "CC BY 4.0. Zenodo record 18157438."
+    page: https://zenodo.org/records/18157438
+    host: zenodo
+    record: "18157438"
+    tier: medium
+    default: false
+
+  - id: australia_dashcam
+    ready: australia-dashcam__swerving_crash-scenes
+    title: "Australian Roads Dashcam Driving (Hugging Face, QUT)"
+    kind: video
+    camera: "128 short dashcam clips in folders such as Crash and normal driving, 0.6 GB"
+    violations: [swerving]
+    has: "Dashcam clips grouped by situation."
+    caveat: "CC BY-NC: evaluation only. Moving camera."
+    license: "CC BY-NC 4.0 (Hugging Face card)."
+    page: https://huggingface.co/datasets/qutegocentric/Australian_Roads_Dashcam_Driving
+    host: hf
+    repo: qutegocentric/Australian_Roads_Dashcam_Driving
+    tier: small
+    default: false
+
+  - id: stock_traffic_footage
+    ready: stock-traffic-footage__zone-rules
+    title: "Small Crowd and Traffic Video Footages (Hugging Face)"
+    kind: video
+    camera: "10 short traffic and crowd videos, 0.1 GB"
+    violations: [restricted_lane, crossing_solid_line]
+    has: "Short fixed-view car traffic clips."
+    caveat: "Stock-style footage, small. A convenience substrate only."
+    license: "MIT (Hugging Face card)."
+    page: https://huggingface.co/datasets/parsafaramarzi/Small-Crowd-and-Traffic-Video-Footages
+    host: hf
+    repo: parsafaramarzi/Small-Crowd-and-Traffic-Video-Footages
+    tier: small
+    default: false
+
+coverage:
+  counterflow: "Only bicycles / e-bikes on fixed CCTV (wrong_way_cycling) and Roboflow wrong-way pictures. No public CAR wrong-way clips found (the AI City 2020 Iowa DOT clips have no public download). htv_highway gives normal-flow negatives."
+  illegal_parking: "ATG-PVD (drone, not CCTV; its download link is dead since 2026-10-29: ask the authors). The i-LIDS Parked Vehicle (AVSS) and the Sussex traffic sets are used by papers, but I could not confirm a free download."
+  restricted_lane: "Nothing found: film your own. Added 2026-11-03: the zone-rules substrates (nancy_multiperspective, avdl_latvia, road_anomaly_cctv): fixed views, events not labelled."
+  pedestrian_lane: "idiap_traffic_junction (a car entering the pedestrian area, people off the zebra) and medellin_pedestrian_cctv (crosswalk frames). A 'Crosswalk' video set was seen listed but could not be verified."
+  illegal_turn: "Nothing public (a six-video set in arXiv 2601.07845 is private). sps_malaysia_2021 is the closest. Added 2026-11-03: peshawar_roundabout_wrongturn (roundabout wrong-turn frames, CC BY 4.0)."
+  illegal_u_turn: "sps_malaysia_2021 (dashcam, U-turn labels; access to be confirmed)."
+  swerving: "meteor (zigzag, huge, dashcam) and zigzag_cadiz (only 4 tiny sequences)."
+  red_light: "runningredlight_vn (best fit, manual Drive folder), idiap_traffic_junction, meteor (running signals). Added 2026-11-03: fluid_signalized_drone (drone video with signal timings and trajectories)."
+  disregarding_signs: "Nothing found."
+  signal_light: "tld_tail_lights (gated, 64 GB). DeepSignals is private."
+  blocking_intersection: "Nothing found. Added 2026-11-03: fluid_signalized_drone (drone view of three signalized intersections)."
+  crossing_solid_line: "Nothing found. Added 2026-11-03: road_lane_quality_dashcam plus the zone-rules substrates (nancy_multiperspective, avdl_latvia, road_anomaly_cctv, hanoi_motorbike_tracking)."
+  overloading: "helmet_myanmar (a helmet class per rider position, so riders per motorcycle can be counted on fixed-camera clips), ridesafe_400 (triple riding, dashcam), dhaka_helmet_triple (images), triple_riding_rf (images). Added 2026-11-03: motorcycle_violation_hetero (keyframes, triple riding)."
+  pickup_passengers: "Nothing public. The 2025 IEEE Access truck-passenger paper keeps its pictures confidential (traffic police data)."
+  riding_outside_vehicle: "Nothing found."
+  no_plate: "ridesafe_400 labels plates. Plate-only sets are already in training_lab/datasets (training, not testing)."
+  no_helmet: "helmet_myanmar (FIXED roadside clips with tracked helmet labels: the best match), ridesafe_400 (dashcam), dhaka_helmet_triple (images), ai_city_helmet (registration). Added 2026-11-03: motorcycle_violation_hetero (keyframes, helmet and triple riding)."
+  no_seatbelt: "seatbelt_rf (close-up images). No road-camera set found."
+  distracted_driving: "In-cabin Kaggle sets (for example State Farm) need a Kaggle login and show the cabin, not a road camera."
+  missing_side_mirror: "Nothing public (the 2025 arXiv paper 2511.12206 used its own data). Film your own."
+  illegal_loading: "No public set (searched 2026-10-29: only commercial products and city violation tables, no video). Film your own: a bus or jeepney stopping in a marked no-loading area."
+  truck_ban: "inatrc_toll_trucks (fixed-CCTV stills, trucks vs other vehicles: the detection half) and htv_highway (highway video, needs a Kaggle login; check by eye that trucks appear). The ban itself is a zone you draw."
+  tricycle_on_highway: "No public video. Two Philippine Roboflow sets show tricycles and jeepneys (ph_vehicle_classification, philippine-traffic-detection) but only as detection pictures. Film your own. Added 2026-11-03: keke_counting (roadside frames with a tricycle class; no violation labels)."
+  sidewalk_driving: "medellin_pedestrian_cctv (fixed CCTV frames of motorcycles with riders in pedestrian areas, the closest match; stills only)."
+  double_parking: "No public set (only patents and violation tables). The i-LIDS parked-vehicle sets are for illegal parking in general. Film your own: a vehicle stopped beside a parked one while traffic passes."

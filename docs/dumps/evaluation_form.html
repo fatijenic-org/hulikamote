@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HULI-KAMOTE System Evaluation Form</title>
+<!--
+  Retyped from Appendix C (Evaluation Tool) of "Research Proposal with Cover Page.pdf".
+  Questions and rating words are unchanged from the original.
+  Print: open in a browser, Ctrl+P, A4, margins "Default", turn "Background graphics" on, save as PDF.
+-->
+<style>
+  :root { color-scheme: light; --line: #5a9a32; --head: #e4e4e4; --soft: #f1f1f1; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: #000; font: 11pt/1.35 Arial, Helvetica, sans-serif; }
+  .tools { position: sticky; top: 0; z-index: 5; background: #fff8d6; border-bottom: 1px solid #d8c97a; padding: 8px 16px; font-size: 10pt; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .tools button { font: inherit; padding: 4px 12px; cursor: pointer; }
+  .frame { width: 100%; max-width: 190mm; margin: 0 auto; border-collapse: collapse; }
+  .frame > thead > tr > td, .frame > tbody > tr > td { padding: 0 16px; }
+  .letterhead { text-align: center; padding: 14px 0 8px; border-bottom: 2px solid #1d4a14; margin-bottom: 12px; }
+  .letterhead p { margin: 0; }
+  .letterhead .dept { font-weight: bold; }
+  h1 { font-size: 13pt; text-align: center; margin: 4px 0 0; }
+  .sub { text-align: center; font-style: italic; margin: 2px 0; }
+  h2 { font-size: 12.5pt; background: var(--soft); padding: 4px 6px; margin: 16px 0 6px; break-after: avoid; }
+  h3 { font-size: 11pt; margin: 14px 0 6px; break-after: avoid; }
+  table.form { width: 100%; border-collapse: collapse; margin: 6px 0; }
+  table.form th, table.form td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; text-align: left; }
+  table.form th.label { width: 30%; font-weight: bold; }
+  table.form tr { break-inside: avoid; }
+  table.form thead th { background: var(--head); text-align: center; }
+  table.form td.rate { width: 24mm; }
+  table.form tr.grp td { background: var(--head); font-weight: bold; }
+  table.sus td.c, table.sus th.c { text-align: center; width: 12mm; }
+  table.sus td.no { width: 10mm; text-align: center; }
+  .scale { margin: 4px 0 8px; }
+  .scale ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+  .reco { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 6px 0; }
+  .box { border: 1px solid var(--line); min-height: 30mm; margin-top: 6px; padding: 6px; }
+  .sig { height: 22mm; }
+  .names p { margin: 2px 0; }
+  .names .role { margin-bottom: 14px; }
+  .pagebreak { break-before: page; }
+  [contenteditable]:focus { outline: 2px solid #2b6cb0; outline-offset: 1px; }
+  @page { size: A4; margin: 12mm 10mm; }
+  @media print {
+    .tools { display: none; }
+    .frame { max-width: none; }
+    .frame > thead { display: table-header-group; }
+    .frame > thead > tr > td, .frame > tbody > tr > td { padding: 0; }
+    table.form th, table.form td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h2, table.form thead th, table.form tr.grp td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<div class="tools">
+  <button type="button" onclick="window.print()">Print / Save as PDF</button>
+  <span>Click any text to change it. Changes are <b>not saved</b> when you close the page: print right after editing, or edit this file.</span>
+</div>
+
+<table class="frame">
+<thead><tr><td>
+  <div class="letterhead" contenteditable="true">
+    <p>Western Mindanao State University</p>
+    <p>College of Computing Studies</p>
+    <p class="dept">DEPARTMENT OF COMPUTER SCIENCE</p>
+    <p>Zamboanga City</p>
+  </div>
+</td></tr></thead>
+<tbody><tr><td contenteditable="true">
+
+  <h1>SYSTEM EVALUATION FORM</h1>
+  <p class="sub">FURPS Criteria and System Usability Scale (SUS)</p>
+  <p class="sub">(For Land Transportation Office Evaluators)</p>
+
+  <p><b>Date:</b> ____________________</p>
+
+  <table class="form">
+    <tr><th class="label">Research Title:</th><td>HULI-KAMOTE: Camera-Based Multi-Violation Detection and Non-Contact Apprehension System for Urban Traffic Enforcement in Zamboanga City</td></tr>
+    <tr><th class="label">Proponents:</th><td>Emman Nicholas Blabe B. Idulsa, Jehana H. Kairan, Fatima Sheena Sharifa T. Abubakar</td></tr>
+    <tr><th class="label">Main Objective:</th><td>&nbsp;</td></tr>
+    <tr><th class="label">Venue/Site of Testing:</th><td>&nbsp;</td></tr>
+  </table>
+
+  <h3>Evaluator's Profile</h3>
+  <table class="form">
+    <tr><th class="label">Name:</th><td>&nbsp;</td></tr>
+    <tr><th class="label">Position/Designation:</th><td>&nbsp;</td></tr>
+    <tr><th class="label">Office/Station:</th><td>&nbsp;</td></tr>
+    <tr><th class="label">Years in Service:</th><td>&nbsp;</td></tr>
+  </table>
+
+  <p>This form is intended to gather the assessment of Land Transportation Office (LTO) personnel regarding the HULI-KAMOTE system, based on its simulated testing and demonstration. It is composed of two parts: Part I evaluates the system using the FURPS model (Functionality, Usability, Reliability, Performance, and Supportability), and Part II evaluates the system's perceived usability using the System Usability Scale (SUS). Kindly answer both parts as honestly and objectively as possible, as your assessment will be used to validate and further improve the system.</p>
+
+  <h2>Part I. FURPS Evaluation</h2>
+  <div class="scale">
+    <b>Rate each item using the scale below:</b>
+    <!-- RATING SCALE: original wording of Appendix C. Chapter 3, Table 4 words for 3 and 2 would be "Acceptable with Minor Revisions" and "Acceptable with Major Revisions". -->
+    <ul>
+      <li>4 = Highly Acceptable</li>
+      <li>3 = Acceptable</li>
+      <li>2 = Needs Revision</li>
+      <li>1 = Not Acceptable</li>
+    </ul>
+  </div>
+
+  <table class="form">
+    <thead><tr><th>Criteria</th><th>Rating</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="2">F – Functionality</td></tr>
+      <tr><td>The system accurately detects helmet non-compliance among motorcycle riders.</td><td class="rate"></td></tr>
+      <tr><td>The system accurately detects other defined violations (e.g., missing side mirror, counterflow driving, illegal turning, passenger overloading).</td><td class="rate"></td></tr>
+      <tr><td>The system correctly reads and records the license plate of the vehicle involved in a detected violation.</td><td class="rate"></td></tr>
+      <tr><td>The captured evidence (frame, plate number, and violation details) would be sufficient to support a non-contact citation, similar to existing no-contact apprehension programs.</td><td class="rate"></td></tr>
+
+      <tr class="grp"><td colspan="2">U – Usability</td></tr>
+      <tr><td>The administrative dashboard is easy to navigate and understand.</td><td class="rate"></td></tr>
+      <tr><td>Violation logs and captured evidence frames are presented clearly and are easy to interpret.</td><td class="rate"></td></tr>
+      <tr><td>The information displayed (timestamp, plate number, violation type, and evidence frame) is sufficient for documentation purposes.</td><td class="rate"></td></tr>
+
+      <tr class="grp"><td colspan="2">R – Reliability</td></tr>
+      <tr><td>The simulated violations and results presented are realistic and representative of actual road and traffic conditions.</td><td class="rate"></td></tr>
+      <tr><td>The system performs consistently across the different simulated lighting and traffic conditions shown.</td><td class="rate"></td></tr>
+      <tr><td>The rate of false detections (false positives or false negatives) observed is within an acceptable level.</td><td class="rate"></td></tr>
+
+      <tr class="grp"><td colspan="2">P – Performance</td></tr>
+      <tr><td>The system processes video footage and produces results within a reasonable amount of time.</td><td class="rate"></td></tr>
+
+      <tr class="grp"><td colspan="2">S – Supportability</td></tr>
+      <tr><td>The handling of captured footage (e.g., faces, plate numbers) shows adequate consideration for data privacy.</td><td class="rate"></td></tr>
+      <tr><td>Access to the dashboard and violation records appears properly restricted and secured.</td><td class="rate"></td></tr>
+      <tr><td>The system's logging and recording method appears suitable for integration into the office's enforcement workflow.</td><td class="rate"></td></tr>
+
+      <tr class="grp"><td colspan="2">Overall Acceptability</td></tr>
+      <tr><td>Overall, the system shows strong potential as a tool for future automated, non-contact traffic enforcement in Zamboanga City.</td><td class="rate"></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Overall Recommendation</h3>
+  <div class="reco">
+    <div>☐ Highly Acceptable for Enforcement Use</div>
+    <div>☐ Acceptable with Minor Revisions</div>
+    <div>☐ Acceptable with Major Revisions</div>
+    <div>☐ Not Acceptable</div>
+  </div>
+
+  <h2 class="pagebreak">Part II. System Usability Scale (SUS)</h2>
+  <p>For each statement below, please encircle or mark the number that best reflects how strongly you agree or disagree, using the 5-point scale from Strongly Disagree (1) to Strongly Agree (5). Kindly respond to every item, even if you are not entirely certain of your answer.</p>
+
+  <table class="form sus">
+    <thead>
+      <tr><th class="c">No.</th><th>Statement</th><th class="c">1<br><small>Strongly Disagree</small></th><th class="c">2</th><th class="c">3</th><th class="c">4</th><th class="c">5<br><small>Strongly Agree</small></th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="no">1</td><td>I think that I would like to use this system frequently.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">2</td><td>I found the system unnecessarily complex.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">3</td><td>I thought the system was easy to use.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">4</td><td>I think that I would need the support of a technical person to be able to use this system.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">5</td><td>I found the various functions in this system were well integrated.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">6</td><td>I thought there was too much inconsistency in this system.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">7</td><td>I would imagine that most people would learn to use this system very quickly.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">8</td><td>I found the system very cumbersome to use.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">9</td><td>I felt very confident using the system.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+      <tr><td class="no">10</td><td>I needed to learn a lot of things before I could get going with this system.</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td><td class="c">○</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Additional Comments/Suggestions:</h3>
+  <div class="box"></div>
+
+  <h3 style="break-before: page;">Evaluated by:</h3>
+  <table class="form">
+    <tr><th class="label">Name:</th><td class="sig">&nbsp;</td></tr>
+    <tr><th class="label">Signature:</th><td class="sig">&nbsp;</td></tr>
+  </table>
+
+  <div class="names">
+    <p style="margin-top: 20px;">Prepared By:</p>
+    <p><b>EMMAN NICHOLAS BLABE B. IDULSA</b></p>
+    <p><b>JEHANA H. KAIRAN</b></p>
+    <p><b>FATIMA SHEENA SHARIFA T. ABUBAKAR</b></p>
+    <p class="role">Researchers</p>
+
+    <p>Noted By:</p>
+    <p><b>JAYDEE C. BALLAHO, MIT</b><br>Thesis Instructor<br>Head, Computer Science Department</p>
+    <p style="margin-top: 14px;"><b>MARK L. FLORES, PhD</b><br>Dean, College of Computing Studies</p>
+  </div>
+
+</td></tr></tbody>
+</table>
+</body>
+</html>

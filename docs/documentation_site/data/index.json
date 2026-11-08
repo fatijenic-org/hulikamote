@@ -1,0 +1,1074 @@
+{
+  "slug": "index.html",
+  "number": "Start",
+  "title": "HULI-KAMOTE technical documentation",
+  "lede": [
+    {
+      "type": "text",
+      "text": "A printable reference for the thesis: every dataset, every model, the whole training pipeline and a defense of it, and every violation with its code. Words are kept simple; technical terms are kept, with a plain explanation one hover away."
+    }
+  ],
+  "toc": [
+    {
+      "id": "what",
+      "title": "What HULI-KAMOTE is, in one minute",
+      "level": 2
+    },
+    {
+      "id": "how",
+      "title": "How to read this site",
+      "level": 2
+    },
+    {
+      "id": "status",
+      "title": "Where the project honestly stands",
+      "level": 2
+    }
+  ],
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "What HULI-KAMOTE is, in one minute",
+      "kicker": "The project"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "HULI-KAMOTE"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " is a thesis project of the College of Computing Studies in Zamboanga City: a computer-vision system that finds traffic violations in video, so officers can review them without standing at the roadside. "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "Huli"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " means 'caught'; "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "kamote"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " is slang for a reckless driver. It finds vehicles with a "
+        },
+        {
+          "type": "term",
+          "key": "YOLO",
+          "shown": "YOLO"
+        },
+        {
+          "type": "text",
+          "text": " detector, follows each one with a tracker ("
+        },
+        {
+          "type": "term",
+          "key": "DeepSORT",
+          "shown": "DeepSORT"
+        },
+        {
+          "type": "text",
+          "text": "), reads licence plates ("
+        },
+        {
+          "type": "term",
+          "key": "OCR",
+          "shown": "OCR"
+        },
+        {
+          "type": "text",
+          "text": "), and then decides each violation with a small, explainable rule. A person always reviews what the system flags."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "figure",
+      "kind": "scene",
+      "caption": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Read the four pages in this order."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " What the models learned from, what they are, how they were made, and what they are used for."
+        }
+      ],
+      "scene": {
+        "w": 760,
+        "h": 240,
+        "aria": "The four pages in reading order: datasets, models, training pipeline, violations",
+        "primitives": [
+          {
+            "type": "rect",
+            "x": 0.0,
+            "y": 20.0,
+            "w": 170.0,
+            "h": 80.0,
+            "rx": 9.0,
+            "role": "bx c1",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 85.0,
+            "y": 48.0,
+            "text": "1 Datasets",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 85.0,
+            "y": 64.0,
+            "text": "the pictures",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 85.0,
+            "y": 80.0,
+            "text": "models learn from",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 195.0,
+            "y": 20.0,
+            "w": 170.0,
+            "h": 80.0,
+            "rx": 9.0,
+            "role": "bx c3",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 280.0,
+            "y": 48.0,
+            "text": "2 Models",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 280.0,
+            "y": 64.0,
+            "text": "what was learned,",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 280.0,
+            "y": 80.0,
+            "text": "and how it is run",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 390.0,
+            "y": 20.0,
+            "w": 170.0,
+            "h": 80.0,
+            "rx": 9.0,
+            "role": "bx c4",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 475.0,
+            "y": 48.0,
+            "text": "3 Training pipeline",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 475.0,
+            "y": 64.0,
+            "text": "how a model is made,",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 475.0,
+            "y": 80.0,
+            "text": "checked, defended",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 585.0,
+            "y": 20.0,
+            "w": 175.0,
+            "h": 80.0,
+            "rx": 9.0,
+            "role": "bx c7",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 672.5,
+            "y": 48.0,
+            "text": "4 Violations",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 672.5,
+            "y": 64.0,
+            "text": "how each of the 20",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 672.5,
+            "y": 80.0,
+            "text": "is decided",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "line",
+            "x1": 170.0,
+            "y1": 60.0,
+            "x2": 195.0,
+            "y2": 60.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 365.0,
+            "y1": 60.0,
+            "x2": 390.0,
+            "y2": 60.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 560.0,
+            "y1": 60.0,
+            "x2": 585.0,
+            "y2": 60.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Page"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Answers"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "You will find"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "link",
+              "href": "1-datasets.html",
+              "children": [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "1 Datasets"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "What did the models learn from, and can we use it?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Every dataset: contents, sources, licences, the model it trains, what it adds to the study, its limits, and how it was cleaned. Charts of size and Philippine share."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "link",
+              "href": "2-models.html",
+              "children": [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "2 Models"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "What models do we run, and how good are they?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Every model: origin, starting model, training settings, scores against targets, learning curves, and the code that loads and feeds it."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "link",
+              "href": "3-training-pipeline.html",
+              "children": [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "3 Training pipeline"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "How is a model made, and is that enough?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The loop from download to deploy to harvest, each step with its command and code, the benchmark, and an honest defense with its gaps."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "link",
+              "href": "4-violations.html",
+              "children": [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "4 Violations"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "How is each violation decided?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "All 20 violations: law, steps, models used, dashboard setup, the numbers, limits, tests and the real code, with the model-feeding code."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "link",
+              "href": "5-qa.html",
+              "children": [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "5 Q&A"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "What will the panel ask, and what do we answer?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Your own list of questions and answers. Add, edit and delete them; answers accept Markdown; saved to a JSON file on this computer."
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "20%",
+        "28%",
+        "52%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "How to read this site",
+      "kicker": "Reading guide"
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "You see"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "It means"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "A "
+            },
+            {
+              "type": "term",
+              "key": "dotted word",
+              "shown": "dotted word"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A technical term. Hover (or press Tab on it) for a plain-language meaning. In print, all terms used on a page are listed at its end."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "A code box with a path and 'lines 12-30'"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A quote cut from the real source file at the time the site was built. The line numbers are the true ones. "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Open in VS Code"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " jumps to that line (VS Code must be installed on this computer)."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Numbered badges (① ② ③) on code lines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The numbered sentences under the code explain those lines in plain words, in reading order."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Coloured chips"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "Done"
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "Needs attention"
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "chip",
+              "kind": "bad",
+              "text": "Not working / below target"
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Note"
+            },
+            {
+              "type": "text",
+              "text": " each with an icon and a label, never colour alone."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Bars and lines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Charts drawn from the real numbers. Each has a caption that says what to look at."
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "34%",
+        "66%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "callout",
+      "kind": "ok",
+      "title": "How to print",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Open a page in Chrome or Edge, press "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Ctrl+P"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ", choose "
+            },
+            {
+              "type": "i",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Save as PDF"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " (or a printer), paper "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "A4"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ", and switch on "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Background graphics"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " so the charts keep their colours. The page switches to black on white, hides the menu and starts each big section on a new page. Do this for each of the four pages."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "",
+      "text": "Keeping it up to date",
+      "kicker": ""
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "The tables, numbers and code are read from the repository when the site is built. After the code or the data changes, rebuild it:"
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "cmd",
+      "text": "hulikamote_backend/venv/Scripts/python.exe tools/doc_site/build_site.py"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "To use the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Q&A"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " page with saving, start the local server instead of opening the file directly. It also serves all the other pages:"
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "cmd",
+      "text": "hulikamote_backend/venv/Scripts/python.exe tools/doc_site/serve.py --open"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Where the project honestly stands",
+      "kicker": "One table, no spin"
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Area"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "State"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Detail"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "Violations"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "20 coded"
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "0 scored on real footage"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Each has automated tests on scripted data. The benchmark that scores them on real clips is built; its clip list is still empty. Page 4."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Detection models"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "3 trained"
+            },
+            {
+              "type": "text",
+              "text": " "
+            },
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "1 below target"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Helmet meets its target on validation data; cabin is just under; plate is well under. The vehicle detector is the stock one. Page 2."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Training data"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "Not Zamboanga"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Public datasets with open licences; none is local CCTV. The harvest loop is built to add local pictures. Pages 1 and 3."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Missing features"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "bad",
+              "text": "Missing Side Mirror cannot work yet"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Needs the cabin model retrained on mirror pictures."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Tests"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "All passing"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "284 backend, 91 training-lab and 217 dashboard tests."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Live demo"
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Simulated CCTV"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A second laptop or phone streams the footage over RTSP; the system reads it as a camera. Page 4, set-up."
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "18%",
+        "32%",
+        "50%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "callout",
+      "kind": "warn",
+      "title": "What this documentation does not claim",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "It does not claim accuracy on Zamboanga roads. It documents what is built, how it works, what it was trained on, and what still has to be measured. Legal references marked "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "to confirm"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " are not yet checked with an adviser; fine amounts are not quoted."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "refs",
+      "items": [
+        {
+          "path": "docs/HANDOVER.md",
+          "line": 1,
+          "label": "HANDOVER.md (living status)"
+        },
+        {
+          "path": "docs/PROJECT_CONTEXT.md",
+          "line": 1,
+          "label": "PROJECT_CONTEXT.md (the thesis scope)"
+        },
+        {
+          "path": "docs/THESIS_REVISIONS.md",
+          "line": 1,
+          "label": "THESIS_REVISIONS.md (paste-ready thesis text)"
+        }
+      ]
+    }
+  ]
+}

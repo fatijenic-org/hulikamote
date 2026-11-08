@@ -1,0 +1,36 @@
+{
+ "split": "test",
+ "map50": 0.715,
+ "classes": [
+  {
+   "name": "tricycle",
+   "score": 0.915,
+   "boxes": 124
+  },
+  {
+   "name": "bus",
+   "score": 0.833,
+   "boxes": 290
+  },
+  {
+   "name": "truck",
+   "score": 0.707,
+   "boxes": 301
+  },
+  {
+   "name": "car",
+   "score": 0.7,
+   "boxes": 824
+  },
+  {
+   "name": "motorcycle",
+   "score": 0.663,
+   "boxes": 487
+  },
+  {
+   "name": "person",
+   "score": 0.472,
+   "boxes": 1082
+  }
+ ]
+}

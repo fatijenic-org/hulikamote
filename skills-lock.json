@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "best-practices": {
+      "source": "mobbin/skills",
+      "sourceType": "github",
+      "skillPath": "skills/best-practices/SKILL.md",
+      "computedHash": "9aedae167496d9e0c91b787176d4482de1c1a790eab7c65f499f2f0e19f3cbcb"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "106acf230014cbb43ca34e6410371321b56ca742f9ee0442e8ec05bf02eb0384"
+    }
+  }
+}

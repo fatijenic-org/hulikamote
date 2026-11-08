@@ -1,0 +1,89 @@
+{
+  "model": "plate_specialist",
+  "applied": true,
+  "seconds": 242.9,
+  "classes": [
+    "license_plate"
+  ],
+  "layout_moves": [],
+  "checked": 15761,
+  "kept": 15761,
+  "dropped": {},
+  "fixed_labels": 0,
+  "resaved_pictures": 0,
+  "issues_kept": {},
+  "images_per_split": {
+    "train": 12968,
+    "val": 1790,
+    "test": 1003
+  },
+  "eval_pictures_with_train_twin": {},
+  "boxes_per_class": {
+    "train": {
+      "license_plate": 20517
+    },
+    "val": {
+      "license_plate": 2561
+    },
+    "test": {
+      "license_plate": 1483
+    }
+  },
+  "per_source": {
+    "colorum_plates": {
+      "train": 196,
+      "val": 61,
+      "test": 25
+    },
+    "govviolation_plates": {
+      "train": 1701,
+      "val": 329,
+      "test": 118
+    },
+    "indonesia_plates": {
+      "train": 675,
+      "val": 188,
+      "test": 94
+    },
+    "legacy": {
+      "train": 2526,
+      "val": 297,
+      "test": 134
+    },
+    "my_plates": {
+      "train": 414,
+      "val": 89
+    },
+    "oi_plates": {
+      "train": 2995,
+      "val": 400,
+      "test": 400
+    },
+    "ph_plates": {
+      "train": 4261,
+      "val": 404,
+      "test": 205
+    },
+    "tr_plates250": {
+      "train": 200,
+      "val": 22,
+      "test": 27
+    }
+  },
+  "long_side_px": {
+    "min": 220,
+    "median": 640,
+    "max": 1280
+  },
+  "box_area_share": {
+    "p10": 0.00019,
+    "median": 0.00311,
+    "p90": 0.03845
+  },
+  "empty_pictures_kept": 0,
+  "eval_twins_before_first_cleaning": {
+    "val": 88,
+    "test": 43,
+    "approx": true
+  }
+}

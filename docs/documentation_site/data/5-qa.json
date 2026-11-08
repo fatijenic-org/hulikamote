@@ -1,0 +1,392 @@
+{
+  "slug": "5-qa.html",
+  "number": "5",
+  "title": "Q&A",
+  "lede": [
+    {
+      "type": "text",
+      "text": "The questions a panelist may ask, and your answers. Add, edit and delete them here. Answers accept Markdown. Everything is saved to a JSON file on this computer and goes nowhere else."
+    }
+  ],
+  "toc": [],
+  "blocks": [
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "How saving works, and how to start it",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "A web page cannot write a file by itself, so a tiny local server does it. It runs only on this computer ("
+            },
+            {
+              "type": "code",
+              "text": "127.0.0.1"
+            },
+            {
+              "type": "text",
+              "text": "), writes only "
+            },
+            {
+              "type": "code",
+              "text": "tools/doc_site/data/qa.json"
+            },
+            {
+              "type": "text",
+              "text": ", and keeps the previous version as "
+            },
+            {
+              "type": "code",
+              "text": "qa.json.bak"
+            },
+            {
+              "type": "text",
+              "text": ". Start it once, then open the page at the address it prints:"
+            }
+          ],
+          "is_note": false
+        },
+        {
+          "type": "cmd",
+          "text": "hulikamote_backend/venv/Scripts/python.exe tools/doc_site/serve.py --open"
+        },
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Without the server (page opened straight from disk), the page still works: changes are kept in this browser, and "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Export JSON"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " / "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Import JSON"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " let you save and load a file by hand. The green or yellow bar below tells you which mode you are in."
+            }
+          ],
+          "is_note": false
+        },
+        {
+          "type": "table",
+          "headers": [
+            [
+              {
+                "type": "text",
+                "text": "Type this"
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": "To get"
+              }
+            ]
+          ],
+          "rows": [
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "**bold**"
+                },
+                {
+                  "type": "text",
+                  "text": "   "
+                },
+                {
+                  "type": "code",
+                  "text": "*italic*"
+                },
+                {
+                  "type": "text",
+                  "text": "   "
+                },
+                {
+                  "type": "code",
+                  "text": "~~gone~~"
+                }
+              ],
+              [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "bold"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": "   "
+                },
+                {
+                  "type": "i",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "italic"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "text": "   "
+                },
+                {
+                  "type": "s",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "gone"
+                    }
+                  ]
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "`code`"
+                }
+              ],
+              [
+                {
+                  "type": "code",
+                  "text": "code"
+                },
+                {
+                  "type": "text",
+                  "text": " (inline)"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "# Heading"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "a heading (also "
+                },
+                {
+                  "type": "code",
+                  "text": "##"
+                },
+                {
+                  "type": "text",
+                  "text": ", "
+                },
+                {
+                  "type": "code",
+                  "text": "###"
+                },
+                {
+                  "type": "text",
+                  "text": ")"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "- item"
+                },
+                {
+                  "type": "text",
+                  "text": " or "
+                },
+                {
+                  "type": "code",
+                  "text": "1. item"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "a bullet list or a numbered list ("
+                },
+                {
+                  "type": "code",
+                  "text": "- [ ]"
+                },
+                {
+                  "type": "text",
+                  "text": " and "
+                },
+                {
+                  "type": "code",
+                  "text": "- [x]"
+                },
+                {
+                  "type": "text",
+                  "text": " make a checklist)"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "> quote"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "an indented quote"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "[words](https://example.com)"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "a link (only http and https links work)"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "text",
+                  "text": "three backticks on their own line, then code, then three backticks"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "a code block"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "| a | b |"
+                },
+                {
+                  "type": "text",
+                  "text": " then "
+                },
+                {
+                  "type": "code",
+                  "text": "| --- | --- |"
+                },
+                {
+                  "type": "text",
+                  "text": " then rows"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "a table"
+                }
+              ]
+            ],
+            [
+              [
+                {
+                  "type": "code",
+                  "text": "---"
+                }
+              ],
+              [
+                {
+                  "type": "text",
+                  "text": "a dividing line"
+                }
+              ]
+            ]
+          ],
+          "widths": [
+            "46%",
+            "54%"
+          ],
+          "cell_classes": [
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ],
+            [
+              "",
+              ""
+            ]
+          ],
+          "is_dense": true,
+          "is_heat": false
+        }
+      ],
+      "is_collapsible": true,
+      "is_open": false
+    },
+    {
+      "type": "qa_placeholder"
+    }
+  ]
+}

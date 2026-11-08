@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huli-Kamote | Engineering Progress & Technical Audit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0f19;
+            --surface: #111827;
+            --surface-card: #161f33;
+            --border: #1f293d;
+            --border-hover: #374151;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.15);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.15);
+            --warning: #f59e0b;
+            --warning-glow: rgba(245, 158, 11, 0.15);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.15);
+            --purple: #a855f7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* HEADER */
+        header {
+            margin-bottom: 48px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .title-group h1 {
+            font-size: 2.25rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .title-group p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+        }
+
+        .badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.025em;
+            text-transform: uppercase;
+        }
+
+        .badge-cyan {
+            background: var(--accent-glow);
+            color: var(--accent);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .badge-green {
+            background: var(--success-glow);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-purple {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--purple);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+        }
+
+        /* METRIC CARDS */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 48px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-hover);
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .stat-val {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.02em;
+        }
+
+        .stat-desc {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-top: 4px;
+        }
+
+        /* SECTION STYLING */
+        section {
+            margin-bottom: 56px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .section-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--accent-glow);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        /* ARCHITECTURE DIAGRAM BOX */
+        .diag-box {
+            background: #060911;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--accent);
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.4;
+            margin-bottom: 24px;
+        }
+
+        /* CHALLENGES CARDS */
+        .challenge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+            gap: 20px;
+        }
+
+        @media (max-width: 640px) {
+            .challenge-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .challenge-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .challenge-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .badge-danger {
+            background: var(--danger-glow);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .challenge-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .pill-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .solution-box {
+            background: rgba(16, 185, 129, 0.05);
+            border-left: 3px solid var(--success);
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9rem;
+            color: #d1fae5;
+        }
+
+        .solution-box strong {
+            color: var(--success);
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* DATA TABLE */
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: #0f172a;
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            vertical-align: top;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .cell-bold {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        .code-tag {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #cbd5e1;
+        }
+
+        .fail-text {
+            color: #f87171;
+            font-size: 0.85rem;
+        }
+
+        .fix-text {
+            color: #34d399;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        /* TIMELINE LIST */
+        .timeline {
+            position: relative;
+            padding-left: 28px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 6px;
+            bottom: 6px;
+            left: 8px;
+            width: 2px;
+            background: var(--border);
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 28px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 6px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .timeline-date {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+
+        .timeline-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .timeline-body {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        footer {
+            margin-top: 80px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- HEADER -->
+    <header>
+        <div class="title-group">
+            <h1>Huli-Kamote Technical Audit</h1>
+            <p>Sprint Engineering Progress & Architecture Log (Aug 25 – Sep 17, 2026)</p>
+        </div>
+        <div class="badges">
+            <span class="badge badge-cyan">Decoupled Cascading Pipeline</span>
+            <span class="badge badge-green">GPU CUDA Active</span>
+            <span class="badge badge-purple">13 Violations Implemented</span>
+        </div>
+    </header>
+
+    <!-- METRICS -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-label">Inference Engine</div>
+            <div class="stat-val">60+ FPS</div>
+            <div class="stat-desc">Accelerated with ONNX CUDA Provider</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">1080p Stream Optimization</div>
+            <div class="stat-val">-56%</div>
+            <div class="stat-desc">Memory bandwidth reduction via 720p cap</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Specialist Recall</div>
+            <div class="stat-val">3x Boost</div>
+            <div class="stat-desc">Bottom 40% bumper cropping on plates</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Curriculum Modules</div>
+            <div class="stat-val">13 / 13</div>
+            <div class="stat-desc">Full 5-phase educational coverage</div>
+        </div>
+    </div>
+
+    <!-- ARCHITECTURE -->
+    <section>
+        <div class="section-header">
+            <div class="section-icon">⚙️</div>
+            <h2>Decoupled Cascading Pipeline Architecture</h2>
+        </div>
+        <div class="diag-box">
+Incoming Stream / Offline MP4
+      │
+      ▼
+[stream.py: Resolution Cap (MAX_PROCESSING_HEIGHT = 720)] ──── Cuts 1080p frame memory overhead by >50%
+      │
+      ▼
+[Primary Anchor Detector: YOLOv8 ONNX (CUDAExecutionProvider)] ── Rapid 640x640 letterbox vehicle localization
+      │
+      ▼
+[tracker.py: SimpleIoUTracker] ──────────────────────────────── Serialized in dedicated ThreadPoolExecutor
+      │
+      ▼
+[engine/pipeline.py: Multi-Zone ROI Gating] ─────────────────── Dynamically scaled to match downscaled 720p array
+      │
+      ▼
+[engine/ledger.py: ActiveLedgerManager] 
+ ├── Spatial-Temporal Math (Counterflow Dot Product, Stationary Variance)
+ └── Specialist Model Injection (Runs every 5 frames on localized vehicle sub-crops)
+      ├── Plate Specialist ONNX (Bottom 40% bumper focus + 2-miss gate) ──> EasyOCR
+      └── Helmet / Cabin Specialists (Motorcycles, seatbelts, mobile phones)
+      │
+      ▼
+[WebSocket Broadcast & DB Store] ────────────────────────────── Real-time alert ingestion + multi-frame proof</div>
+    </section>
+
+    <!-- CRITICAL CHALLENGES RESOLVED -->
+    <section>
+        <div class="section-header">
+            <div class="section-icon">🛡️</div>
+            <h2>Key Engineering Bottlenecks & Fixes</h2>
+        </div>
+        <div class="challenge-grid">
+            <div class="challenge-card">
+                <div class="challenge-header">
+                    <span class="badge-danger">Race Condition</span>
+                    <h3>Tracker KeyError: 15 & CUDA 700 Crash</h3>
+                </div>
+                <p class="pill-desc">Unbounded default thread pool allowed asynchronous stream frames to race inside the shared tracking dictionary, corrupting memory inside the CUDA stream.</p>
+                <div class="solution-box">
+                    <strong>Solution Applied:</strong>
+                    Enforced a dedicated, single-worker thread pool (<code>_PIPELINE_EXECUTOR</code>) in <code>stream.py</code> to strictly serialize tracking updates.
+                </div>
+            </div>
+
+            <div class="challenge-card">
+                <div class="challenge-header">
+                    <span class="badge-danger">Memory Saturation</span>
+                    <h3>1080p High-Resolution Video Lag</h3>
+                </div>
+                <p class="pill-desc">Full 1080p arrays (6.2 MB each) were copied, annotated, and JPEG-encoded on the CPU, causing frames to drop from 30 FPS down to 8 FPS.</p>
+                <div class="solution-box">
+                    <strong>Solution Applied:</strong>
+                    Implemented <code>MAX_PROCESSING_HEIGHT = 720</code> cap immediately after frame capture. Decreased memory bandwidth by 56% while preserving full YOLO accuracy.
+                </div>
+            </div>
+
+            <div class="challenge-card">
+                <div class="challenge-header">
+                    <span class="badge-danger">Detection Failure</span>
+                    <h3>License Plates Missed on Distant Vehicles</h3>
+                </div>
+                <p class="pill-desc">Full vehicle bounding boxes squashed to 320x320 reduced distant plates to unreadable 10px pixels; 15-frame intervals skipped quick passes.</p>
+                <div class="solution-box">
+                    <strong>Solution Applied:</strong>
+                    Focused crops specifically on the <strong>bottom 40% bumper zone</strong>, lowered confidence threshold to <code>0.35</code>, and shortened interval to 5 frames.
+                </div>
+            </div>
+
+            <div class="challenge-card">
+                <div class="challenge-header">
+                    <span class="badge-danger">Coordinate Drift</span>
+                    <h3>ROI Polygon Mismatch After Downscaling</h3>
+                </div>
+                <p class="pill-desc">Polygons drawn on 1080p native video frames failed to match vehicle centroids computed in the downscaled 720p internal array.</p>
+                <div class="solution-box">
+                    <strong>Solution Applied:</strong>
+                    Added <code>_scale_polygon</code> and <code>_get_scaled_rois</code> to dynamically scale polygon vertices to the working frame resolution at runtime.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ALL 13 VIOLATIONS TABLE -->
+    <section>
+        <div class="section-header">
+            <div class="section-icon">📚</div>
+            <h2>Full 13-Violation Educational Logic Suite</h2>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Violation</th>
+                        <th>Naive Brute-Force Method</th>
+                        <th>Classical Failure Mode</th>
+                        <th>Modern AI Pipeline Fix</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="code-tag">m1</span></td>
+                        <td class="cell-bold">Counterflow</td>
+                        <td>Pairwise pixel distance search + ray-casting + negative dot product.</td>
+                        <td class="fail-text">Identity swaps when vehicles cross; wind jitter reverses heading.</td>
+                        <td class="fix-text">IoU tracking + 4-frame temporal active ledger buffer.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">m2</span></td>
+                        <td class="cell-bold">Illegal Parking</td>
+                        <td>Frame-to-frame pixel stillness threshold (&lt; 5px) for &gt; 300 frames.</td>
+                        <td class="fail-text">Bounding box bounce (3-7px) resets counter back to 0.</td>
+                        <td class="fix-text">Centroid variance drift analysis (σ² &lt; ε) over 150-frame window.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">m3</span></td>
+                        <td class="cell-bold">Illegal Turn</td>
+                        <td>Entry/exit tripwire point sampling + atan2 angle difference.</td>
+                        <td class="fail-text">Pothole weaving alters snapshot bearing; atan2 boundary jumps.</td>
+                        <td class="fix-text">Polynomial spline trajectory fitting + directional corridor fields.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">m4</span></td>
+                        <td class="cell-bold">No Helmet</td>
+                        <td>Fixed top 20% motorcycle box crop + HSV skin-color histogram.</td>
+                        <td class="fail-text">Hair and shadows mimic skin tone; viewing angle cuts heads off.</td>
+                        <td class="fix-text">Composite rider-motorcycle classes + Helmet Specialist ONNX.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">m5</span></td>
+                        <td class="cell-bold">Missing Mirror</td>
+                        <td>Handlebar corner crops + Canny Edge + Hough Circle detection.</td>
+                        <td class="fail-text">Aerodynamic mirrors lack round contours; banking occludes far side.</td>
+                        <td class="fix-text">Orientation-normalized deep specialist mirror object detector.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">m6</span></td>
+                        <td class="cell-bold">Overloading</td>
+                        <td>Raw face detector counting faces inside motorcycle box (&gt; 2).</td>
+                        <td class="fail-text">Pedestrians walking nearby on crosswalks count as riders.</td>
+                        <td class="fix-text">Strict 80% body-chassis IoU containment + seated posture check.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">c1</span></td>
+                        <td class="cell-bold">No Plate</td>
+                        <td>Fixed bottom 30% bumper crop + Sobel edge density clustering.</td>
+                        <td class="fail-text">Off-center plate mounts missed; dirty plates produce zero edges.</td>
+                        <td class="fix-text">Bottom 40% bumper crop + Plate Specialist ONNX + 2-miss gate.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">c2</span></td>
+                        <td class="cell-bold">Red Light Running</td>
+                        <td>Static sky ROI red-pixel thresholding + instant stopline touch.</td>
+                        <td class="fail-text">Direct sunlight washes out lens; vehicle shadows cross stop line.</td>
+                        <td class="fix-text">Dual-State YOLO light classifier + tire contact point tracking.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">c3</span></td>
+                        <td class="cell-bold">No Seatbelt</td>
+                        <td>Windshield torso crop + Hough Line transform for 45° strap.</td>
+                        <td class="fail-text">Dark clothing hides black straps; striped shirts trigger false positives.</td>
+                        <td class="fix-text">Window Tint Override Gate + Deep Cabin Specialist model.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">c4</span></td>
+                        <td class="cell-bold">Crosswalk Block</td>
+                        <td>Car bounding box overlap (&gt; 0.25) with painted zebra polygon.</td>
+                        <td class="fail-text">Cars legally driving through on green get ticketed.</td>
+                        <td class="fix-text">Conjunction logic: speed near 0 specifically during Red signal.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">c5</span></td>
+                        <td class="cell-bold">Distracted Driving</td>
+                        <td>Cabin crop + normalized template matching with black phone shape.</td>
+                        <td class="fail-text">Wallets, dark sunglasses, and head-scratching match templates.</td>
+                        <td class="fix-text">Driver pose estimation + Cabin Specialist phone object detection.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">e1</span></td>
+                        <td class="cell-bold">Swerving</td>
+                        <td>Frame-to-frame lateral displacement + 3rd-derivative jerk spike.</td>
+                        <td class="fail-text">Wind-induced pole vibration creates phantom acceleration spikes.</td>
+                        <td class="fix-text">Road-aligned coordinate projection + Savitzky-Golay smoothing.</td>
+                    </tr>
+                    <tr>
+                        <td><span class="code-tag">e2</span></td>
+                        <td class="cell-bold">Overspeeding</td>
+                        <td>Raw screen pixel displacement × static pixels-to-meters multiplier.</td>
+                        <td class="fail-text">Perspective distortion: near cars move 10x faster in pixels.</td>
+                        <td class="fix-text">3x3 Homography Matrix (Bird's-Eye Transform) + calibrated ledger.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section>
+        <div class="section-header">
+            <div class="section-icon">📅</div>
+            <h2>Sprint Chronology (Aug 25 – Present)</h2>
+        </div>
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-date">Sep 16 – 17, 2026</div>
+                <div class="timeline-title">Performance Optimization & Educational Completion</div>
+                <div class="timeline-body">Implemented 720p stream resolution cap, serialized <code>_PIPELINE_EXECUTOR</code> to stop CUDA crashes, overhauled plate detection geometry, and populated Tab 1 brute-force logic for all 13 violations.</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">Sep 15, 2026</div>
+                <div class="timeline-title">Multi-Zone ROI Wizard & Offline Scrubber</div>
+                <div class="timeline-body">Built offline video playback workstation with frame scrubbing, model switcher dropdown, and full multi-zone directional flow calibration dialog in the dashboard.</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">Sep 11 – 14, 2026</div>
+                <div class="timeline-title">Visualizer Suite & Specialist Training Lab</div>
+                <div class="timeline-body">Expanded visualizer to 13 traffic violations with custom 4-phase interactive canvas controls. Built automated desktop training lab for fine-tuning secondary YOLO models.</div>
+            </div>
+            <div class="timeline-item">
+                <div class="timeline-date">Sep 03 – 11, 2026</div>
+                <div class="timeline-title">Decoupled Cascading Pipeline & Enforcer Inbox</div>
+                <div class="timeline-body">Transitioned backend to decoupled architecture. Added Enforcer Verification Inbox with multi-frame proof timelines, EasyOCR integration, and mobile citizen appeals shell.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        Huli-Kamote Intelligent Traffic Enforcement System • Technical Audit Document • Confidential
+    </footer>
+</div>
+
+</body>
+</html>

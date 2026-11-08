@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huli-Kamote Progress Journey</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@9.4.3/dist/mermaid.min.js"></script>
+    <!-- Highlight.js for code blocks -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+</head>
+<body>
+    <!-- 3D Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="glass-nav">
+        <div class="logo">Huli-Kamote</div>
+        <div class="nav-links">Capstone Progress Report</div>
+    </div>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1 class="reveal-text">The Journey of<br><span>Huli-Kamote</span></h1>
+            <p class="subtitle fade-in">An AI-driven Traffic Enforcement Framework</p>
+            <div class="scroll-indicator fade-in">
+                <span>Explore the Progress</span>
+                <div class="mouse">
+                    <div class="wheel"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="timeline-container" id="timeline-container">
+        <div class="timeline-line"></div>
+        <!-- Milestones will be dynamically injected here by script.js -->
+    </main>
+
+    <footer>
+        <p>Built with precision. Documented for clarity.</p>
+    </footer>
+
+    <!-- Detail Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-container">
+            <button class="modal-close" id="modal-close">&times;</button>
+            <div class="modal-content" id="modal-content">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+websockets==12.0
+pytest==8.2.0
+httpx==0.27.0
+opencv-python==4.9.0.80
+numpy<2
+# GPU inference stack: pin to CUDA-12-built onnxruntime (1.27+ defaults to CUDA 13,
+# which requires a newer driver than most RTX 30-series setups have installed).
+onnxruntime-gpu==1.26.0
+nvidia-cuda-runtime-cu12==12.8.90
+nvidia-cublas-cu12==12.8.4.1
+nvidia-cudnn-cu12==9.8.0.87
+nvidia-cufft-cu12==11.3.3.83
+ultralytics==8.2.35
+python-multipart>=0.0.9
+firebase-admin>=6.5.0
+databases[aiosqlite]>=0.9.0
+aiosqlite>=0.20.0
+supervision
+easyocr

@@ -1,0 +1,21 @@
+# Ground-truth registry: the clips and what REALLY happens in them. See benchmarks/README.md.
+# Check it:  python -m tools.benchmark validate      See coverage:  python -m tools.benchmark status
+# Score it:  python -m tools.benchmark run --label baseline
+
+defaults:
+  tolerance_s: 3.0          # a ticket counts for an event when its evidence time is within this many seconds of it
+  min_events: 10            # real events needed per violation before a verdict (PASS / FAIL) is given
+  pass: {precision: 0.80, recall: 0.80}      # targets per violation: edit to match the thesis
+
+clips: []
+# Add clips with:  python -m tools.benchmark adopt <forensic task id> <clip id>
+# or by hand:
+#   - id: counterflow_01
+#     file: clips/counterflow_01.mp4            # relative to benchmarks/
+#     settings: settings/counterflow_01.json    # the wizard's forensic_config.json for this clip
+#     clean: false                              # true = nothing happens in this clip (every ticket is a false alarm)
+#     note: "Rizal Ave, 4 m pole, daylight"
+#     events:                                   # what REALLY happens (times in seconds or m:ss)
+#       - {violation: counterflow, start: 3.0, end: 8.5}
+#       - {violation: no_plate, start: "0:12", end: "0:15"}
+#       - {violation: illegal_parking, start: 20, end: 50, plate: "ABC 1234"}      # plate and box are optional extra checks

@@ -1,0 +1,8228 @@
+{
+  "slug": "1-datasets.html",
+  "number": "1",
+  "title": "Datasets",
+  "lede": [
+    {
+      "type": "text",
+      "text": "Every picture collection our models learn from: what is in it, who made it, what the licence says, which model it trains and what it adds to the study. Read this page first, because a model is only as good as the pictures it was taught with."
+    }
+  ],
+  "toc": [
+    {
+      "id": "overview",
+      "title": "The big picture",
+      "level": 2
+    },
+    {
+      "id": "ds-vehicle",
+      "title": "Vehicle and rider set (primary_anchor)",
+      "level": 2
+    },
+    {
+      "id": "ds-vehicle-classes",
+      "title": "What the s say",
+      "level": 3
+    },
+    {
+      "id": "ds-vehicle-sources",
+      "title": "Where the pictures come from",
+      "level": 3
+    },
+    {
+      "id": "ds-vehicle-study",
+      "title": "How it contributes to the study",
+      "level": 3
+    },
+    {
+      "id": "ds-vehicle-limits",
+      "title": "Known limits",
+      "level": 3
+    },
+    {
+      "id": "ds-helmet",
+      "title": "Helmet set (helmet_specialist)",
+      "level": 2
+    },
+    {
+      "id": "ds-helmet-classes",
+      "title": "What the s say",
+      "level": 3
+    },
+    {
+      "id": "ds-helmet-sources",
+      "title": "Where the pictures come from",
+      "level": 3
+    },
+    {
+      "id": "ds-helmet-study",
+      "title": "How it contributes to the study",
+      "level": 3
+    },
+    {
+      "id": "ds-helmet-limits",
+      "title": "Known limits",
+      "level": 3
+    },
+    {
+      "id": "ds-plate",
+      "title": "Licence plate set (plate_specialist)",
+      "level": 2
+    },
+    {
+      "id": "ds-plate-classes",
+      "title": "What the s say",
+      "level": 3
+    },
+    {
+      "id": "ds-plate-sources",
+      "title": "Where the pictures come from",
+      "level": 3
+    },
+    {
+      "id": "ds-plate-study",
+      "title": "How it contributes to the study",
+      "level": 3
+    },
+    {
+      "id": "ds-plate-limits",
+      "title": "Known limits",
+      "level": 3
+    },
+    {
+      "id": "ds-cabin",
+      "title": "Cabin set (cabin_specialist)",
+      "level": 2
+    },
+    {
+      "id": "ds-cabin-classes",
+      "title": "What the s say",
+      "level": 3
+    },
+    {
+      "id": "ds-cabin-sources",
+      "title": "Where the pictures come from",
+      "level": 3
+    },
+    {
+      "id": "ds-cabin-study",
+      "title": "How it contributes to the study",
+      "level": 3
+    },
+    {
+      "id": "ds-cabin-limits",
+      "title": "Known limits",
+      "level": 3
+    },
+    {
+      "id": "ds-ocr",
+      "title": "Plate text set (plate_ocr)",
+      "level": 2
+    },
+    {
+      "id": "ds-reid",
+      "title": "Car look-alike sets (reid and reid_public)",
+      "level": 2
+    },
+    {
+      "id": "ds-sr",
+      "title": "Sharp plate set (sr_plates)",
+      "level": 2
+    },
+    {
+      "id": "ds-local",
+      "title": "Our own footage and the harvest inbox",
+      "level": 2
+    },
+    {
+      "id": "ds-waiting",
+      "title": "Held back, waiting, or deliberately not used",
+      "level": 2
+    },
+    {
+      "id": "ds-licences",
+      "title": "Licences and credits",
+      "level": 2
+    },
+    {
+      "id": "ds-rules",
+      "title": "Rules that keep the numbers honest",
+      "level": 2
+    }
+  ],
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "The big picture",
+      "kicker": "Start here"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "A "
+        },
+        {
+          "type": "term",
+          "key": "dataset",
+          "shown": "dataset"
+        },
+        {
+          "type": "text",
+          "text": " is a folder of pictures plus the correct answer for each one. We use "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "four detection datasets"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " (one for each "
+        },
+        {
+          "type": "term",
+          "key": "YOLO",
+          "shown": "YOLO"
+        },
+        {
+          "type": "text",
+          "text": " model) and "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "four helper collections"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " (plate text, car look-alikes, a synthetic car-matching set and sharp plates for the picture enhancer). Almost everything comes from "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "public sources with open licences"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", because no large labelled collection of Zamboanga traffic exists yet. That is the most important fact on this page: the models have learned what helmets, plates and windshields "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "look like"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", but they have not yet been taught what "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "our"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " roads look like. The harvest loop (page 3) is how that gap is closed."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "kind": "hbar",
+      "groups": [
+        {
+          "label": "Vehicle detector set",
+          "values": [
+            24763.0,
+            876.0,
+            430.0
+          ]
+        },
+        {
+          "label": "Helmet model set",
+          "values": [
+            10590.0,
+            923.0,
+            697.0
+          ]
+        },
+        {
+          "label": "Plate model set",
+          "values": [
+            12968.0,
+            1790.0,
+            1003.0
+          ]
+        },
+        {
+          "label": "Cabin model set",
+          "values": [
+            15689.0,
+            300.0,
+            402.0
+          ]
+        }
+      ],
+      "series": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "vmax": 24763.0,
+      "label_w": 190,
+      "w": 760,
+      "aria": "Number of pictures in the train, validation and test parts of the four detection datasets",
+      "type": "figure",
+      "caption": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Pictures per dataset."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " Most pictures are for learning (train). The validation part is used while training to choose the best moment to stop; the test part is kept sealed for the final score. Exact counts of every class are in each dataset's own section below."
+        }
+      ]
+    },
+    {
+      "kind": "hbar",
+      "groups": [
+        {
+          "label": "Vehicle detector set",
+          "values": [
+            20.0
+          ]
+        },
+        {
+          "label": "Helmet model set",
+          "values": [
+            7.0
+          ]
+        },
+        {
+          "label": "Plate model set",
+          "values": [
+            0.0
+          ]
+        },
+        {
+          "label": "Cabin model set",
+          "values": [
+            19.0
+          ]
+        }
+      ],
+      "series": [
+        "Philippine share"
+      ],
+      "vmax": 100.0,
+      "label_w": 190,
+      "w": 760,
+      "aria": "Share of Philippine pictures in each detection dataset, in percent",
+      "type": "figure",
+      "caption": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "How much of each dataset is Philippine."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " The vehicle set counts only pictures known to be Philippine (a further 80% comes from a source that mixes Philippine and generic photos). The plate set has no Philippine pictures at all. No dataset contains Zamboanga CCTV yet."
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Dataset"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Vehicle detector"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Helmet model"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Plate model"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Cabin model"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Plate reader ("
+          },
+          {
+            "type": "term",
+            "key": "OCR",
+            "shown": "OCR"
+          },
+          {
+            "type": "text",
+            "text": ")"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Car matcher ("
+          },
+          {
+            "type": "term",
+            "key": "ReID",
+            "shown": "ReID"
+          },
+          {
+            "type": "text",
+            "text": ")"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Picture enhancer"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "primary_anchor"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "helmet_specialist"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "plate_specialist"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "cabin_specialist"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "plate_ocr"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "scores"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "reid (own cars)"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "reid_public"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "pre-trains"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "sr_plates"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "–"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "y",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "y",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "o",
+          "y",
+          "o",
+          "o",
+          "o",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "o",
+          "o",
+          "y",
+          "o",
+          "o",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "o",
+          "o",
+          "o",
+          "m",
+          "o",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o",
+          "y",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o",
+          "m",
+          "o"
+        ],
+        [
+          "",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o",
+          "o",
+          "y"
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": true
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Read across: the dataset in the first column "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "trains"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " (or only "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "scores"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", or "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "pre-trains"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ") the model in the column. Plate text is only used for scoring because the text-reading trainer cannot run as installed (page 3)."
+        }
+      ],
+      "is_note": true
+    },
+    {
+      "type": "callout",
+      "kind": "warn",
+      "title": "Honest reading of this page",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Every score in this project so far was measured on the "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "validation"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " part of these public datasets, not on Zamboanga footage. The scores show that the models learned their pictures; they do not yet show accuracy on our roads. Page 3 explains how that is being closed, and page 4 states the status of each violation."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Vehicle and rider set (primary_anchor)",
+      "kicker": "Dataset · trains the vehicle detector"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Wide road pictures with a box around every motorcycle, car, bus, truck, tricycle and "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "person"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". This is the set for the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "first-stage detector"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ": the model that looks at every frame and finds the vehicles and the people on them. Pictures are 640 pixels on the longest side, the size this detector runs at. Today the system uses a stock "
+        },
+        {
+          "type": "term",
+          "key": "COCO",
+          "shown": "COCO"
+        },
+        {
+          "type": "text",
+          "text": " detector, which does not know tricycles or jeepneys. This set is how a Philippine detector would be fine-tuned."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "kv",
+      "items": [
+        {
+          "key": "Pictures",
+          "value": [
+            {
+              "type": "text",
+              "text": "24,763 train · 876 validation · 430 test"
+            }
+          ]
+        },
+        {
+          "key": "Philippine share",
+          "value": [
+            {
+              "type": "text",
+              "text": "5,306 of 26,069 pictures (20%)"
+            }
+          ]
+        },
+        {
+          "key": "Folder",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/primary_anchor/data.yaml:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "datasets/primary_anchor/"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/primary_anchor/data.yaml:1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "Full card",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/primary_anchor/DATASET_CARD.md:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "DATASET_CARD.md"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/primary_anchor/DATASET_CARD.md:1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-vehicle-classes",
+      "text": "What the labels say",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "id"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "class",
+            "shown": "class"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Plain meaning"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "val boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "test boxes"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "0"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "motorcycle"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A motorcycle (the rider is a separate 'person' box)."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "5,724"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "488"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "217"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "1"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "car"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Cars and vans. A van is merged into car."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "14,503"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,005"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "552"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "2"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "bus"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Buses and also jeepneys, because there is no jeepney class."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "10,824"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "481"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "252"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "3"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "truck"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Trucks and semi-trucks. Pickups are usually found here too."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "6,401"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "344"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "238"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "4"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "person"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A person: rider, passenger or pedestrian. Needed to count riders and passengers."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "27,109"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,815"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,082"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "5"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "tricycle"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The Philippine motorcycle with a sidecar, including the electric kind."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "4,908"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "27"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "8"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-vehicle-sources",
+      "text": "Where the pictures come from",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What it is and what it adds"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Country"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "trust grade",
+            "shown": "Trust"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train / val / test"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Their class → ours"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ph_plate_vehicle"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/research-3wj93/philippine-plate-and-vehicle",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A small Philippine set of vehicles and plates, including e-jeepney and e-tricycle. Few pictures, but all Philippine."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "67 / 20 / 13"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "car"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "car"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "semi-truck"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "jeepney"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "e-jeepney"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "motorcycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "motorcycle"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "person"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "person"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "tricycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "tricycle"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "e-tricycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "tricycle"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ph_vehicles"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/capstone-xgfsp/v4-best-philippine-vehicle-datasest-11ztu",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippine vehicle photos with jeepneys and tricycles, mixed with ordinary web, stock and Street View pictures. Heavily augmented (rotated, upside-down, noisy copies). Contributes most of the vehicle pictures and the only large tricycle and jeepney examples."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "19,490 / 856 / 417"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "car"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "car"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "motorcycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "motorcycle"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "pedestrian"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "person"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "tricycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "tricycle"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "jeepney"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ph_vehicles_selfdev"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/selfdev-l0ovg/ph-vehicles",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippine web photos of single vehicles (jeepney, van, bus, tricycle) with large boxes. All of it is used for training only, because its own validation and test parts hold almost no motorcycle, tricycle or bus boxes."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "5,206 / 0 / 0"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "truck"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Bus"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Motorcycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "motorcycle"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Van"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "car"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Tricycle"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "tricycle"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "person"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "person"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "cars"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "car"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Jeepney"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "bus"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "12%",
+        "34%",
+        "8%",
+        "12%",
+        "5%",
+        "9%",
+        "20%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-vehicle-study",
+      "text": "How it contributes to the study",
+      "kicker": ""
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Every violation starts here: no vehicle box, no track, no violation. The "
+        },
+        {
+          "type": "code",
+          "text": "person"
+        },
+        {
+          "type": "text",
+          "text": " class is what makes "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "overloading"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "pickup passengers"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "riding outside"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " and the helmet crop possible, because riders are people standing on a motorcycle box. The "
+        },
+        {
+          "type": "code",
+          "text": "tricycle"
+        },
+        {
+          "type": "text",
+          "text": " class and jeepneys (as "
+        },
+        {
+          "type": "code",
+          "text": "bus"
+        },
+        {
+          "type": "text",
+          "text": ") are what the stock COCO model lacks, so this set is the path to detecting Philippine road users properly. A 6-class training run on it reached epoch 23 of 30 (page 2) and was not deployed."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-vehicle-limits",
+      "text": "Known limits",
+      "kicker": ""
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        [
+          {
+            "type": "text",
+            "text": "Class "
+          },
+          {
+            "type": "code",
+            "text": "tricycle"
+          },
+          {
+            "type": "text",
+            "text": " has only 27 boxes in "
+          },
+          {
+            "type": "code",
+            "text": "val"
+          },
+          {
+            "type": "text",
+            "text": ": its score is unreliable (below 50)."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Class "
+          },
+          {
+            "type": "code",
+            "text": "tricycle"
+          },
+          {
+            "type": "text",
+            "text": " has only 8 boxes in "
+          },
+          {
+            "type": "code",
+            "text": "test"
+          },
+          {
+            "type": "text",
+            "text": ": its score is unreliable (below 50)."
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "ph_vehicles"
+          },
+          {
+            "type": "text",
+            "text": ": real Philippine jeepney / tricycle photos mixed with generic web, stock and Street View pictures; heavy augmentation (rotated, upside-down, noise)"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "ph_vehicles_selfdev"
+          },
+          {
+            "type": "text",
+            "text": ": checked by eye 2026-10-25: Philippine web photos of single vehicles (jeepney, van, bus, tricycle), large boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "The tricycle class is thin in validation and test, so its score is unreliable until our own footage is added (harvest, Vehicles tile)."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Jeepneys share the class "
+          },
+          {
+            "type": "code",
+            "text": "bus"
+          },
+          {
+            "type": "text",
+            "text": ": the system cannot tell a jeepney from a bus."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "How it was cleaned",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Checked 26,069 pictures, kept 26,069. Moved to "
+            },
+            {
+              "type": "code",
+              "text": "datasets/_quarantine/primary_anchor/"
+            },
+            {
+              "type": "text",
+              "text": " (not deleted): nothing. Label files fixed: 0. Pictures re-saved as upright RGB JPEG: 0."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "A picture that sits in both train and val/test keeps its val/test copy; the train copy is the one quarantined."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Before the first cleaning, 81 val and 27 test pictures had a near-identical twin in train (same scene or video frame), so scores measured on this data earlier were optimistic."
+                }
+              ]
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Rebuild this dataset from scratch:"
+        }
+      ],
+      "is_note": true
+    },
+    {
+      "type": "cmd",
+      "text": "python scripts/fetch_datasets.py --model primary_anchor\npython data.py curate --model primary_anchor --apply\npython data.py report"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Waiting to join:"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " "
+        },
+        {
+          "type": "code",
+          "text": "ph_vehicle_classification"
+        },
+        {
+          "type": "text",
+          "text": " (about 6,854 pictures, 7 classes, Philippine, CC BY 4.0). Status when this page was built: downloaded and staged; it joins this set after "
+        },
+        {
+          "type": "code",
+          "text": "curate --apply"
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "code",
+          "text": "report"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Helmet set (helmet_specialist)",
+      "kicker": "Dataset · trains the helmet model"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Pictures of motorcycles "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "together with their riders"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". The model is not asked to find a helmet; it is asked to look at a "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "whole rider"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " (body and head) and say "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "with"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " or "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "without"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " a helmet. This is on purpose: boxing only the helmet misses a helmet carried on the lap, which is not a helmet worn."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "kv",
+      "items": [
+        {
+          "key": "Pictures",
+          "value": [
+            {
+              "type": "text",
+              "text": "10,590 train · 923 validation · 697 test"
+            }
+          ]
+        },
+        {
+          "key": "Philippine share",
+          "value": [
+            {
+              "type": "text",
+              "text": "845 of 12,210 pictures (7%)"
+            }
+          ]
+        },
+        {
+          "key": "Folder",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/helmet_specialist/data.yaml:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "datasets/helmet_specialist/"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/helmet_specialist/data.yaml:1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "Full card",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/helmet_specialist/DATASET_CARD.md:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "DATASET_CARD.md"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/helmet_specialist/DATASET_CARD.md:1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-helmet-classes",
+      "text": "What the labels say",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "id"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "class",
+            "shown": "class"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Plain meaning"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "val boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "test boxes"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "0"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "rider_with_helmet"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A whole rider (torso and head) wearing a helmet, full-face or half."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "9,463"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "873"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "800"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "1"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "rider_without_helmet"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A whole rider with a bare head."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "8,908"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "984"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "790"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-helmet-sources",
+      "text": "Where the pictures come from",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What it is and what it adds"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Country"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "trust grade",
+            "shown": "Trust"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train / val / test"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Their class → ours"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "edgevision_helmet"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://data.mendeley.com/datasets/j82bnw7gsr/1",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "2,392 real motorcycle-traffic photos from Gujarat, India, from a peer-reviewed data paper. Head-level boxes. The most trustworthy road photos in the helmet set, but not Philippine."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "Gajjar K. et al., EdgeVision Dataset, Mendeley Data V1, doi:10.17632/j82bnw7gsr.1"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "India"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,885 / 265 / 230"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "NoHelmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_without_helmet"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Helmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_with_helmet"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "flashys_helmet"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/flashys-workspace/helmet-detection-fsrgu",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Mostly stock photos of people on scooters (watermarks visible) with head-level boxes and augmented copies. Weak evidence for real road accuracy; kept because it is large. Trust grade C."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0 (labels only: the pictures are stock photos)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "C"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "4,837 / 303 / 101"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "Helmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_with_helmet"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "No_helmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_without_helmet"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "martinez_helmet"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/css1823martinezmina-xyhl4/motorcycle-helmet-72c9g",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippine CCTV from one Manila street camera, cut to motorcycle-plus-riders crops (the shape the helmet model is fed). Only about 105 no-helmet boxes, so it mostly adds compliant riders as seen by a CCTV camera. Training only."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "845 / 0 / 0"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "Full-Faced"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_with_helmet"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Half-Faced"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_with_helmet"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Not Wearing Helmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_without_helmet"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "naratip_helmet"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/naratipws/motorcycle-helmet-w75eo",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Close-up photos of riders from Thailand, head-level boxes, some stock-like. The training part holds rotated copies with black corners."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Thailand"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "MIT"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "3,023 / 355 / 366"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "Helmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_with_helmet"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "No-Helmet"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "rider_without_helmet"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "12%",
+        "34%",
+        "8%",
+        "12%",
+        "5%",
+        "9%",
+        "20%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-helmet-study",
+      "text": "How it contributes to the study",
+      "kicker": ""
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "This set teaches the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "no-helmet"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " violation. At run time the pipeline crops the motorcycle "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "plus"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " its riders (so heads are never cut off) and the model judges each rider; the ticket needs a "
+        },
+        {
+          "type": "term",
+          "key": "vote",
+          "shown": "vote"
+        },
+        {
+          "type": "text",
+          "text": " over several looks. Training crops were cut the same way, so what the model sees in training matches what it sees in the system."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-helmet-limits",
+      "text": "Known limits",
+      "kicker": ""
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        [
+          {
+            "type": "text",
+            "text": "Less than a quarter of the pictures are Philippine: collect and review Zamboanga footage ("
+          },
+          {
+            "type": "code",
+            "text": "python harvest.py"
+          },
+          {
+            "type": "text",
+            "text": ")."
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "flashys_helmet"
+          },
+          {
+            "type": "text",
+            "text": ": mostly Shutterstock / iStock stock photos (watermarks visible) of people on scooters, head-level boxes, augmented copies: weak evidence for real road accuracy"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "mapua_helmet"
+          },
+          {
+            "type": "text",
+            "text": ": one street camera in Manila (night + day, 2022), whole 640x640 frames with heads of only ~15 x 26 px, no motorcycle / rider boxes to cut crops from; the helmet model is fed rider crops. Use after cutting rider crops with the vehicle detector. Only ~230 'No-Helmet' heads in 2,184 train pictures. Same camera as martinez_helmet"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "martinez_helmet"
+          },
+          {
+            "type": "text",
+            "text": ": checked by eye 2026-10-25: Manila CCTV, 640x640 stretched frames; only ~105 'Not Wearing Helmet' boxes in train, so it mostly adds compliant riders from the target camera type"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "naratip_helmet"
+          },
+          {
+            "type": "text",
+            "text": ": checked by eye 2026-10-25: head-level boxes on close-up photos of riders (some stock-like); the train split holds rotated copies with black corners; some pictures have only 'person' boxes (skate park, bicycles) and are skipped"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Many pictures are close-ups or stock photos; CCTV-style views from a fixed camera are the minority. This is why the harvest loop matters for this model."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "How it was cleaned",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Checked 12,210 pictures, kept 12,210. Moved to "
+            },
+            {
+              "type": "code",
+              "text": "datasets/_quarantine/helmet_specialist/"
+            },
+            {
+              "type": "text",
+              "text": " (not deleted): nothing. Label files fixed: 0. Pictures re-saved as upright RGB JPEG: 0."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "A picture that sits in both train and val/test keeps its val/test copy; the train copy is the one quarantined."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Before the first cleaning, about 15 val and about 8 test pictures had a near-identical twin in train (same scene or video frame), so scores measured on this data earlier were optimistic."
+                }
+              ]
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Rebuild this dataset from scratch:"
+        }
+      ],
+      "is_note": true
+    },
+    {
+      "type": "cmd",
+      "text": "python scripts/fetch_datasets.py --model helmet_specialist\npython data.py curate --model helmet_specialist --apply\npython data.py report"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Licence plate set (plate_specialist)",
+      "kicker": "Dataset · trains the plate model"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Pictures of vehicles with a "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "tight box around the licence plate"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". The box must be tight, because the text reader ("
+        },
+        {
+          "type": "term",
+          "key": "EasyOCR",
+          "shown": "EasyOCR"
+        },
+        {
+          "type": "text",
+          "text": ") reads whatever is inside the crop, and a loose crop adds noise. One class only: "
+        },
+        {
+          "type": "code",
+          "text": "license_plate"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "kv",
+      "items": [
+        {
+          "key": "Pictures",
+          "value": [
+            {
+              "type": "text",
+              "text": "12,968 train · 1,790 validation · 1,003 test"
+            }
+          ]
+        },
+        {
+          "key": "Philippine share",
+          "value": [
+            {
+              "type": "text",
+              "text": "0 of 15,761 pictures (0%)"
+            }
+          ]
+        },
+        {
+          "key": "Folder",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/plate_specialist/data.yaml:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "datasets/plate_specialist/"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/plate_specialist/data.yaml:1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "Full card",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/plate_specialist/DATASET_CARD.md:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "DATASET_CARD.md"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/plate_specialist/DATASET_CARD.md:1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-plate-classes",
+      "text": "What the labels say",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "id"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "class",
+            "shown": "class"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Plain meaning"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "val boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "test boxes"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "0"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A tight box around the licence plate itself."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "20,517"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "2,561"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,483"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-plate-sources",
+      "text": "Where the pictures come from",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What it is and what it adds"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Country"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "trust grade",
+            "shown": "Trust"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train / val / test"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Their class → ours"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "colorum_plates"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/colorumscan/colorumscan-ox9vj",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Indian, UK and US plates from car-sale photos, despite the Philippine-sounding name. A few boxes sit on the wrong spot (a headlight)."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "mixed (India, UK, USA)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "196 / 61 / 25"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "licence"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "govviolation_plates"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/firstproject-7iwwi/governmentviolation",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Egyptian enforcement cameras with Arabic plates."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Egypt"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,701 / 329 / 118"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "licence_plate"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "indonesia_plates"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://zenodo.org/records/15605718",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "South-East Asian plates (Indonesia) in YOLO format, from Zenodo. The original project named no licence, so research use only."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Indonesia"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0 on Zenodo; the original Roboflow project named none, so research use only"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "675 / 188 / 94"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "plate"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "legacy"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "-"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Roboflow exports that were already committed to the repository before the dataset library existed. Their exact origins are not recorded."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "mixed"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "as committed in git (Roboflow exports)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "2,526 / 297 / 134"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "as committed"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "my_plates"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://data.mendeley.com/datasets/9795rjwxnd/1",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Malaysian car plates from Multimedia University, hosted on Mendeley Data. Trust grade A."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "Malaysian Car Plate Dataset, Mendeley Data V1, doi:10.17632/9795rjwxnd.1"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Malaysia"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "414 / 89 / 0"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "car plate"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "oi_plates"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://storage.googleapis.com/openimages/web/index.html",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Real colour photos of plates from all over the world, from Google's Open Images, sampled to 3,000 / 400 / 400 pictures. Trust grade A."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "Kuznetsova A. et al., The Open Images Dataset V4, IJCV 2020"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Annotations CC BY 4.0 (Google); images CC BY 2.0 (Flickr authors)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "2,995 / 400 / 400"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "Vehicle registration plate"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ph_plates"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/thesis-dzclp/license-plate-detection-jy62w",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Named 'ph' but the pictures are grey Vietnamese parking-barrier photos with heavy augmentation. One camera view repeated many times."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Vietnam"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "4,261 / 404 / 205"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "0"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "tr_plates250"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://zenodo.org/records/23369685",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "250 real Turkish plates, text in the file name, from Zenodo. Trust grade A."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "Bozkir A.S., Turkish License Plate 250 Dataset, Zenodo, doi:10.5281/zenodo.23369685"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Turkey"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "200 / 22 / 27"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "license_plate"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "license_plate"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "12%",
+        "34%",
+        "8%",
+        "12%",
+        "5%",
+        "9%",
+        "20%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-plate-study",
+      "text": "How it contributes to the study",
+      "kicker": ""
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "This set teaches the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "plate finder"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". It feeds two things: the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "plate text"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " on every ticket (find the plate, crop it, read it) and the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "no-plate"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " violation (no plate found in any fair look). It is the weakest dataset for our purpose: none of its pictures is Philippine, and the largest part is grey Vietnamese barrier-camera footage. The plate model trained on it scores clearly below its target (page 2), and the plate model is the first one that should be retrained on our own harvested pictures."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-plate-limits",
+      "text": "Known limits",
+      "kicker": ""
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        [
+          {
+            "type": "text",
+            "text": "Less than a quarter of the pictures are Philippine: collect and review Zamboanga footage ("
+          },
+          {
+            "type": "code",
+            "text": "python harvest.py"
+          },
+          {
+            "type": "text",
+            "text": ")."
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "ph_plates"
+          },
+          {
+            "type": "text",
+            "text": ": named ph_plates but the pictures are greyscale Vietnamese barrier-camera photos with heavy augmentation (checked by eye 2026-10-24)"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "augmented_plates"
+          },
+          {
+            "type": "text",
+            "text": ": same Vietnamese parking-barrier pictures as ph_plates (8,823 more of one camera view): it would drown the varied plate sets. Checked by eye 2026-10-24"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "colorum_plates"
+          },
+          {
+            "type": "text",
+            "text": ": named like a Philippine colorum project, but checked by eye 2026-10-25: Indian, UK and US plates from car-sale photos. A few boxes sit on the wrong spot (a headlight)"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "govviolation_plates"
+          },
+          {
+            "type": "text",
+            "text": ": Egyptian enforcement cameras, Arabic plates (checked by eye 2026-10-25)"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "The plate set contains no Philippine plates. Real read rates on Zamboanga footage have to be measured (benchmark, page 3)."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "How it was cleaned",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Checked 15,761 pictures, kept 15,761. Moved to "
+            },
+            {
+              "type": "code",
+              "text": "datasets/_quarantine/plate_specialist/"
+            },
+            {
+              "type": "text",
+              "text": " (not deleted): nothing. Label files fixed: 0. Pictures re-saved as upright RGB JPEG: 0."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "A picture that sits in both train and val/test keeps its val/test copy; the train copy is the one quarantined."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Before the first cleaning, about 88 val and about 43 test pictures had a near-identical twin in train (same scene or video frame), so scores measured on this data earlier were optimistic."
+                }
+              ]
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Rebuild this dataset from scratch:"
+        }
+      ],
+      "is_note": true
+    },
+    {
+      "type": "cmd",
+      "text": "python scripts/fetch_datasets.py --model plate_specialist\npython data.py curate --model plate_specialist --apply\npython data.py report"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Cabin set (cabin_specialist)",
+      "kicker": "Dataset · trains the cabin model"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Pictures of a vehicle seen from the front through the windshield, plus motorcycle crops for mirrors. Five classes cover four checks: is the window clear or tinted, is a seatbelt on, is a phone in hand, and how many side mirrors does a motorcycle have."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "kv",
+      "items": [
+        {
+          "key": "Pictures",
+          "value": [
+            {
+              "type": "text",
+              "text": "15,689 train · 300 validation · 402 test"
+            }
+          ]
+        },
+        {
+          "key": "Philippine share",
+          "value": [
+            {
+              "type": "text",
+              "text": "3,072 of 16,391 pictures (19%)"
+            }
+          ]
+        },
+        {
+          "key": "Folder",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/cabin_specialist/data.yaml:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "datasets/cabin_specialist/"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/cabin_specialist/data.yaml:1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "Full card",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/cabin_specialist/DATASET_CARD.md:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "DATASET_CARD.md"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/cabin_specialist/DATASET_CARD.md:1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-cabin-classes",
+      "text": "What the labels say",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "id"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "class",
+            "shown": "class"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Plain meaning"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "val boxes"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "test boxes"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "0"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "clear_window"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A windshield you can see through. Needed before seatbelt or phone can be judged."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "9,860"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "306"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "407"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "1"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "tinted_window"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A tinted window. It switches the seatbelt and phone checks off (safety gate)."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "11,142"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "0"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "2"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "seatbelt"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The diagonal strap across the driver's chest."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "6,685"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "215"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "255"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "3"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "driver_phone"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A phone held by the driver, near the head or the wheel."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "3,430"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "69"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "104"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "4"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "side_mirror"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A side mirror seen on a motorcycle."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "3,138"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "0"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-cabin-sources",
+      "text": "Where the pictures come from",
+      "kicker": ""
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What it is and what it adds"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Country"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence"
+          }
+        ],
+        [
+          {
+            "type": "term",
+            "key": "trust grade",
+            "shown": "Trust"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "train / val / test"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Their class → ours"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "govviolation_cabin"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/firstproject-7iwwi/governmentviolation",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Egyptian enforcement cameras seen through the windshield (Arabic plates): windshield, seatbelt and phone."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Egypt"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "1,251 / 112 / 69"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "Windshield"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "clear_window"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Seatbelt"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "seatbelt"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "Phone"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "driver_phone"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "mc_helmet_overload"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/peds-workspace-1618a/mc-side-mirror-violation",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A Philippine street camera (jeepneys and tricycles are visible): about 3,100 small motorcycle crops with side-mirror boxes. The only side-mirror data we have. Training only; each crop is only about 40 x 90 pixels."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "3,072 / 0 / 0"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "sidemirror"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "side_mirror"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "menna_cabin"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/mennaworkspace/ds-5cu4e",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Enforcement-camera views through the windshield (Arabic plates): windshield, seatbelt, phone. The same cars repeat across train, validation and test (video frames and augmented copies), which the cleaning step reduced."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Egypt"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "7,967 / 188 / 333"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "car windshield"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "clear_window"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "seat-belt"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "seatbelt"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "using_mobile"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "driver_phone"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "tint_windows"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/workspace-4fyp5/window-tint-tint-insq3",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "General car-sale photos with a box on every tinted window; many pictures are taken from INSIDE the car and the set has no clear windows. Training only: the tint gate must be tested on Zamboanga footage before it is trusted."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "2,994 / 0 / 0"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "window-tint-tint"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "tinted_window"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "tpnew_seatbelt"
+                }
+              ]
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "link",
+              "href": "https://universe.roboflow.com/skripsinew/tpnew",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "source"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A small seatbelt set. Its first export put every picture in 'test', so all of it is used for training."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "B"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "405 / 0 / 0"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "windshield"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "clear_window"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "code",
+              "text": "seatbelt"
+            },
+            {
+              "type": "text",
+              "text": " → "
+            },
+            {
+              "type": "code",
+              "text": "seatbelt"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "12%",
+        "34%",
+        "8%",
+        "12%",
+        "5%",
+        "9%",
+        "20%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-cabin-study",
+      "text": "How it contributes to the study",
+      "kicker": ""
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "This one model supports three violations: "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "no seatbelt"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "phone use"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " (distracted driving) and "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "missing side mirror"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". The "
+        },
+        {
+          "type": "code",
+          "text": "tinted_window"
+        },
+        {
+          "type": "text",
+          "text": " class acts as a "
+        },
+        {
+          "type": "term",
+          "key": "safety gate",
+          "shown": "safety gate"
+        },
+        {
+          "type": "text",
+          "text": ": if the windshield is tinted, nothing inside can be judged, so no seatbelt or phone ticket is made. The side-mirror class comes from one Philippine street camera and was found after the deployed cabin model was trained, so the deployed model has not learned mirrors yet."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 3,
+      "id": "ds-cabin-limits",
+      "text": "Known limits",
+      "kicker": ""
+    },
+    {
+      "type": "list",
+      "ordered": false,
+      "items": [
+        [
+          {
+            "type": "text",
+            "text": "Class "
+          },
+          {
+            "type": "code",
+            "text": "tinted_window"
+          },
+          {
+            "type": "text",
+            "text": " has only 0 boxes in "
+          },
+          {
+            "type": "code",
+            "text": "val"
+          },
+          {
+            "type": "text",
+            "text": ": its score is unreliable (below 50)."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Class "
+          },
+          {
+            "type": "code",
+            "text": "side_mirror"
+          },
+          {
+            "type": "text",
+            "text": " has only 0 boxes in "
+          },
+          {
+            "type": "code",
+            "text": "val"
+          },
+          {
+            "type": "text",
+            "text": ": its score is unreliable (below 50)."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Class "
+          },
+          {
+            "type": "code",
+            "text": "tinted_window"
+          },
+          {
+            "type": "text",
+            "text": " has only 0 boxes in "
+          },
+          {
+            "type": "code",
+            "text": "test"
+          },
+          {
+            "type": "text",
+            "text": ": its score is unreliable (below 50)."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Class "
+          },
+          {
+            "type": "code",
+            "text": "side_mirror"
+          },
+          {
+            "type": "text",
+            "text": " has only 0 boxes in "
+          },
+          {
+            "type": "code",
+            "text": "test"
+          },
+          {
+            "type": "text",
+            "text": ": its score is unreliable (below 50)."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Less than a quarter of the pictures are Philippine: collect and review Zamboanga footage ("
+          },
+          {
+            "type": "code",
+            "text": "python harvest.py"
+          },
+          {
+            "type": "text",
+            "text": ")."
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "menna_cabin"
+          },
+          {
+            "type": "text",
+            "text": ": enforcement-camera views through the windshield (Arabic plates). The same cars repeat across train / val / test (video frames + augmented copies): see the cleaning log. 'un seat-belt' is not mapped, absence = no seatbelt"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "govviolation_cabin"
+          },
+          {
+            "type": "text",
+            "text": ": checked by eye 2026-10-25: Egyptian enforcement cameras (Arabic plates), the same kind of picture as menna_cabin"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "tint_windows"
+          },
+          {
+            "type": "text",
+            "text": ": checked by eye 2026-10-25: the boxes are windows (not whole cars), but the pictures are general car-sale photos, many from INSIDE the car, and the set has no clear windows. A model trained on it can learn the picture style instead of the tint: do not trust the tint gate until it is tested on Zamboanga footage"
+          }
+        ],
+        [
+          {
+            "type": "code",
+            "text": "mc_helmet_overload"
+          },
+          {
+            "type": "text",
+            "text": ": checked by eye 2026-10-25: a street camera in the Philippines, one box per motorcycle, one per mirror seen ('sidemirror') and one where a mirror is missing ('no_sidemirror'). Only the mirrors that exist are trained: the rule 'fewer than two mirrors' counts them. Pictures are 640x360 so the crops are small"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Validation and test contain no tinted_window and no side_mirror boxes, so those two classes have never been scored."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "The cabin model deployed today was trained on 2026-10-13, before the mirror data was merged (2026-10-25)."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "How it was cleaned",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "Checked 16,391 pictures, kept 16,391. Moved to "
+            },
+            {
+              "type": "code",
+              "text": "datasets/_quarantine/cabin_specialist/"
+            },
+            {
+              "type": "text",
+              "text": " (not deleted): nothing. Label files fixed: 28. Pictures re-saved as upright RGB JPEG: 0."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "A picture that sits in both train and val/test keeps its val/test copy; the train copy is the one quarantined."
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Before the first cleaning, 196 val and 283 test pictures had a near-identical twin in train (same scene or video frame), so scores measured on this data earlier were optimistic."
+                }
+              ]
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Rebuild this dataset from scratch:"
+        }
+      ],
+      "is_note": true
+    },
+    {
+      "type": "cmd",
+      "text": "python scripts/fetch_datasets.py --model cabin_specialist\npython data.py curate --model cabin_specialist --apply\npython data.py report"
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Plate text set (plate_ocr)",
+      "kicker": "Helper collection · scores the plate reader"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Cropped plate pictures with their "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "text"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " written next to them (one line, "
+        },
+        {
+          "type": "code",
+          "text": "0 ABC1234"
+        },
+        {
+          "type": "text",
+          "text": "). It is not a detection set; it answers a different question: "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "how well can we read a plate once we have found it?"
+            }
+          ]
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "kv",
+      "items": [
+        {
+          "key": "Pictures",
+          "value": [
+            {
+              "type": "text",
+              "text": "242 train · 22 val · 27 test"
+            }
+          ]
+        },
+        {
+          "key": "Folder",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/datasets/plate_ocr/DATASET_CARD.md:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "datasets/plate_ocr/"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/datasets/plate_ocr/DATASET_CARD.md:1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Pictures"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Country"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Trust"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "pop_quiz (own corrections)"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "42"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "own data"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Philippines"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "own data (reviewed CCTV)"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "tr_plates250_text"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "249"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Turkey"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A (official / peer-reviewed host)"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Contribution."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " The Turkish crops give plates with known text, so the reader can be scored (character and whole-plate error, called "
+        },
+        {
+          "type": "term",
+          "key": "CER",
+          "shown": "CER"
+        },
+        {
+          "type": "text",
+          "text": " and "
+        },
+        {
+          "type": "term",
+          "key": "WER",
+          "shown": "WER"
+        },
+        {
+          "type": "text",
+          "text": "). The 42 'Pop Quiz' corrections are the most valuable: they are real Zamboanga plates whose text a person typed in the review screen ("
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "Send plate"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "). The "
+        },
+        {
+          "type": "term",
+          "key": "EasyOCR",
+          "shown": "EasyOCR"
+        },
+        {
+          "type": "text",
+          "text": " package has no trainer, so these crops currently "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "score"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " the reader rather than train it."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "callout",
+      "kind": "warn",
+      "title": "Limit",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "No Philippine plate text exists in the set except the Pop Quiz corrections. The most useful next data is a plate-text collection with motorcycle plates (request-only academic sets are listed under 'Waiting' below) and our own reviewed plates."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Car look-alike sets (reid and reid_public)",
+      "kicker": "Helper collection · trains the car matcher"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "The tracker must decide whether a car that reappears after being hidden is the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "same car"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". It does this with a "
+        },
+        {
+          "type": "term",
+          "key": "fingerprint",
+          "shown": "fingerprint"
+        },
+        {
+          "type": "text",
+          "text": " made by a small network ("
+        },
+        {
+          "type": "term",
+          "key": "ReID",
+          "shown": "ReID"
+        },
+        {
+          "type": "text",
+          "text": "). To improve that network we need "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "folders of photos where each folder is one physical car"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Collection"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What it is"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Size now"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence / origin"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "reid"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " (ours)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Photos of real Zamboanga cars from our own clips. Each folder is one car. Made by the reviewers' answers: "
+            },
+            {
+              "type": "i",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "same car"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ", "
+            },
+            {
+              "type": "i",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "different car"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ", "
+            },
+            {
+              "type": "i",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "rest are fine"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " (Forensic review and the harvest 'Same car?' tile). Ignored by git."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "20 car folders, 524 photos"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Own data (real CCTV footage)"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "reid_public"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " (SimVeRi)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A public set of "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "simulated"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " cars (made in the CARLA and SUMO simulators), six pictures per car from different cameras, fetched as a sample without downloading the 2.3 GB zip. Kept in its own folder so a new matcher is still scored on "
+            },
+            {
+              "type": "i",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "real"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " cars."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "651 cars, 3,900 photos"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0 · Zenodo record 21980379 · trust A"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Contribution."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " A test on 67 ticketed cars from two real clips showed that fine-tuning on our own car folders raised the 'find this car again' rate on "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "new"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " cars from the same cameras from 76.7% to 85.3% (three of three random splits better), but gave no gain on a different road. So this data helps on the cameras it came from. Details and the exact method: "
+        },
+        {
+          "type": "code",
+          "text": "training_lab/experiments/reid/RESULTS.md"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Sharp plate set (sr_plates)",
+      "kicker": "Helper collection · teaches the picture enhancer"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Clear plate crops, cut from the labelled pictures of the plate set. A "
+        },
+        {
+          "type": "term",
+          "key": "super-resolution",
+          "shown": "super-resolution"
+        },
+        {
+          "type": "text",
+          "text": " model learns to rebuild a clear plate from a blurry one, so it needs "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "clear"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " plates to learn from; the trainer makes the blurry copies itself. A crop is kept only if it is big enough, plate-shaped, sharp and not a repeat, and it inherits the split of its picture so the enhancer is never scored on a plate it saw in training."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "kv",
+      "items": [
+        {
+          "key": "Pictures",
+          "value": [
+            {
+              "type": "text",
+              "text": "3,578 crops"
+            }
+          ]
+        },
+        {
+          "key": "Made by",
+          "value": [
+            {
+              "type": "link",
+              "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/training_lab/data_tools/sr.py:1",
+              "children": [
+                {
+                  "type": "code",
+                  "text": "data_tools/sr.py"
+                },
+                {
+                  "type": "text",
+                  "text": "training_lab/data_tools/sr.py:1"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "key": "Build command",
+          "value": [
+            {
+              "type": "code",
+              "text": "python data.py sr-build"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "Contribution."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " Plates on CCTV are small and blurry, and the reader fails on blur. The enhancer is the experiment that tries to help; it is listed in the Training Studio but its training is unproven (the custom "
+        },
+        {
+          "type": "term",
+          "key": "GAN",
+          "shown": "GAN"
+        },
+        {
+          "type": "text",
+          "text": " was never shown to beat the ready-made "
+        },
+        {
+          "type": "term",
+          "key": "Real-ESRGAN",
+          "shown": "Real-ESRGAN"
+        },
+        {
+          "type": "text",
+          "text": ", page 2)."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Our own footage and the harvest inbox",
+      "kicker": "The data that matters most"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Public data teaches what things look like. Only "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "our own footage"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " teaches what "
+        },
+        {
+          "type": "i",
+          "children": [
+            {
+              "type": "text",
+              "text": "our cameras"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " see. The project has one confirmed local clip so far (a rainy, wide-angle, 4K crossing in Zamboanga, analysis id "
+        },
+        {
+          "type": "code",
+          "text": "9db131ee"
+        },
+        {
+          "type": "text",
+          "text": "). The "
+        },
+        {
+          "type": "term",
+          "key": "harvest",
+          "shown": "harvest"
+        },
+        {
+          "type": "text",
+          "text": " tool turns finished analyses into training material: it copies pictures the system was unsure about, shows them one at a time, a person checks or draws the boxes, and the accepted pictures join the dataset."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Model"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Pictures in the inbox (all states)"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "cabin_specialist"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "24"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "helmet_specialist"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "12"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "plate_specialist"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "441"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "primary_anchor"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "16"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "steps",
+      "items": [
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Analyze"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " a clip in the Forensic Analyzer (turn on "
+          },
+          {
+            "type": "i",
+            "children": [
+              {
+                "type": "text",
+                "text": "Keep the uploaded video"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " so frames can be sampled later)."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Collect"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ": pictures are copied into "
+          },
+          {
+            "type": "code",
+            "text": "training_lab/harvest_inbox/"
+          },
+          {
+            "type": "text",
+            "text": " with the model's suggested boxes."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Check"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ": one picture at a time; Enter = boxes are right, drag = draw one, N = nothing here, S = not sure."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Accept"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ": finished pictures are added to the model's dataset, only while that model is not training."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Train and compare"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " on the same protected benchmark clips."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "ok",
+      "title": "Safety rules built into the harvest tool",
+      "blocks": [
+        {
+          "type": "list",
+          "ordered": false,
+          "items": [
+            [
+              {
+                "type": "text",
+                "text": "It never writes inside "
+              },
+              {
+                "type": "code",
+                "text": "hulikamote_backend/"
+              },
+              {
+                "type": "text",
+                "text": " and never uploads anything."
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": "A picture is added only after a person has checked it."
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": "Benchmark clips are protected and never harvested."
+              }
+            ],
+            [
+              {
+                "type": "text",
+                "text": "All pictures of one car stay on the same side of the train / validation split, and the test split is never written."
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Held back, waiting, or deliberately not used",
+      "kicker": "So nothing is hidden"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Choices about data are part of the method. These sources were looked at and "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "not"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " put into training, with the reason."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Status"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Why / what is needed"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ph_vehicle_classification"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Staged"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The 2026-10-25 download was cut off; re-downloaded complete on 2026-10-27 (6,854 images, 7 classes) and merged. Still to do: python data.py curate --apply and python data.py report."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "mapua_helmet"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "Held back"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Downloaded and checked, held back (merge: false): whole 640x640 frames of one Manila street camera with ~15 x 26 px heads. Turn it on after cutting rider crops with the vehicle detector."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "rodosol_alpr"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Request needed"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "20,000 plate photos with text, 5,000 are motorcycles (Brazilian LLL-NNNN plates, same shape as PH plates). Academic licence: e-mail the signed form from a university address to the authors, link arrives in 1-5 days. https://github.com/raysonlaroca/rodosol-alpr-dataset"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ufpr_alpr"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Request needed"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "4,500 frames with plate text, cars and motorcycles. Same request process. https://web.inf.ufpr.br/vri/databases/ufpr-alpr/"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "veri_776"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Request needed"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Real multi-camera vehicle ReID (776 cars). Request form on the authors' page; non-commercial research."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ufpr_sr_plates"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Check licence"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "100,000 paired low / high resolution plate photos for the enhancer. Project page: valfride.github.io/nascimento2025toward (check the licence there)."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "seatbelt_phone_kaggle"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Account needed"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Kaggle sets need a Kaggle token (kaggle.json); State Farm Distracted Driver is competition data with its own rules, check them before use."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "side_mirror"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "In use, weak"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "FIRST DATA FOUND 2026-10-25: mc_helmet_overload (a Philippine street camera, about 3,100 small motorcycle crops, train only, merged under cabin_specialist). Pictures are 640x360, so each crop is only about 40 x 90 px: harvest crops from our own footage (harvest tool) to get a sharp validation set. Other Roboflow projects (mximos-workspace/side-mirror, mohammed-hoodh-valiyaveedu-paramba-ghqjk/side-mirror-bounding-box) were never checked for motorcycles."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "window_tint_seg"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "To check"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "slzz-hwlpm/car-window-tint-jw8l0 (4,589 imgs, Public Domain, segmentation, class 'window'): check what 'window' means before mapping to tinted_window. A clear-window set from the same kind of pictures is what tint_windows lacks."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ph_plate_t1lqw"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "To check"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "colorumscan/philiipine_license_plate-t1lqw (480 imgs, CC BY 4.0) has classes '0' and 'n': look at them before mapping to license_plate. (colorum_plates, from the same workspace, turned out to be Indian / UK / US plates, so check by eye first.)"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "ridesafe_400"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "off",
+              "text": "Not released"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Dashcam clips of riders with helmet / no-helmet / plate / triple riding (arXiv 2503.00428, IIIT Hyderabad). The page says 'Coming Soon': nothing to download yet. Watch https://dash-cop.github.io/ or ask the authors."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "not_used"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "bad",
+              "text": "Excluded"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Excluded on purpose: DeBoniz/helmet-detection-dataset (18k images, origin not stated), dataph Cebu CCTV (30 GB, no licence, shows people), mabo7237/license-plates-700k and sonnetechnology OCR (labels made by a model), seatbelt sets on Hugging Face (whole-photo classification, no boxes), Medellin motorcyclists (riders are not labelled as persons)."
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "16%",
+        "12%",
+        "72%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Also downloaded but not merged: "
+        },
+        {
+          "type": "code",
+          "text": "augmented_plates"
+        },
+        {
+          "type": "text",
+          "text": " (8,823 more pictures of the same Vietnamese barrier camera, which would drown the varied plate sets)."
+        }
+      ],
+      "is_note": true
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Licences and credits",
+      "kicker": "Required by the licences"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Most sources are "
+        },
+        {
+          "type": "term",
+          "key": "CC BY 4.0",
+          "shown": "CC BY 4.0"
+        },
+        {
+          "type": "text",
+          "text": ", which allows use and changes "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "if the author is credited"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". One source is under the "
+        },
+        {
+          "type": "term",
+          "key": "MIT licence",
+          "shown": "MIT licence"
+        },
+        {
+          "type": "text",
+          "text": ". One (Indonesia plates) names no licence in its original project, so it is treated as research use only. Open Images pictures are credited to their Flickr authors. The full per-source licence is in each table above and in "
+        },
+        {
+          "type": "code",
+          "text": "configs/datasets_manifest.yaml"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Source"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Citation"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Licence"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Used for"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "edgevision_helmet"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Gajjar K. et al., EdgeVision Dataset, Mendeley Data V1, doi:10.17632/j82bnw7gsr.1"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "helmet_specialist"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "oi_plates"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Kuznetsova A. et al., The Open Images Dataset V4, IJCV 2020"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Annotations CC BY 4.0 (Google); images CC BY 2.0 (Flickr authors)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "plate_specialist"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "augmented_plates"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Augmented Startups, Vehicle Registration Plates Dataset, Roboflow Universe"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "plate_specialist"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "my_plates"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Malaysian Car Plate Dataset, Mendeley Data V1, doi:10.17632/9795rjwxnd.1"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "plate_specialist"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "tr_plates250"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Bozkir A.S., Turkish License Plate 250 Dataset, Zenodo, doi:10.5281/zenodo.23369685"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "plate_specialist"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "tr_plates250_text"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Bozkir A.S., Turkish License Plate 250 Dataset, Zenodo, doi:10.5281/zenodo.23369685"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "plate_ocr"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "simveri"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Zhang Z. et al., SimVeRi, Zenodo, doi:10.5281/zenodo.21980379"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "CC BY 4.0"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "reid_public"
+            }
+          ]
+        ]
+      ],
+      "widths": [],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "callout",
+      "kind": "warn",
+      "title": "For the thesis text",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "The thesis must credit the CC BY sources (author and link, listed in the tables above) and must state that the plate, helmet and cabin data are not Zamboanga footage. The wording is prepared in "
+            },
+            {
+              "type": "code",
+              "text": "docs/THESIS_REVISIONS.md"
+            },
+            {
+              "type": "text",
+              "text": ", block I."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Rules that keep the numbers honest",
+      "kicker": "Method"
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Rule"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Why it matters"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "One standard layout: "
+            },
+            {
+              "type": "code",
+              "text": "images/{train,val,test}"
+            },
+            {
+              "type": "text",
+              "text": " + "
+            },
+            {
+              "type": "code",
+              "text": "labels/{train,val,test}"
+            },
+            {
+              "type": "text",
+              "text": " + "
+            },
+            {
+              "type": "code",
+              "text": "data.yaml"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Every trainer and checker reads the same shape, so nothing depends on a source's own folder style."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "A source's own train / valid / test split is kept (valid becomes val)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Near-identical augmented copies never leak into the test part."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "code",
+              "text": "force_split: train"
+            },
+            {
+              "type": "text",
+              "text": " for one fixed camera filmed over time"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Neighbouring video frames in validation or test would make the score look better than it is."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "The same photo in two splits: the "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "train"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " copy is quarantined"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Test and validation stay as they are, so scores stay comparable. Nothing is deleted: files are moved to "
+            },
+            {
+              "type": "code",
+              "text": "datasets/_quarantine/"
+            },
+            {
+              "type": "text",
+              "text": "."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Near-duplicates are found with a "
+            },
+            {
+              "type": "term",
+              "key": "perceptual hash",
+              "shown": "perceptual hash"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Catches the same scene resized, re-encoded or slightly rotated. Unrelated pictures sit far apart."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Files named "
+            },
+            {
+              "type": "code",
+              "text": "harvest__*"
+            },
+            {
+              "type": "text",
+              "text": " (our reviewed CCTV pictures) are never moved, fixed or re-saved"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Our own checked work is protected from the automatic cleaner."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Country and 'Philippine' flags were checked "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "by eye"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " on picture sheets, not from project names"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "'ph_plates' is Vietnamese and 'colorum_plates' is Indian / UK / US. A name is not evidence."
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "46%",
+        "54%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "code",
+      "path": "training_lab/datasets/helmet_specialist/data.yaml",
+      "first": 1,
+      "last": 19,
+      "title": "What a dataset's data.yaml says (the helmet set)",
+      "lines": [
+        {
+          "n": 1,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# Helmet Specialist Dataset"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 2,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# Input: Cropped motorcycle box joined with its riders' person boxes (as engine/pipeline.py crops it,"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 3,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "#        so heads are not cut off). Harvest training crops the same way."
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 4,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# Task: Detect whether each rider has a valid helmet on their head"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 5,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "#"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 6,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# CRITICAL ANNOTATION RULE:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 7,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# Use composite classes — annotate the WHOLE RIDER, not just the helmet."
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 8,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# This prevents the \"helmet on lap\" false negative described in AI_ENGINEERING_PLAN.md."
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 9,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# The rider's bounding box should span their full torso + head."
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 10,
+          "tokens": [
+            {
+              "cls": "",
+              "text": " "
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 11,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "path: datasets/helmet_specialist"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 12,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "train: images/train"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 13,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "val: images/val"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 14,
+          "tokens": [
+            {
+              "cls": "",
+              "text": " "
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 15,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "nc: "
+            },
+            {
+              "cls": "num",
+              "text": "2"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 16,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "names:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 17,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "  "
+            },
+            {
+              "cls": "num",
+              "text": "0"
+            },
+            {
+              "cls": "",
+              "text": ": rider_with_helmet     "
+            },
+            {
+              "cls": "com",
+              "text": "# Helmet center is in the top 20% of this box"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 18,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "  "
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            },
+            {
+              "cls": "",
+              "text": ": rider_without_helmet  "
+            },
+            {
+              "cls": "com",
+              "text": "# No helmet, or helmet held in hand/on lap"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 19,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "test: images/test"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": []
+    },
+    {
+      "type": "figure",
+      "kind": "scene",
+      "caption": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "How one source is split."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " The source's own validation and test parts are kept; a photo found in both train and validation is removed from train."
+        }
+      ],
+      "scene": {
+        "w": 760,
+        "h": 240,
+        "aria": "How a source dataset flows into the standard layout",
+        "primitives": [
+          {
+            "type": "rect",
+            "x": 10.0,
+            "y": 20.0,
+            "w": 150.0,
+            "h": 58.0,
+            "rx": 9.0,
+            "role": "bx c1",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 85.0,
+            "y": 45.0,
+            "text": "Source dataset",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 85.0,
+            "y": 61.0,
+            "text": "its own train / valid / test",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 215.0,
+            "y": 20.0,
+            "w": 150.0,
+            "h": 58.0,
+            "rx": 9.0,
+            "role": "bx c3",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 290.0,
+            "y": 45.0,
+            "text": "Merge",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 290.0,
+            "y": 61.0,
+            "text": "names get '<id>__' prefix",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 420.0,
+            "y": 20.0,
+            "w": 150.0,
+            "h": 58.0,
+            "rx": 9.0,
+            "role": "bx c4",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 495.0,
+            "y": 45.0,
+            "text": "Check and clean",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 495.0,
+            "y": 61.0,
+            "text": "broken, tiny, duplicate",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 625.0,
+            "y": 20.0,
+            "w": 125.0,
+            "h": 58.0,
+            "rx": 9.0,
+            "role": "bx c7",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 687.5,
+            "y": 45.0,
+            "text": "Standard layout",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 687.5,
+            "y": 61.0,
+            "text": "images / labels",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "line",
+            "x1": 160.0,
+            "y1": 49.0,
+            "x2": 215.0,
+            "y2": 49.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 365.0,
+            "y1": 49.0,
+            "x2": 420.0,
+            "y2": 49.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 570.0,
+            "y1": 49.0,
+            "x2": 625.0,
+            "y2": 49.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "rect",
+            "x": 420.0,
+            "y": 105.0,
+            "w": 150.0,
+            "h": 44.0,
+            "rx": 9.0,
+            "role": "bx c8",
+            "dash": true
+          },
+          {
+            "type": "text",
+            "x": 495.0,
+            "y": 123.0,
+            "text": "Quarantine folder",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 495.0,
+            "y": 139.0,
+            "text": "nothing is deleted",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "line",
+            "x1": 495.0,
+            "y1": 78.0,
+            "x2": 495.0,
+            "y2": 105.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": true,
+            "width": 1.0
+          }
+        ]
+      }
+    }
+  ]
+}

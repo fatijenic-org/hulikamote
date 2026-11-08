@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "q-seed-01",
+      "q": "Why YOLOv8n and not a bigger model?",
+      "a": "It is small and fast and exports to a **12 MB** file that runs on a laptop. The project aims to stay light enough for a barangay trial.\n\nIf a score stays too low, the training config already names the next size up (`yolov8s`).",
+      "tags": ["models", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-02",
+      "q": "Why not one model for everything?",
+      "a": "The objects differ hugely in size. A licence plate covers about **0.3% of the picture**. Cropping the vehicle first lets each small model see its object large.",
+      "tags": ["models", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-03",
+      "q": "How do you know your scores are not inflated?",
+      "a": "The dataset cleaner found near-copies shared between training and validation or test pictures and moved the training copies away. The test split is never written to, and the best epoch is chosen by a strict score (fitness).\n\nSee page 3, *What the cleaning found*.",
+      "tags": ["data", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-04",
+      "q": "Your plate score is below target. Is the system usable?",
+      "a": "",
+      "tags": ["plates", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-05",
+      "q": "Where is the accuracy on real roads?",
+      "a": "",
+      "tags": ["evaluation", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-06",
+      "q": "Is the training data legal to use?",
+      "a": "Every source is listed with its licence and country on page 1. Most are CC BY 4.0 (credit required), one is research-use only, and sources of unclear origin were excluded.",
+      "tags": ["data", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-07",
+      "q": "Chapter 3 says local footage first. Why did you train on public datasets?",
+      "a": "",
+      "tags": ["data", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-08",
+      "q": "Where are the email notifications and the demerit points?",
+      "a": "",
+      "tags": ["scope", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-09",
+      "q": "How do you protect faces and plates under RA 10173?",
+      "a": "",
+      "tags": ["privacy", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-10",
+      "q": "Why can't Missing Side Mirror work yet?",
+      "a": "",
+      "tags": ["violations", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-11",
+      "q": "How did you choose the thresholds (25 px/s, 45 degrees, 60% vote)?",
+      "a": "",
+      "tags": ["violations", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    },
+    {
+      "id": "q-seed-12",
+      "q": "What happens at night or in the rain?",
+      "a": "",
+      "tags": ["limits", "starter"],
+      "created": "2026-10-28T00:00:00.000Z",
+      "updated": "2026-10-28T00:00:00.000Z"
+    }
+  ]
+}

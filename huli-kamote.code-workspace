@@ -1,0 +1,16 @@
+ {
+    "folders": [
+    {
+        "path": "hulikamote_backend"
+    },
+    {
+        "path": "hulikamote_dashboard"
+    },
+    {
+        "path": "hulikamote_app"
+    }
+    ],
+    "settings": {
+    "dart.flutterSdkPath": "default"
+    }
+}

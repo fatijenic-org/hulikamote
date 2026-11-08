@@ -1,0 +1,48 @@
+# HULI-KAMOTE Master Training Configuration
+# Adjust these values per model and available hardware.
+
+# ─── Hardware ────────────────────────────────────────────────────────────────
+device: 0          # GPU index. Use 'cpu' if no CUDA GPU available.
+workers: 4         # DataLoader workers. Match your CPU core count.
+
+# ─── Model Defaults (can be overridden per CLI call) ─────────────────────────
+base_model: yolov8n.pt    # Nano for VRAM efficiency. Upgrade to yolov8s.pt if mAP is insufficient.
+epochs: 150
+patience: 30              # Early stopping — stop if no improvement for 30 epochs
+imgsz: 640                # Use 320 for specialist models (small crops); 640 for primary anchor
+batch: 16                 # Reduce to 8 if you get CUDA OOM errors
+
+# ─── Augmentation (applied by Ultralytics internally during training) ─────────
+# These are passed to the YOLO trainer via the train() call.
+# Override in scripts/augment.py for offline augmentation instead.
+augment:
+  hsv_h: 0.015      # Hue shift — simulates lighting changes
+  hsv_s: 0.7        # Saturation — simulates weather/fog
+  hsv_v: 0.4        # Value/brightness — simulates night
+  degrees: 5.0      # Rotation — slight camera tilt
+  translate: 0.1    # Random crop translation
+  scale: 0.5        # Zoom augmentation
+  fliplr: 0.5       # Horizontal flip (50% chance)
+  mosaic: 1.0       # Mosaic augmentation (4-image tiles)
+
+# ─── Per-Model Overrides ─────────────────────────────────────────────────────
+models:
+  primary_anchor:
+    imgsz: 640
+    epochs: 50          # Usually converges fast from COCO pretrained weights
+    note: "Use pretrained COCO yolov8n.pt. Only retrain if adding tricycle/kalesa classes."
+
+  helmet_specialist:
+    imgsz: 320          # Input is a crop, not the full 4K frame
+    epochs: 150
+    note: "Most important model. Target mAP@0.5 >= 0.85 before deploying."
+
+  plate_specialist:
+    imgsz: 320
+    epochs: 100
+    note: "Target mAP@0.5 >= 0.90. Tight crops are critical for EasyOCR accuracy."
+
+  cabin_specialist:
+    imgsz: 320
+    epochs: 150
+    note: "tinted_window class precision must be high. False positives skip valid checks."

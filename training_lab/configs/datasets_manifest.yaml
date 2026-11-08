@@ -1,0 +1,306 @@
+# Public datasets merged into our training sets by scripts/fetch_datasets.py.
+#
+# Per entry:  id (unique; becomes the file-name prefix "<id>__"), where to get it (`source:` + location),
+#             classes: {<their class name>: <OUR class name from datasets/<model>/data.yaml>}  (unlisted = dropped),
+#             license, country, ph (true = Philippine pictures), trust, citation.
+#
+# TRUST  A = official or peer-reviewed host with a DOI / a major institution (Open Images, Mendeley Data, Zenodo)
+#        B = community upload with an open licence and a named author (Roboflow Universe and mirrors of it)
+#        C = origin unclear. Not used for val / test; not listed here unless the user asks.
+# Sources and licences were checked on 2026-10-24. Credit them in the thesis (CC BY needs attribution).
+#
+# `source: roboflow` (the default) needs your own API key: set ROBOFLOW_API_KEY, then run scripts/fetch_datasets.py.
+# Entries marked `# needs key` are not downloaded yet; without a key they are skipped, nothing else breaks.
+# `version: latest` takes the newest published version. A project with no published version ("Dataset versions 0")
+# cannot be downloaded by API: open its page, press "Fork", and use your fork's workspace/project here.
+# Every other source type needs no account at all.
+#
+# Class mapping notes that need a human eye are marked  # CHECK  (the curator prints sample sheets to decide).
+#
+# Optional keys:  force_split: train   put every picture of the source in train (use it for one fixed camera filmed over time:
+#                                      neighbouring frames in val / test would make the scores look better than they are)
+#                 crop_to: <their class> + crop_margin: 0.1   save one picture per box of that class (a motorcycle, a rider)
+#                                      with the wanted boxes inside: the models are fed crops like this by the pipeline
+#                 merge: false         downloaded and documented, kept out of the training set
+# Country / Philippine flags were checked BY EYE on the contact sheets (data.py sheet) on 2026-10-25 for the Roboflow sets:
+# a project name is not evidence (ph_plates is Vietnamese, colorum_plates is Indian / UK / US).
+
+helmet_specialist:          # riders on roads, with / without helmet
+  - id: flashys_helmet
+    workspace: flashys-workspace
+    project: helmet-detection-fsrgu
+    version: 2
+    license: "CC BY 4.0 (labels only: the pictures are stock photos)"
+    trust: C
+    notes: "mostly Shutterstock / iStock stock photos (watermarks visible) of people on scooters, head-level boxes, augmented copies: weak evidence for real road accuracy"
+    classes: {Helmet: rider_with_helmet, No_helmet: rider_without_helmet}
+  - id: edgevision_helmet           # 2,392 motorcycle-traffic photos from Gujarat, India; peer-reviewed data paper
+    source: mendeley
+    dataset: j82bnw7gsr
+    version: 1
+    license: CC BY 4.0
+    country: India
+    trust: A
+    citation: "Gajjar K. et al., EdgeVision Dataset, Mendeley Data V1, doi:10.17632/j82bnw7gsr.1"
+    classes: {NoHelmet: rider_without_helmet, Helmet: rider_with_helmet}   # CHECK: head-level boxes; BikeWithRider dropped
+  # --- needs key (Philippine and South-East Asian helmet sets, all permissive licences) ---
+  - id: mapua_helmet                # Mapua University (Manila): Philippine CCTV, helmet categories
+    workspace: mapua-university-n7qm7
+    project: motorcycle-helmet-7d2gr
+    version: latest
+    license: CC BY 4.0
+    country: Philippines
+    ph: true
+    trust: B
+    merge: false                    # downloaded 2026-10-25, NOT merged: see notes
+    notes: "one street camera in Manila (night + day, 2022), whole 640x640 frames with heads of only ~15 x 26 px, no motorcycle / rider boxes to cut crops from; the helmet model is fed rider crops. Use after cutting rider crops with the vehicle detector. Only ~230 'No-Helmet' heads in 2,184 train pictures. Same camera as martinez_helmet"
+    classes: {Full-Faced: rider_with_helmet, Half-Faced: rider_with_helmet, No-Helmet: rider_without_helmet}   # "Invalid" dropped
+  - id: martinez_helmet             # 1,046 imgs (436 + augmented copies), Philippine CCTV, helmet categories + rider boxes
+    workspace: css1823martinezmina-xyhl4
+    project: motorcycle-helmet-72c9g
+    version: latest
+    license: CC BY 4.0
+    country: Philippines
+    ph: true
+    trust: B
+    force_split: train              # the same Manila street camera as mapua_helmet: frames of one video must not sit in val / test
+    crop_to: motorcycle-rider       # the helmet model is fed the motorcycle + its riders, so train on that crop
+    crop_margin: 0.1
+    notes: "checked by eye 2026-10-25: Manila CCTV, 640x640 stretched frames; only ~105 'Not Wearing Helmet' boxes in train, so it mostly adds compliant riders from the target camera type"
+    classes: {Full-Faced: rider_with_helmet, Half-Faced: rider_with_helmet, Not Wearing Helmet: rider_without_helmet}
+  - id: naratip_helmet              # needs key; 3,835 images (Thai uploader), helmet / no-helmet / person
+    workspace: naratipws
+    project: motorcycle-helmet-w75eo
+    version: latest
+    license: MIT
+    country: Thailand
+    trust: B
+    notes: "checked by eye 2026-10-25: head-level boxes on close-up photos of riders (some stock-like); the train split holds rotated copies with black corners; some pictures have only 'person' boxes (skate park, bicycles) and are skipped"
+    classes: {Helmet: rider_with_helmet, No-Helmet: rider_without_helmet}
+  # mc_helmet_overload (workspace peds-workspace-1618a) is under cabin_specialist: it has NO helmet classes, it is the side-mirror set.
+  # 1,533 imgs, With Helmet / Without Helmet / licence: needs a FORK first (it has no published version):
+  # - id: tai_helmet
+  #   workspace: <your-workspace>   # fork of tai-tpl0h/helmet-and-no-helmet-rider-detection-xljqe
+  #   project: helmet-and-no-helmet-rider-detection-xljqe
+  #   version: 1
+  #   classes: {With Helmet: rider_with_helmet, Without Helmet: rider_without_helmet}
+
+cabin_specialist:           # seen from outside through the windshield
+  # NOTE: there is no public side-mirror data for motorcycles (self-label side_mirror with the harvest tool) and
+  # no windshield-level tint set that is Philippine; the tint class below comes from general car photos.
+  - id: menna_cabin
+    workspace: mennaworkspace
+    project: ds-5cu4e
+    version: 2
+    license: CC BY 4.0
+    country: Egypt
+    trust: B
+    notes: "enforcement-camera views through the windshield (Arabic plates). The same cars repeat across train / val / test (video frames + augmented copies): see the cleaning log. 'un seat-belt' is not mapped, absence = no seatbelt"
+    classes: {car windshield: clear_window, seat-belt: seatbelt, using_mobile: driver_phone}
+  - id: tpnew_seatbelt
+    workspace: skripsinew
+    project: tpnew
+    version: 1
+    force_split: train      # its v1 export has every image in "test"
+    license: CC BY 4.0
+    trust: B
+    classes: {windshield: clear_window, seatbelt: seatbelt}
+  - id: govviolation_cabin          # 3,516 imgs: Windshield / Seatbelt / Phone / licence_plate, seen from outside
+    workspace: firstproject-7iwwi
+    project: governmentviolation
+    version: latest
+    license: CC BY 4.0
+    country: Egypt
+    trust: B
+    notes: "checked by eye 2026-10-25: Egyptian enforcement cameras (Arabic plates), the same kind of picture as menna_cabin"
+    classes: {Windshield: clear_window, Seatbelt: seatbelt, Phone: driver_phone}
+  - id: tint_windows                # 2,994 imgs, one class = a tinted window; feeds the tint gate
+    workspace: workspace-4fyp5
+    project: window-tint-tint-insq3
+    version: latest
+    license: CC BY 4.0
+    trust: B
+    force_split: train              # general car photos: weak evidence, never used to score the model
+    notes: "checked by eye 2026-10-25: the boxes are windows (not whole cars), but the pictures are general car-sale photos, many from INSIDE the car, and the set has no clear windows. A model trained on it can learn the picture style instead of the tint: do not trust the tint gate until it is tested on Zamboanga footage"
+    classes: {window-tint-tint: tinted_window}
+  - id: mc_helmet_overload          # 573 imgs (1,489 with augmented copies): the only SIDE-MIRROR set; classes motorcycle / sidemirror / no_sidemirror
+    workspace: peds-workspace-1618a
+    project: mc-side-mirror-violation
+    version: latest
+    license: CC BY 4.0
+    country: Philippines            # by eye: jeepneys and tricycles; the owner gives no location
+    ph: true
+    trust: B
+    force_split: train              # one fixed street camera (an LPR camera with a time stamp): frames of one video must not sit in val / test
+    crop_to: motorcycle             # the cabin model is fed the vehicle's box, so train on the motorcycle crop
+    crop_margin: 0.1
+    notes: "checked by eye 2026-10-25: a street camera in the Philippines, one box per motorcycle, one per mirror seen ('sidemirror') and one where a mirror is missing ('no_sidemirror'). Only the mirrors that exist are trained: the rule 'fewer than two mirrors' counts them. Pictures are 640x360 so the crops are small"
+    classes: {sidemirror: side_mirror}
+
+primary_anchor:             # Philippine vehicles (only if you fine-tune the vehicle detector)
+  - id: ph_vehicles
+    workspace: capstone-xgfsp
+    project: v4-best-philippine-vehicle-datasest-11ztu
+    version: 1
+    license: CC BY 4.0
+    country: Philippines
+    ph: mixed
+    trust: B
+    notes: "real Philippine jeepney / tricycle photos mixed with generic web, stock and Street View pictures; heavy augmentation (rotated, upside-down, noise)"
+    classes: {car: car, truck: truck, bus: bus, motorcycle: motorcycle, pedestrian: person,
+              tricycle: tricycle, jeepney: bus}
+  - id: ph_plate_vehicle
+    workspace: research-3wj93
+    project: philippine-plate-and-vehicle
+    version: 3
+    license: CC BY 4.0
+    country: Philippines
+    ph: true
+    trust: B
+    classes: {car: car, truck: truck, semi-truck: truck, jeepney: bus, e-jeepney: bus,
+              motorcycle: motorcycle, person: person, tricycle: tricycle, e-tricycle: tricycle}
+  # --- needs key (Philippine vehicle sets with tricycle / jeepney / van) ---
+  - id: ph_vehicle_classification   # 6,854 imgs, 7 classes; van counts as car, jeepney as bus
+    workspace: thesis-vdkcz         # 2026-10-25: the download was cut off (roboflow.zip is incomplete): re-run with your key
+    project: vehicle-classification-philippines
+    version: latest
+    license: CC BY 4.0
+    country: Philippines
+    ph: true
+    trust: B
+    classes: {car: car, truck: truck, bus: bus, van: car, jeepney: bus, motorcycles: motorcycle, tricycles: tricycle}
+  - id: ph_vehicles_selfdev         # 5,752 imgs; no person class in the download (7 vehicle classes)
+    workspace: selfdev-l0ovg
+    project: ph-vehicles
+    version: latest
+    license: CC BY 4.0
+    country: Philippines
+    ph: true
+    trust: B
+    force_split: train              # its own val / test hold almost no motorcycle / tricycle / bus boxes, so they would score the wrong thing
+    notes: "checked by eye 2026-10-25: Philippine web photos of single vehicles (jeepney, van, bus, tricycle), large boxes"
+    classes: {truck: truck, Bus: bus, Motorcycle: motorcycle, Van: car, Tricycle: tricycle, person: person,
+              cars: car, Jeepney: bus}
+
+plate_specialist:           # the licence plate on a vehicle
+  - id: ph_plates
+    workspace: thesis-dzclp
+    project: license-plate-detection-jy62w
+    version: 1
+    license: CC BY 4.0
+    trust: B
+    country: Vietnam
+    notes: "named ph_plates but the pictures are greyscale Vietnamese barrier-camera photos with heavy augmentation (checked by eye 2026-10-24)"
+    classes: {"0": license_plate}
+  # --- no account needed ---
+  - id: oi_plates                   # Google Open Images V7: real photos of plates worldwide, colour, many angles
+    source: openimages
+    license: "Annotations CC BY 4.0 (Google); images CC BY 2.0 (Flickr authors)"
+    trust: A
+    citation: "Kuznetsova A. et al., The Open Images Dataset V4, IJCV 2020"
+    classes: {Vehicle registration plate: license_plate}      # group-of boxes and drawings are skipped
+    max_images: {train: 3000, validation: 400, test: 400}
+  - id: augmented_plates            # 8,823 imgs by Augmented Startups (Roboflow Universe), mirrored on Hugging Face
+    source: huggingface
+    repo: keremberke/license-plate-object-detection
+    patterns: ["data/train.zip", "data/valid.zip", "data/test.zip", "README*"]   # not the valid-mini sample
+    layout: coco_zips
+    skip_categories: [license-plate-recognition]
+    license: CC BY 4.0
+    country: Vietnam
+    trust: B
+    merge: false                    # downloaded for the record, NOT merged: set true to add it
+    notes: "same Vietnamese parking-barrier pictures as ph_plates (8,823 more of one camera view): it would drown the varied plate sets. Checked by eye 2026-10-24"
+    citation: "Augmented Startups, Vehicle Registration Plates Dataset, Roboflow Universe"
+    classes: {license_plate: license_plate}
+  - id: indonesia_plates            # South-East Asian plates (Indonesia), YOLO format
+    source: zenodo
+    record: 15605718
+    files: [anpr-model-1.v1i.yolov11.zip]
+    license: "CC BY 4.0 on Zenodo; the original Roboflow project named none, so research use only"
+    country: Indonesia
+    trust: B
+    classes: {plate: license_plate}                # the zip also has a "toyota" (car brand) class: dropped
+  - id: my_plates                   # Malaysian plates (Multimedia University), peer-hosted on Mendeley Data
+    source: mendeley
+    dataset: 9795rjwxnd
+    version: 1
+    license: CC BY 4.0
+    country: Malaysia
+    trust: A
+    citation: "Malaysian Car Plate Dataset, Mendeley Data V1, doi:10.17632/9795rjwxnd.1"
+    classes: {car plate: license_plate}            # pictures with only a "car" box are skipped, not trained as 'no plate'
+  - id: tr_plates250                # 250 real Turkish plates with the text in the file name
+    source: zenodo
+    record: 23369685
+    files: [Turkish_Licence_Plates_250.zip]
+    names: [license_plate]
+    image_dirs: [Turkish_Licence_Plates_250/images_with_texts]
+    label_format: tf_corners        # "ymin, xmin, ymax, xmax" fractions (verified by drawing the boxes)
+    license: CC BY 4.0
+    country: Turkey
+    trust: A
+    citation: "Bozkir A.S., Turkish License Plate 250 Dataset, Zenodo, doi:10.5281/zenodo.23369685"
+    classes: {license_plate: license_plate}
+  # --- needs key ---
+  - id: colorum_plates              # 299 imgs (703 with augmented copies)
+    workspace: colorumscan
+    project: colorumscan-ox9vj
+    version: latest
+    license: CC BY 4.0
+    country: mixed (India, UK, USA)
+    ph: false
+    trust: B
+    notes: "named like a Philippine colorum project, but checked by eye 2026-10-25: Indian, UK and US plates from car-sale photos. A few boxes sit on the wrong spot (a headlight)"
+    classes: {licence: license_plate}
+  - id: govviolation_plates         # same download as govviolation_cabin (cached), plate class only
+    workspace: firstproject-7iwwi
+    project: governmentviolation
+    version: latest
+    license: CC BY 4.0
+    country: Egypt
+    trust: B
+    notes: "Egyptian enforcement cameras, Arabic plates (checked by eye 2026-10-25)"
+    classes: {licence_plate: license_plate}
+
+plate_ocr:                  # plate crops + their text ("0 ABC1234"); the trainer reads images/train + labels/train
+  - id: tr_plates250_text           # crops cut from tr_plates250, text taken from the file names
+    stage_as: tr_plates250          # same download as above, fetched once
+    source: zenodo
+    record: 23369685
+    files: [Turkish_Licence_Plates_250.zip]
+    names: [license_plate]
+    text_from: filename
+    license: CC BY 4.0
+    country: Turkey
+    trust: A
+    citation: "Bozkir A.S., Turkish License Plate 250 Dataset, Zenodo, doi:10.5281/zenodo.23369685"
+
+# reid: our own review decisions (datasets/reid) are kept apart from public identity sets (datasets/reid_public),
+# so the held-out score of a new ReID model is still measured on real Zamboanga cars.
+reid_public:
+  - id: simveri
+    source: zenodo
+    record: 21980379
+    file: images.zip                # 2.3 GB: only a sample is fetched (per_identity pictures of each car, different cameras)
+    per_identity: 6
+    workers: 24
+    license: CC BY 4.0
+    trust: A
+    notes: "SYNTHETIC (CARLA + SUMO simulation): pre-training only, never for scoring"
+    citation: "Zhang Z. et al., SimVeRi, Zenodo, doi:10.5281/zenodo.21980379"
+
+# Things only a person can do (accounts, forms, e-mails). Nothing here is read by the scripts.
+_manual:
+  ph_vehicle_classification: "The 2026-10-25 download was cut off (1.6 GB roboflow.zip that is not a complete zip). In your own terminal, with ROBOFLOW_API_KEY set: python scripts/fetch_datasets.py --only ph_vehicle_classification   (then python data.py curate --apply and python data.py report)."
+  mapua_helmet: "Downloaded and checked, held back (merge: false): whole 640x640 frames of one Manila street camera with ~15 x 26 px heads. Turn it on after cutting rider crops with the vehicle detector."
+  rodosol_alpr: "20,000 plate photos with text, 5,000 are motorcycles (Brazilian LLL-NNNN plates, same shape as PH plates). Academic licence: e-mail the signed form from a university address to the authors, link arrives in 1-5 days. https://github.com/raysonlaroca/rodosol-alpr-dataset"
+  ufpr_alpr: "4,500 frames with plate text, cars and motorcycles. Same request process. https://web.inf.ufpr.br/vri/databases/ufpr-alpr/"
+  veri_776: "Real multi-camera vehicle ReID (776 cars). Request form on the authors' page; non-commercial research."
+  ufpr_sr_plates: "100,000 paired low / high resolution plate photos for the enhancer. Project page: valfride.github.io/nascimento2025toward (check the licence there)."
+  seatbelt_phone_kaggle: "Kaggle sets need a Kaggle token (kaggle.json); State Farm Distracted Driver is competition data with its own rules, check them before use."
+  side_mirror: "FIRST DATA FOUND 2026-10-25: mc_helmet_overload (a Philippine street camera, about 3,100 small motorcycle crops, train only, merged under cabin_specialist). Pictures are 640x360, so each crop is only about 40 x 90 px: harvest crops from our own footage (harvest tool) to get a sharp validation set. Other Roboflow projects (mximos-workspace/side-mirror, mohammed-hoodh-valiyaveedu-paramba-ghqjk/side-mirror-bounding-box) were never checked for motorcycles."
+  window_tint_seg: "slzz-hwlpm/car-window-tint-jw8l0 (4,589 imgs, Public Domain, segmentation, class 'window'): check what 'window' means before mapping to tinted_window. A clear-window set from the same kind of pictures is what tint_windows lacks."
+  ph_plate_t1lqw: "colorumscan/philiipine_license_plate-t1lqw (480 imgs, CC BY 4.0) has classes '0' and 'n': look at them before mapping to license_plate. (colorum_plates, from the same workspace, turned out to be Indian / UK / US plates, so check by eye first.)"
+  ridesafe_400: "Dashcam clips of riders with helmet / no-helmet / plate / triple riding (arXiv 2503.00428, IIIT Hyderabad). The page says 'Coming Soon': nothing to download yet. Watch https://dash-cop.github.io/ or ask the authors."
+  not_used: "Excluded on purpose: DeBoniz/helmet-detection-dataset (18k images, origin not stated), dataph Cebu CCTV (30 GB, no licence, shows people), mabo7237/license-plates-700k and sonnetechnology OCR (labels made by a model), seatbelt sets on Hugging Face (whole-photo classification, no boxes), Medellin motorcyclists (riders are not labelled as persons)."

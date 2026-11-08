@@ -1,0 +1,51 @@
+{
+  "active_violations": [
+    "counterflow"
+  ],
+  "tracker": "deepsort",
+  "plate_model": "plate_specialist_train2_20260924.onnx",
+  "plate_method": "smart",
+  "plate_format": "raw",
+  "ocr_engine": "easyocr",
+  "enhancement": "realesrgan",
+  "primary_model": "",
+  "use_sahi": false,
+  "flag_sensitivity": 4,
+  "evidence_gap": 5,
+  "keep_input_video": false,
+  "flow_mode": "auto",
+  "per_violation_configs": {
+    "counterflow": {
+      "rois": [],
+      "time_limit": 180.0,
+      "allowed_classes": [
+        "bus"
+      ],
+      "banned_classes": [],
+      "banned_turns": [
+        "left"
+      ],
+      "max_riders": 2,
+      "light_mode": "timer",
+      "red_start": 0.0,
+      "red": 30.0,
+      "green": 30.0,
+      "yellow": 3.0
+    }
+  },
+  "regions_of_interest": {
+    "counterflow_zones": []
+  },
+  "video_native_width": 1920,
+  "video_native_height": 1080,
+  "camera_profiles": [
+    {
+      "name": "cam1",
+      "url": "rtsp://192.168.68.111:8554/cam1"
+    }
+  ],
+  "active_source": {
+    "url": "C:\\Users\\nekol\\desktop\\istqm_framework\\k_dev\\huli-kamote\\hulikamote_backend\\snapshots\\live_uploads\\c1f0b11ab9b44bb79e6265d0d6a78da5.mp4"
+  },
+  "camera_id": "forensic_b06feb80"
+}

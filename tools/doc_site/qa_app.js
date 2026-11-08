@@ -1,0 +1,284 @@
+/* Q&A page. Plain JavaScript, no libraries, nothing leaves this computer.
+   Data: {version: 1, items: [{id, q, a, tags, created, updated}]}
+   Saved to tools/doc_site/data/qa.json through serve.py (GET / PUT api/qa).
+   Opened straight from disk (no server)? It keeps a copy in this browser and offers Export / Import JSON. */
+(() => {
+  "use strict";
+  const API = "api/qa";
+  const LS_KEY = "hk_qa_local_v1";
+  const root = document.getElementById("qa-app");
+
+  const state = { items: [], mode: "local", q: "", status: "all", tag: "", editing: null, message: "", kind: "" };
+
+  // ── tiny helpers ──────────────────────────────────────────────────────────
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const now = () => new Date().toISOString();
+  const newId = () => "q-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const stamp = (iso) => { try { return new Date(iso).toLocaleString(); } catch (e) { return iso; } };
+
+  function h(tag, attrs, ...kids) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === "class") node.className = v;
+      else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+      else if (v !== false && v != null) node.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) node.append(kid.nodeType ? kid : document.createTextNode(kid));
+    return node;
+  }
+
+  // ── Markdown (safe: everything is escaped first) ──────────────────────────
+  function inline(text) {
+    return text.split(/(`[^`\n]+`)/).map((part) => {
+      if (part.length > 2 && part[0] === "`" && part[part.length - 1] === "`") return "<code>" + esc(part.slice(1, -1)) + "</code>";
+      let t = esc(part);
+      t = t.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+      t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>");
+      t = t.replace(/(^|[^_\w])_([^_\n]+)_(?![_\w])/g, "$1<i>$2</i>");
+      t = t.replace(/~~([^~\n]+)~~/g, "<s>$1</s>");
+      t = t.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      return t;
+    }).join("");
+  }
+
+  function markdown(src) {
+    const lines = String(src).replace(/\r\n?/g, "\n").split("\n");
+    const out = [];
+    let i = 0;
+    const isTableSep = (s) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(s || "");
+    const cells = (s) => s.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^\s*$/.test(line)) { i++; continue; }
+      let m;
+      if ((m = line.match(/^```\s*(\w*)\s*$/))) {                              // fenced code
+        const body = []; i++;
+        while (i < lines.length && !/^```\s*$/.test(lines[i])) body.push(lines[i++]);
+        i++;
+        out.push("<pre><code>" + esc(body.join("\n")) + "</code></pre>");
+      } else if ((m = line.match(/^(#{1,4})\s+(.*)$/))) {                      // headings
+        const level = m[1].length + 2;                                          // # becomes h3 so the page's h1/h2 stay unique
+        out.push(`<h${level}>${inline(m[2])}</h${level}>`); i++;
+      } else if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { out.push("<hr>"); i++; }
+      else if (/^>\s?/.test(line)) {                                            // quote
+        const body = [];
+        while (i < lines.length && /^>\s?/.test(lines[i])) body.push(lines[i++].replace(/^>\s?/, ""));
+        out.push("<blockquote>" + markdown(body.join("\n")) + "</blockquote>");
+      } else if (line.includes("|") && isTableSep(lines[i + 1])) {              // table
+        const head = cells(line); i += 2;
+        const rows = [];
+        while (i < lines.length && lines[i].includes("|") && !/^\s*$/.test(lines[i])) rows.push(cells(lines[i++]));
+        out.push("<div class='tbl'><table><thead><tr>" + head.map((c) => "<th>" + inline(c) + "</th>").join("") + "</tr></thead><tbody>"
+          + rows.map((r) => "<tr>" + r.map((c) => "<td>" + inline(c) + "</td>").join("") + "</tr>").join("") + "</tbody></table></div>");
+      } else if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {                         // lists (one level; indented lines continue the item)
+        const ordered = /^\s*\d+[.)]\s+/.test(line);
+        const items = [];
+        while (i < lines.length && /^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) {
+          let text = lines[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ""); i++;
+          const task = text.match(/^\[( |x|X)\]\s+(.*)$/);
+          let prefix = "";
+          if (task) { prefix = task[1] === " " ? "&#9744; " : "&#9745; "; text = task[2]; }
+          while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) text += "\n" + lines[i++].trim();
+          items.push("<li>" + prefix + inline(text).replace(/\n/g, "<br>") + "</li>");
+        }
+        out.push((ordered ? "<ol>" : "<ul>") + items.join("") + (ordered ? "</ol>" : "</ul>"));
+      } else {                                                                  // paragraph (a single line break stays a line break)
+        const body = [];
+        while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(```|#{1,4}\s|>\s?|\s*([-*+]|\d+[.)])\s+)/.test(lines[i])) body.push(lines[i++]);
+        if (!body.length) body.push(lines[i++]);
+        out.push("<p>" + inline(body.join("\n")).replace(/\n/g, "<br>") + "</p>");
+      }
+    }
+    return out.join("");
+  }
+
+  // ── loading and saving ────────────────────────────────────────────────────
+  function valid(doc) {
+    return doc && doc.version === 1 && Array.isArray(doc.items) && doc.items.every((x) =>
+      x && typeof x.id === "string" && typeof x.q === "string" && typeof x.a === "string" && Array.isArray(x.tags)
+      && typeof x.created === "string" && typeof x.updated === "string");
+  }
+
+  function setMessage(text, kind) { state.message = text; state.kind = kind || ""; paintStatus(); }
+
+  async function load() {
+    try {
+      const res = await fetch(API, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const doc = await res.json();
+      if (!valid(doc)) throw new Error("the JSON file has an unexpected shape");
+      state.items = doc.items; state.mode = "server";
+      setMessage("Connected. Every change is saved to the JSON file on this computer.", "ok");
+    } catch (e) {
+      state.mode = "local";
+      try { const doc = JSON.parse(localStorage.getItem(LS_KEY) || "null"); if (valid(doc)) state.items = doc.items; } catch (err) { /* empty */ }
+      setMessage("Not connected to the local server, so changes stay in this browser only. Use Export JSON to keep a file, or start the server (see the box below).", "warn");
+    }
+    render();
+  }
+
+  async function persist() {
+    const body = JSON.stringify({ version: 1, items: state.items });
+    try { localStorage.setItem(LS_KEY, body); } catch (e) { /* private mode: ignore */ }
+    if (state.mode !== "server") { setMessage("Saved in this browser only (" + new Date().toLocaleTimeString() + ").", "warn"); return true; }
+    try {
+      const res = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json", "X-HK-QA": "1" }, body });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "HTTP " + res.status);
+      setMessage("Saved to the JSON file at " + new Date().toLocaleTimeString() + ".", "ok");
+      return true;
+    } catch (e) {
+      setMessage("Could not save to the file: " + e.message + ". Your change is still in this browser.", "bad");
+      return false;
+    }
+  }
+
+  // ── actions ───────────────────────────────────────────────────────────────
+  const parseTags = (s) => [...new Set(s.split(/[,;\n]/).map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 12);
+
+  async function saveItem(id, q, a, tagText) {
+    q = q.trim();
+    if (!q) { alert("Write the question first."); return false; }
+    const tags = parseTags(tagText);
+    if (id) {
+      const item = state.items.find((x) => x.id === id);
+      Object.assign(item, { q, a, tags, updated: now() });
+    } else {
+      state.items.unshift({ id: newId(), q, a, tags, created: now(), updated: now() });
+    }
+    state.editing = null;
+    render();
+    await persist();
+    return true;
+  }
+
+  async function removeItem(id) {
+    const item = state.items.find((x) => x.id === id);
+    if (!confirm('Delete this question?\n\n"' + item.q.slice(0, 120) + '"')) return;
+    state.items = state.items.filter((x) => x.id !== id);
+    render();
+    await persist();
+  }
+
+  function exportJson() {
+    const blob = new Blob([JSON.stringify({ version: 1, items: state.items }, null, 2)], { type: "application/json" });
+    const a = h("a", { href: URL.createObjectURL(blob), download: "hulikamote-qa.json" });
+    document.body.append(a); a.click(); a.remove();
+  }
+
+  function importJson(file) {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      let doc;
+      try { doc = JSON.parse(reader.result); } catch (e) { alert("That file is not valid JSON."); return; }
+      if (!valid(doc)) { alert("That file does not look like a Q&A export (expected version 1 and an items list)."); return; }
+      const byId = new Map(state.items.map((x) => [x.id, x]));
+      let added = 0, replaced = 0;
+      for (const item of doc.items) { if (byId.has(item.id)) replaced++; else added++; byId.set(item.id, item); }
+      if (!confirm("Import " + doc.items.length + " questions? " + added + " new, " + replaced + " replace the ones with the same id.")) return;
+      state.items = [...byId.values()];
+      render();
+      await persist();
+    };
+    reader.readAsText(file);
+  }
+
+  // ── drawing ───────────────────────────────────────────────────────────────
+  let statusEl, listEl, countEl, tagsEl;
+
+  function paintStatus() { if (statusEl) { statusEl.className = "qa-status " + state.kind; statusEl.textContent = state.message; } }
+
+  function editor(item) {
+    const isNew = !item;
+    const qBox = h("textarea", { class: "qa-in", rows: "2", placeholder: "The question a panelist may ask..." }, item ? item.q : "");
+    const aBox = h("textarea", { class: "qa-in qa-answer", rows: "9", placeholder: "Your answer. Markdown works: **bold**, *italic*, `code`, - lists, > quotes, ```code blocks```, [link](https://...)" }, item ? item.a : "");
+    const tagBox = h("input", { class: "qa-in", type: "text", placeholder: "tags, separated by commas (data, plates, privacy...)", value: item ? item.tags.join(", ") : "" });
+    const preview = h("div", { class: "qa-md qa-preview", hidden: true });
+    const writeTab = h("button", { type: "button", class: "qa-tab on" }, "Write");
+    const prevTab = h("button", { type: "button", class: "qa-tab" }, "Preview");
+    const show = (preview_) => {
+      preview.hidden = !preview_; aBox.hidden = preview_;
+      writeTab.classList.toggle("on", !preview_); prevTab.classList.toggle("on", preview_);
+      if (preview_) preview.innerHTML = aBox.value.trim() ? markdown(aBox.value) : "<p class='note'>Nothing to preview yet.</p>";
+    };
+    writeTab.addEventListener("click", () => show(false));
+    prevTab.addEventListener("click", () => show(true));
+    const submit = () => saveItem(item ? item.id : null, qBox.value, aBox.value, tagBox.value);
+    const keys = (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); submit(); } };
+    for (const box of [qBox, aBox, tagBox]) box.addEventListener("keydown", keys);
+    setTimeout(() => qBox.focus(), 0);
+    return h("div", { class: "qa-card qa-edit" },
+      h("label", { class: "qa-label" }, "Question"), qBox,
+      h("div", { class: "qa-labelrow" }, h("label", { class: "qa-label" }, "Answer"), h("span", { class: "qa-tabs" }, writeTab, prevTab)),
+      aBox, preview,
+      h("label", { class: "qa-label" }, "Tags"), tagBox,
+      h("div", { class: "qa-actions" },
+        h("button", { type: "button", class: "qa-btn primary", onclick: submit }, isNew ? "Add question" : "Save changes"),
+        h("button", { type: "button", class: "qa-btn", onclick: () => { state.editing = null; render(); } }, "Cancel"),
+        h("span", { class: "note" }, "Ctrl+Enter saves")));
+  }
+
+  function card(item) {
+    if (state.editing === item.id) return editor(item);
+    const answered = item.a.trim().length > 0;
+    const answer = h("div", { class: "qa-md" });
+    answer.innerHTML = answered ? markdown(item.a) : "<p class='note'><i>No answer yet. Click Edit to write one.</i></p>";
+    return h("article", { class: "qa-card", id: item.id },
+      h("header", {},
+        h("h3", {}, item.q),
+        h("span", { class: "chip " + (answered ? "ok" : "warn") }, h("i", {}, answered ? "✓" : "!"), answered ? "Answered" : "Unanswered")),
+      answer,
+      h("footer", {},
+        h("span", { class: "qa-tags" }, item.tags.map((t) => h("button", { type: "button", class: "pill", title: "Show only this tag", onclick: () => { state.tag = state.tag === t ? "" : t; render(); } }, t))),
+        h("span", { class: "note" }, "edited " + stamp(item.updated)),
+        h("span", { class: "qa-row noprint" },
+          h("button", { type: "button", class: "qa-btn small", onclick: () => { state.editing = item.id; render(); } }, "Edit"),
+          h("button", { type: "button", class: "qa-btn small danger", onclick: () => removeItem(item.id) }, "Delete"))));
+  }
+
+  function visible() {
+    const q = state.q.trim().toLowerCase();
+    return state.items.filter((x) => {
+      if (state.status === "answered" && !x.a.trim()) return false;
+      if (state.status === "unanswered" && x.a.trim()) return false;
+      if (state.tag && !x.tags.includes(state.tag)) return false;
+      return !q || (x.q + " " + x.a + " " + x.tags.join(" ")).toLowerCase().includes(q);
+    });
+  }
+
+  function render() {
+    root.textContent = "";
+    const answered = state.items.filter((x) => x.a.trim()).length;
+    const search = h("input", { class: "qa-in qa-search", type: "search", placeholder: "Search questions, answers, tags...", value: state.q });
+    search.addEventListener("input", () => { state.q = search.value; paintList(); });
+    const status = h("select", { class: "qa-in qa-select", onchange: (e) => { state.status = e.target.value; paintList(); } },
+      [["all", "All"], ["unanswered", "Unanswered"], ["answered", "Answered"]].map(([v, t]) => h("option", { value: v, selected: state.status === v }, t)));
+    const importer = h("input", { type: "file", accept: "application/json,.json", hidden: true, onchange: (e) => { if (e.target.files[0]) importJson(e.target.files[0]); e.target.value = ""; } });
+    statusEl = h("div", { class: "qa-status" });
+    countEl = h("span", { class: "qa-count" }, state.items.length + " questions, " + answered + " answered");
+    tagsEl = h("div", { class: "qa-tagbar noprint" });
+    listEl = h("div", { class: "qa-list" });
+    root.append(
+      statusEl,
+      h("div", { class: "qa-bar noprint" },
+        h("button", { type: "button", class: "qa-btn primary", onclick: () => { state.editing = "new"; render(); } }, "+ Add question"),
+        search, status,
+        h("button", { type: "button", class: "qa-btn", onclick: exportJson }, "Export JSON"),
+        h("button", { type: "button", class: "qa-btn", onclick: () => importer.click() }, "Import JSON"), importer),
+      countEl, tagsEl, ...(state.editing === "new" ? [editor(null)] : []), listEl);
+    paintStatus();
+    paintList();
+  }
+
+  function paintList() {
+    const all = [...new Set(state.items.flatMap((x) => x.tags))].sort();
+    tagsEl.textContent = "";
+    if (all.length) tagsEl.append(h("span", { class: "note" }, "Tags: "), ...all.map((t) => h("button", { type: "button", class: "pill" + (state.tag === t ? " on" : ""), onclick: () => { state.tag = state.tag === t ? "" : t; render(); } }, t)));
+    const shown = visible();
+    listEl.textContent = "";
+    if (!shown.length) listEl.append(h("p", { class: "note" }, state.items.length ? "No question matches the search or filter." : "No questions yet. Click + Add question."));
+    for (const item of shown) listEl.append(card(item));
+    countEl.textContent = state.items.length + " questions, " + state.items.filter((x) => x.a.trim()).length + " answered" + (shown.length !== state.items.length ? ", showing " + shown.length : "");
+  }
+
+  load();
+})();

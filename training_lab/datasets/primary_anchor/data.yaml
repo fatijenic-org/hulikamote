@@ -1,0 +1,18 @@
+# Primary Anchor Dataset
+# NOTE: In most cases you do NOT need to train this model from scratch.
+# The pretrained YOLOv8n COCO weights already detect cars and motorcycles well.
+# Only train this if you need to add Philippine-specific vehicle classes (e.g., tricycles, kalesas).
+
+path: datasets/primary_anchor
+train: images/train
+val: images/val
+
+nc: 6
+names:
+  0: motorcycle
+  1: car
+  2: bus
+  3: truck
+  4: person     # REQUIRED: riders are counted for overloading and helmet checks
+  5: tricycle   # PH tricycle (motorcycle + sidecar); jeepneys are labelled bus
+test: images/test

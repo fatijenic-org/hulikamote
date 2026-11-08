@@ -1,0 +1,15 @@
+{
+  "cars": 168,
+  "photos": 4888,
+  "repeats_dropped": 275,
+  "held_out_cars": 42,
+  "before": 0.8417,
+  "after": 0.8875,
+  "best_epoch": 12,
+  "deployed": false,
+  "passed": true,
+  "note": "Better on cars it never saw.",
+  "check": "cars it never saw",
+  "before_map": 0.8144,
+  "after_map": 0.8407
+}

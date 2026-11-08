@@ -1,0 +1,12 @@
+# Plate Specialist Dataset
+# Input: a vehicle picture (the plate sits somewhere on it). Task: find the licence plate.
+# Annotation rule: a tight rectangle around the plate itself; EasyOCR accuracy depends on tight crops.
+
+path: datasets/plate_specialist
+train: images/train
+val: images/val
+test: images/test
+
+nc: 1
+names:
+  0: license_plate

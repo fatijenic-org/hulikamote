@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dataset Viewer · HULI-KAMOTE</title>
+<style>
+:root{--bg:#0f1318;--p1:#171c23;--p2:#1e252e;--p3:#2a333f;--tx:#e6ebf1;--mut:#8a97a8;--ac:#4cc2ff;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:14px/1.4 "Segoe UI",system-ui,sans-serif;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:var(--p3);border:1px solid #3a4553;border-radius:6px;padding:5px 11px;cursor:pointer}
+button:hover{border-color:var(--ac)}button:disabled{opacity:.45;cursor:default}
+button.pri{background:#1d6fa5;border-color:#2b8ccc}button.dng{background:#7f2a2a;border-color:#a33}
+input[type=text],input[type=search],select,textarea{background:var(--p1);border:1px solid #3a4553;border-radius:6px;padding:5px 8px}
+#app{display:flex;height:100%}
+#side{width:250px;background:var(--p1);border-right:1px solid #222a33;overflow:auto;flex:none}
+#side h1{font-size:15px;margin:0;padding:14px 14px 8px;letter-spacing:.5px}
+.ds{padding:10px 14px;cursor:pointer;border-left:3px solid transparent}
+.ds:hover{background:var(--p2)}.ds.on{background:var(--p2);border-color:var(--ac)}
+.ds b{display:block}.ds small{color:var(--mut)}
+.badge{display:inline-block;font-size:11px;padding:1px 6px;border-radius:9px;margin-left:5px;vertical-align:1px}
+.b-train{background:#7a4a00;color:#ffd48a}.b-warn{background:#5c4a00;color:var(--warn)}.b-idx{background:#26394d;color:var(--ac)}
+#main{flex:1;display:flex;flex-direction:column;min-width:0}
+#tabs{display:flex;gap:2px;padding:8px 12px 0;background:var(--p1);border-bottom:1px solid #222a33;align-items:flex-end}
+.tab{padding:8px 16px;border-radius:7px 7px 0 0;cursor:pointer;color:var(--mut)}
+.tab.on{background:var(--bg);color:var(--tx)}
+#tabs .sp{flex:1}#tabs button{margin-bottom:6px;margin-left:4px}
+#views{flex:1;min-height:0;position:relative}
+.view{position:absolute;inset:0;display:none;flex-direction:column}.view.on{display:flex}
+.scroll{overflow:auto;padding:16px 22px}
+#bar{padding:8px 12px;background:var(--p1);display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-bottom:1px solid #222a33}
+.chip{padding:3px 9px;border-radius:14px;border:1px solid #3a4553;cursor:pointer;background:var(--p2);user-select:none;white-space:nowrap}
+.chip.on{background:#1d6fa5;border-color:var(--ac)}.chip i{font-style:normal;color:var(--mut);margin-left:4px;font-size:12px}
+.sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+#galwrap{flex:1;min-height:0;position:relative}
+#gal{position:absolute;inset:0;overflow-y:scroll;overflow-x:hidden;user-select:none}
+#spacer{position:relative}
+.tile{position:absolute;display:flex;align-items:center;justify-content:center;background:#0a0d11;border-radius:5px;overflow:hidden;cursor:pointer;outline:2px solid transparent}
+.tile:hover{outline-color:#4a5868}.tile.sel{outline:3px solid var(--ac)}
+.tile img{display:block;max-width:var(--w);max-height:var(--h)}
+.wrap{position:relative;display:inline-block}
+.ov{position:absolute;inset:0;pointer-events:none}
+.bx{position:absolute;border:2px solid;border-radius:1px}
+.noboxes .ov{display:none}
+.chk{position:absolute;left:5px;top:5px;width:20px;height:20px;border-radius:5px;background:#000a;border:2px solid #fff9;display:none;z-index:2;text-align:center;line-height:16px;font-size:14px}
+.tile:hover .chk,.selecting .chk{display:block}.tile.sel .chk{display:block;background:var(--ac);border-color:var(--ac);color:#000}
+.tag{position:absolute;right:5px;top:5px;display:flex;gap:4px;z-index:2}
+.tag span{background:#000b;border-radius:4px;padding:0 5px;font-size:11px}
+.cap{position:absolute;left:0;right:0;bottom:0;background:#000c;font-size:11px;padding:2px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none}
+.tile:hover .cap{display:block}
+#band{position:absolute;border:1px solid var(--ac);background:#4cc2ff30;pointer-events:none;display:none;z-index:5}
+#selbar{display:none;position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--p3);border:1px solid var(--ac);border-radius:10px;padding:8px 14px;gap:8px;align-items:center;z-index:20;box-shadow:0 6px 24px #000a}
+#selbar.on{display:flex}
+#veil{position:absolute;inset:0;background:#0f1318e6;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;z-index:30}
+#veil.on{display:flex}
+.prog{height:8px;width:320px;background:var(--p3);border-radius:4px;overflow:hidden}.prog>div{height:100%;background:var(--ac);width:0}
+#lb{position:fixed;inset:0;background:#05080cf2;display:none;z-index:50}#lb.on{display:flex}
+#stage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-width:0}
+#stage img{display:block;max-width:calc(100vw - 380px);max-height:calc(100vh - 40px);user-select:none}
+#stage .bx{pointer-events:auto;cursor:pointer}.bx.s{box-shadow:0 0 0 2px #fff,0 0 12px #fff8}
+.bx em{position:absolute;left:-2px;top:-19px;font-style:normal;font-size:11px;padding:0 4px;color:#000;white-space:nowrap}
+#panel{width:350px;background:var(--p1);border-left:1px solid #222a33;overflow:auto;padding:14px;font-size:13px}
+#panel h3{margin:14px 0 6px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px}
+#panel table{width:100%;border-collapse:collapse}#panel td{padding:2px 0;vertical-align:top}#panel td:first-child{color:var(--mut);width:92px}
+.brow{display:flex;gap:6px;align-items:center;padding:3px 6px;border-radius:5px;cursor:pointer}.brow:hover,.brow.s{background:var(--p3)}
+.nav{position:absolute;top:50%;transform:translateY(-50%);font-size:28px;background:#0008;border:0;padding:12px 8px;z-index:3}
+#toasts{position:fixed;right:14px;bottom:14px;z-index:90;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--p3);border:1px solid #455;border-radius:8px;padding:9px 14px;box-shadow:0 4px 18px #000a;display:flex;gap:12px;align-items:center}
+.toast.err{border-color:var(--bad)}
+#modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:100}#modal.on{display:flex}
+#modal .box{background:var(--p2);border:1px solid #455;border-radius:12px;padding:20px;max-width:560px;max-height:80vh;overflow:auto}
+#modal .btns{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+pre{background:var(--p3);padding:8px;border-radius:6px;overflow:auto;max-height:220px}
+.card{background:var(--p1);border:1px solid #222a33;border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.card h2{margin:0 0 10px;font-size:14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px}
+.hb{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12px}.hb .l{width:130px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb .t{flex:1;display:flex;height:16px;background:var(--p2);border-radius:3px;overflow:hidden}.hb .t div{height:100%}.hb .v{width:80px;text-align:right}
+.warn{border-left:3px solid var(--warn);padding:4px 10px;margin:4px 0;background:#2a2410}.warn.bad{border-color:var(--bad);background:#2a1414}
+.fnd{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.fnd img{height:78px;border-radius:4px;cursor:pointer;background:#000}
+.md h1,.md h2,.md h3{margin:16px 0 6px}.md table{border-collapse:collapse;margin:8px 0}.md td,.md th,table.t td,table.t th{border:1px solid #333d49;padding:3px 9px;text-align:left}
+code{background:var(--p3);padding:0 4px;border-radius:3px}
+table.t{border-collapse:collapse;font-size:13px}
+.qgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:6px}
+.qgrid .tile{position:relative;height:140px}
+.muted{color:var(--mut)}
+::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-thumb{background:#38424f;border-radius:6px}
+</style></head>
+<body>
+<div id="app">
+  <div id="side"><h1>🗂 Datasets</h1><div id="dslist"></div></div>
+  <div id="main">
+    <div id="tabs">
+      <div class="tab on" data-t="gallery">Gallery</div><div class="tab" data-t="overview">Overview</div>
+      <div class="tab" data-t="about">About</div><div class="tab" data-t="clean">Clean</div><div class="tab" data-t="quarantine">Quarantine</div>
+      <div class="sp"></div><button id="btnUndo" title="Ctrl+Z">↶ Undo</button><button id="btnRefresh" title="Read the folders again">⟳</button><button id="btnHelp">?</button>
+    </div>
+    <div id="views">
+      <div class="view on" id="v-gallery">
+        <div id="bar"></div>
+        <div id="galwrap"><div id="gal"><div id="spacer"></div><div id="band"></div></div><div id="selbar"></div></div>
+      </div>
+      <div class="view" id="v-overview"><div class="scroll" id="ovbody"></div></div>
+      <div class="view" id="v-about"><div class="scroll" id="aboutbody"></div></div>
+      <div class="view" id="v-clean"><div class="scroll" id="cleanbody"></div></div>
+      <div class="view" id="v-quarantine"><div class="scroll" id="qbody"></div></div>
+      <div id="veil"><div id="veiltxt">Reading the dataset…</div><div class="prog"><div id="veilbar"></div></div></div>
+    </div>
+  </div>
+</div>
+<div id="lb"><div id="stage"><button class="nav" id="lbPrev" style="left:6px">‹</button><button class="nav" id="lbNext" style="right:6px">›</button></div><div id="panel"></div></div>
+<div id="modal"><div class="box" id="mbox"></div></div>
+<div id="toasts"></div>
+<script>
+"use strict";
+const TOKEN = "__TOKEN__";
+const PAGE = 150, GAP = 6;
+const COLORS = ["#ff6b6b","#4cc2ff","#fbbf24","#4ade80","#c084fc","#fb923c","#2dd4bf","#f472b6","#a3e635","#94a3b8"];
+const col = c => COLORS[c % COLORS.length];
+const $ = s => document.querySelector(s);
+const fmt = n => (n ?? 0).toLocaleString();
+const kb = b => b > 1048576 ? (b / 1048576).toFixed(1) + " MB" : Math.round(b / 1024) + " KB";
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") e.className = v; else if (k === "style") e.style.cssText = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) e.append(k.nodeType ? k : document.createTextNode(k));
+  return e;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// replaceChildren accepts nested arrays and skips null/false, like el()
+const _rc = Element.prototype.replaceChildren;
+Element.prototype.replaceChildren = function (...k) { _rc.apply(this, k.flat(Infinity).filter(x => x != null && x !== false)); };
+
+// ---------------------------------------------------------------- api
+class ApiError extends Error { constructor(status, body) { super(body.error || ("HTTP " + status)); this.status = status; this.body = body; } }
+async function call(method, path, params, body) {
+  const u = new URLSearchParams(params || {}); u.set("t", TOKEN);
+  const r = await fetch(path + "?" + u, method === "POST" ? {method, headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})} : {});
+  let j = {}; try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new ApiError(r.status, j);
+  return j;
+}
+const get = (p, q) => call("GET", p, q);
+async function getReady(p, q) {            // waits while the dataset index is still being built
+  for (;;) {
+    try { return await get(p, q); }
+    catch (e) { if (e.status !== 503) throw e; showVeil(e.body.progress); await sleep(700); }
+  }
+}
+const url = (path, o) => { const u = new URLSearchParams(o); u.set("t", TOKEN); return path + "?" + u; };
+const thumbUrl = (s, n) => url("/api/thumb", {dataset: S.ds, split: s, name: n});
+
+// ---------------------------------------------------------------- ui helpers
+function toast(msg, o = {}) {
+  const t = el("div", {class: "toast" + (o.err ? " err" : "")}, msg);
+  if (o.undo) t.append(el("button", {onclick: () => { t.remove(); doUndo(); }}, "Undo"));
+  $("#toasts").append(t); setTimeout(() => t.remove(), o.err ? 9000 : 6000);
+}
+function modal(title, body, buttons) {
+  return new Promise(res => {
+    const box = $("#mbox"); box.replaceChildren(el("h3", {style: "margin:0 0 10px"}, title), body,
+      el("div", {class: "btns"}, buttons.map(b => el("button", {class: b.cls || "", onclick: () => { $("#modal").classList.remove("on"); res(b.value); }}, b.text))));
+    $("#modal").classList.add("on");
+  });
+}
+const confirmBox = (title, text, ok, cls) => modal(title, el("div", {}, text), [{text: "Cancel", value: false}, {text: ok, value: true, cls: cls || "pri"}]);
+function showVeil(p) {
+  $("#veil").classList.add("on");
+  const pct = p && p.total ? Math.round(100 * p.done / p.total) : 0;
+  $("#veiltxt").textContent = p && p.total ? `Reading the dataset… ${fmt(p.done)} / ${fmt(p.total)}` : "Reading the dataset…";
+  $("#veilbar").style.width = pct + "%";
+}
+const hideVeil = () => $("#veil").classList.remove("on");
+
+// An action that may need confirmations; retries with the confirm flag the server asks for.
+async function act(path, body) {
+  body = {dataset: S.ds, ...body};
+  for (;;) {
+    try { return await call("POST", path, {}, body); }
+    catch (e) {
+      if (!(e instanceof ApiError)) { toast(String(e), {err: true}); return null; }
+      const nc = e.body.needs_confirm;
+      if (nc === "harvest") {
+        const ok = await confirmBox("Your own reviewed pictures", el("div", {}, e.message, el("pre", {}, (e.body.detail || []).join("\n"))), "Change them anyway", "dng");
+        if (!ok) return null; body.confirm_harvest = true;
+      } else if (nc === "leak") {
+        const ok = await confirmBox("Possible data leak between splits", el("div", {}, e.message, el("pre", {}, (e.body.detail || []).map(d => `${d.name} → ${d.split}` + (d.also_in.length ? ` (same photo also in ${d.also_in.join(", ")})` : ` (was removed as ${d.reason})`)).join("\n"))), "Restore anyway", "dng");
+        if (!ok) return null; body.confirm_leak = true;
+      } else { toast(e.message, {err: true}); return null; }
+    }
+  }
+}
+
+// ---------------------------------------------------------------- state
+const S = {ds: null, tab: "gallery", list: [], info: null, facets: null, seed: 1,
+  f: {split: "", classes: new Set(), source: "", nobox: 0, many: 0, tiny: 0, mine: 0, flag: 0, q: "", sort: "name"},
+  boxes: true, size: 190, gen: 0, total: 0, pages: new Map(), loading: new Set(), tiles: new Map(),
+  sel: new Map(), anchor: -1, keysP: null, cols: 1, rowH: 190, cell: 190};
+const key = (s, n) => s + "/" + n;
+const FLT = {nobox: "nobox", many: "many", tiny: "tiny", mine: "mine", flag: "flagged"};
+
+// ---------------------------------------------------------------- sidebar
+async function loadDatasets() {
+  let d; try { d = (await get("/api/datasets")).datasets; } catch (e) { return; }
+  S.list = d;
+  const box = $("#dslist"); box.replaceChildren();
+  for (const x of d) {
+    const warn = x.warnings.length ? el("span", {class: "badge b-warn", title: "Unreliable scores (fewer than 50 boxes):\n" + x.warnings.map(w => `${w.class} in ${w.split}: ${w.boxes}`).join("\n")}, "⚠ " + x.warnings.length) : null;
+    box.append(el("div", {class: "ds" + (x.name === S.ds ? " on" : ""), onclick: () => selectDs(x.name)},
+      el("b", {}, x.name, x.training ? el("span", {class: "badge b-train"}, "training now") : null, x.index.state === "building" ? el("span", {class: "badge b-idx"}, "indexing") : null, warn),
+      el("small", {}, x.images ? `${fmt(x.total)} images · ${x.classes.length} classes` + (x.ph_share != null ? ` · ${Math.round(x.ph_share * 100)}% PH` : "") : `${x.classes.length} classes · reading…`)));
+  }
+  const cur = d.find(x => x.name === S.ds); if (cur) S.info = cur;
+}
+async function selectDs(name) {
+  if (S.ds === name) return;
+  S.ds = name; S.info = S.list.find(x => x.name === name);
+  Object.assign(S.f, {split: "", classes: new Set(), source: "", nobox: 0, many: 0, tiny: 0, mine: 0, flag: 0, q: "", sort: "name"});
+  S.sel.clear(); S.facets = null; loadDatasets(); showTab(S.tab, true);
+}
+
+// ---------------------------------------------------------------- tabs
+function showTab(t, force) {
+  if (!S.ds) return;
+  S.tab = t;
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.t === t));
+  document.querySelectorAll(".view").forEach(x => x.classList.toggle("on", x.id === "v-" + t));
+  renderSelBar();
+  ({gallery: openGallery, overview: openOverview, about: openAbout, clean: openClean, quarantine: openQuarantine})[t](force);
+}
+document.querySelectorAll(".tab").forEach(x => x.onclick = () => showTab(x.dataset.t));
+
+// ---------------------------------------------------------------- gallery: toolbar
+function buildBar() {
+  const f = S.f, bar = $("#bar"), names = S.info.classes, fc = S.facets || {classes: {}, sources: {}, counts: {}};
+  const toggle = (k, label) => el("span", {class: "chip" + (f[k] ? " on" : ""), onclick: () => { f[k] = f[k] ? 0 : 1; filtersChanged(); }}, label, el("i", {}, fc.counts[FLT[k]] ?? ""));
+  bar.replaceChildren(
+    el("select", {onchange: e => { f.split = e.target.value; refreshFacets(); resetList(false); }}, ["", "train", "val", "test"].map(s => el("option", {value: s, selected: f.split === s}, s || "all splits"))),
+    names.map((n, i) => el("span", {class: "chip" + (f.classes.has(i) ? " on" : ""), title: "images with at least one " + n, onclick: () => { f.classes.has(i) ? f.classes.delete(i) : f.classes.add(i); filtersChanged(); }},
+      el("span", {class: "sw", style: "background:" + col(i)}), n, el("i", {}, fmt(fc.classes[i] || 0)))),
+    el("select", {onchange: e => { f.source = e.target.value; resetList(false); }}, el("option", {value: ""}, "all sources"),
+      Object.entries(fc.sources).map(([s, n]) => el("option", {value: s, selected: f.source === s}, `${s} (${fmt(n)})`))),
+    toggle("nobox", "no boxes"), toggle("many", "many boxes"), toggle("tiny", "tiny boxes"), toggle("flag", "flagged"), toggle("mine", "harvested (mine)"),
+    el("input", {type: "search", placeholder: "file name…", value: f.q, style: "width:150px", oninput: debounce(e => { f.q = e.target.value; resetList(false); }, 220)}),
+    el("select", {onchange: e => { f.sort = e.target.value; if (f.sort === "random") S.seed = Math.floor(Math.random() * 1e6); resetList(false); }},
+      ["name", "boxes", "size", "random"].map(s => el("option", {value: s, selected: f.sort === s}, "sort: " + s))),
+    el("span", {class: "muted", title: "Thumbnail size"}, "🔍 ", el("input", {type: "range", min: 100, max: 360, value: S.size, oninput: e => { S.size = +e.target.value; layout(); render(); }})),
+    el("button", {title: "Show / hide boxes (B)", onclick: toggleBoxes}, "▭ Boxes"),
+    el("span", {class: "muted", id: "count"}, ""));
+  updateCount();
+}
+const debounce = (fn, ms) => { let t; return e => { clearTimeout(t); t = setTimeout(() => fn(e), ms); }; };
+function updateCount() { const c = $("#count"); if (c) c.textContent = `${fmt(S.total)} of ${fmt(S.facets ? S.facets.counts.all : 0)} images`; }
+function toggleBoxes() { S.boxes = !S.boxes; $("#gal").classList.toggle("noboxes", !S.boxes); lbDraw(); }
+async function refreshFacets() {
+  try { S.facets = await getReady("/api/facets", {dataset: S.ds, split: S.f.split}); hideVeil(); } catch (e) { toast(e.message, {err: true}); }
+  buildBar();
+}
+function qparams() {
+  const f = S.f, p = {dataset: S.ds, sort: f.sort, seed: S.seed};
+  if (f.split) p.split = f.split; if (f.classes.size) p.classes = [...f.classes].join(","); if (f.source) p.source = f.source;
+  for (const k of ["nobox", "many", "tiny", "mine", "flag"]) if (f[k]) p[k] = 1; if (f.q) p.q = f.q;
+  return p;
+}
+function filtersChanged() { buildBar(); resetList(false); }
+
+// ---------------------------------------------------------------- gallery: virtual grid
+async function openGallery(force) {
+  if (!S.facets || force) { buildBar(); await refreshFacets(); } else buildBar();
+  await resetList(false);
+}
+async function resetList(keep) {
+  const gen = ++S.gen, g = $("#gal"), top = keep ? g.scrollTop : 0;
+  let r;
+  try { r = await getReady("/api/items", {...qparams(), offset: 0, limit: PAGE}); hideVeil(); } catch (e) { toast(e.message, {err: true}); return; }
+  if (gen !== S.gen) return;
+  S.pages = new Map(); S.loading = new Set(); S.keysP = null;
+  S.total = r.total; S.pages.set(0, r.items);
+  layout(); g.scrollTop = top; updateCount(); render();
+}
+function layout() {
+  const g = $("#gal"), W = g.clientWidth - 2;
+  S.cols = Math.max(1, Math.floor((W + GAP) / (S.size + GAP)));
+  S.cell = (W - GAP * (S.cols - 1)) / S.cols; S.rowH = S.cell + GAP;
+  $("#spacer").style.height = Math.ceil(S.total / S.cols) * S.rowH + "px";
+  for (const t of S.tiles.values()) t.remove(); S.tiles.clear();
+}
+const itemAt = i => { const p = S.pages.get(Math.floor(i / PAGE)); return p ? p[i % PAGE] : null; };
+async function loadPage(pi) {
+  if (S.pages.has(pi) || S.loading.has(pi)) return;
+  S.loading.add(pi); const gen = S.gen;
+  try {
+    const r = await get("/api/items", {...qparams(), offset: pi * PAGE, limit: PAGE});
+    if (gen === S.gen) { S.pages.set(pi, r.items); render(); }
+  } catch (e) { /* retried on the next scroll */ } finally { S.loading.delete(pi); }
+}
+let rafId = 0;
+function render() { if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; draw(); }); }
+function draw() {
+  const g = $("#gal"), top = g.scrollTop, h = g.clientHeight, rowH = S.rowH;
+  const r0 = Math.max(0, Math.floor(top / rowH) - 2), r1 = Math.ceil((top + h) / rowH) + 2;
+  const first = r0 * S.cols, last = Math.min(S.total, (r1 + 1) * S.cols);
+  for (const [i, t] of S.tiles) if (i < first || i >= last) { t.remove(); S.tiles.delete(i); }
+  for (let i = first; i < last; i++) {
+    const it = itemAt(i);
+    if (!it) { loadPage(Math.floor(i / PAGE)); continue; }
+    let t = S.tiles.get(i);
+    if (!t) { t = makeTile(i, it); S.tiles.set(i, t); $("#spacer").append(t); }
+    t.classList.toggle("sel", S.sel.has(key(it.s, it.n)));
+  }
+  g.classList.toggle("selecting", S.sel.size > 0);
+  renderSelBar();
+}
+function boxesDom(boxes) {
+  const ov = el("div", {class: "ov"});
+  for (const [c, cx, cy, w, h] of boxes) ov.append(el("div", {class: "bx", style: `left:${(cx - w / 2) * 100}%;top:${(cy - h / 2) * 100}%;width:${w * 100}%;height:${h * 100}%;border-color:${col(c)}`}));
+  return ov;
+}
+function makeTile(i, it) {
+  const row = Math.floor(i / S.cols), c = i % S.cols, s = S.cell;
+  return el("div", {class: "tile", style: `left:${c * (s + GAP)}px;top:${row * S.rowH}px;width:${s}px;height:${s}px;--w:${s}px;--h:${s}px`, "data-i": i},
+    el("div", {class: "wrap"}, el("img", {src: thumbUrl(it.s, it.n), loading: "lazy", draggable: "false", alt: ""}), boxesDom(it.b)),
+    el("div", {class: "chk"}, "✓"),
+    el("div", {class: "tag"}, it.flag ? el("span", {}, "⚑") : null, it.b.length ? el("span", {}, it.b.length) : el("span", {style: "color:var(--warn)"}, "∅")),
+    el("div", {class: "cap"}, it.n));
+}
+$("#gal").addEventListener("scroll", render);
+window.addEventListener("resize", () => { if (S.tab === "gallery" && S.ds) { layout(); render(); } });
+
+// selection
+function allKeys() {
+  if (!S.keysP) S.keysP = get("/api/keys", qparams()).then(r => r.keys).catch(e => { S.keysP = null; throw e; });
+  return S.keysP;
+}
+const putSel = k => S.sel.set(key(k[0], k[1]), {split: k[0], name: k[1]});
+function toggleSel(s, n) { const k = key(s, n); S.sel.has(k) ? S.sel.delete(k) : S.sel.set(k, {split: s, name: n}); }
+async function selectRange(a, b) {
+  const keys = await allKeys();
+  for (let i = Math.min(a, b); i <= Math.max(a, b); i++) if (keys[i]) putSel(keys[i]);
+  render();
+}
+$("#gal").addEventListener("click", async e => {
+  if (S.bandDid) { S.bandDid = false; return; }
+  const t = e.target.closest(".tile"); if (!t) return;
+  const i = +t.dataset.i, it = itemAt(i); if (!it) return;
+  if (e.shiftKey && S.anchor >= 0) { await selectRange(S.anchor, i); return; }
+  if (e.ctrlKey || e.metaKey || e.target.closest(".chk") || S.sel.size) { toggleSel(it.s, it.n); S.anchor = i; render(); return; }
+  S.anchor = i; openLightbox(listProvider(), i);
+});
+(() => {                                   // rubber-band selection
+  const g = $("#gal"), band = $("#band"); let st = null;
+  g.addEventListener("mousedown", e => {
+    if (e.button !== 0 || e.offsetX > g.clientWidth || e.target.closest(".chk")) return;
+    const r = g.getBoundingClientRect(); st = {x: e.clientX - r.left, y: e.clientY - r.top + g.scrollTop, add: e.ctrlKey || e.metaKey, on: false};
+  });
+  window.addEventListener("mousemove", e => {
+    if (!st) return; const r = g.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top + g.scrollTop;
+    if (!st.on && Math.hypot(x - st.x, y - st.y) < 7) return;
+    st.on = true; st.x2 = x; st.y2 = y; e.preventDefault();
+    Object.assign(band.style, {display: "block", left: Math.min(st.x, x) + "px", top: Math.min(st.y, y) + "px", width: Math.abs(x - st.x) + "px", height: Math.abs(y - st.y) + "px"});
+  });
+  window.addEventListener("mouseup", async () => {
+    if (!st) return; const s = st; st = null; band.style.display = "none";
+    if (!s.on) return; S.bandDid = true; setTimeout(() => S.bandDid = false, 50);
+    const x0 = Math.min(s.x, s.x2), x1 = Math.max(s.x, s.x2), y0 = Math.min(s.y, s.y2), y1 = Math.max(s.y, s.y2), pitch = S.cell + GAP;
+    const c0 = Math.floor(x0 / pitch), c1 = Math.min(S.cols - 1, Math.floor(x1 / pitch)), r0 = Math.floor(y0 / S.rowH), r1 = Math.floor(y1 / S.rowH);
+    const keys = await allKeys(); if (!s.add) S.sel.clear();
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { const i = r * S.cols + c; if (i < S.total && keys[i]) putSel(keys[i]); }
+    render();
+  });
+})();
+function renderSelBar() {
+  const b = $("#selbar"), n = S.sel.size; b.classList.toggle("on", n > 0 && S.tab === "gallery");
+  if (!n) return;
+  b.replaceChildren(el("b", {}, fmt(n) + " selected"), el("button", {class: "dng", onclick: bulkQuarantine}, "Move to quarantine (Del)"),
+    el("button", {onclick: () => bulkFlag(true)}, "⚑ Flag (F)"), el("button", {onclick: () => bulkFlag(false)}, "Unflag"), el("button", {onclick: () => { S.sel.clear(); render(); }}, "Clear (Esc)"));
+}
+async function selectAll() { const keys = await allKeys(); S.sel.clear(); keys.forEach(putSel); toast(`${fmt(S.sel.size)} selected`); render(); }
+async function bulkQuarantine() {
+  const items = [...S.sel.values()]; if (!items.length) return;
+  if (items.length >= 10 && !await confirmBox("Move to quarantine", `Move ${fmt(items.length)} pictures (and their labels) to the quarantine folder? They are not deleted and can be restored.`, "Move", "dng")) return;
+  const r = await act("/api/quarantine", {items}); if (!r) return;
+  S.sel.clear(); toast(`${fmt(r.count)} moved to quarantine`, {undo: true}); afterWrite();
+}
+async function bulkFlag(value) { const items = [...S.sel.values()]; if (!items.length) return; const r = await act("/api/flag", {items, value}); if (r) { toast(`${r.count} ${value ? "flagged" : "unflagged"}`, {undo: true}); S.sel.clear(); afterWrite(); } }
+async function afterWrite() { await resetList(true); refreshFacets(); loadDatasets(); }
+async function doUndo() {
+  if (!S.ds) return; const r = await act("/api/undo", {}); if (!r) return;
+  toast("Undone"); S.sel.clear(); S.facets = null; loadDatasets();
+  if (S.tab === "gallery") { await refreshFacets(); await resetList(true); } else showTab(S.tab, true);
+  if (lbOpen()) lbLoad();
+}
+$("#btnUndo").onclick = doUndo;
+$("#btnRefresh").onclick = async () => { await act("/api/refresh", {}); toast("Reading the folders again…"); await sleep(500); S.facets = null; showTab(S.tab, true); loadDatasets(); };
+
+// ---------------------------------------------------------------- lightbox
+const LB = {prov: null, i: 0, item: null, sel: -1, seq: 0};
+function listProvider() {
+  return {count: () => S.total, get: async i => { let it = itemAt(i); if (!it) { await loadPage(Math.floor(i / PAGE)); it = itemAt(i); } return it && {s: it.s, n: it.n}; }};
+}
+const fixedProvider = arr => ({fixed: arr, count: () => arr.length, get: async i => arr[i] && {s: arr[i].split, n: arr[i].name}});
+async function openLightbox(prov, i) { LB.prov = prov; LB.i = i; LB.sel = -1; $("#lb").classList.add("on"); await lbLoad(); }
+const lbOpen = () => $("#lb").classList.contains("on");
+function lbClose() { $("#lb").classList.remove("on"); $("#lbwrap")?.remove(); }
+async function lbLoad() {
+  const k = await LB.prov.get(LB.i); if (!k) return lbClose();
+  const seq = ++LB.seq;
+  let item; try { item = await get("/api/item", {dataset: S.ds, split: k.s, name: k.n}); } catch (e) { toast(e.message, {err: true}); return; }
+  if (seq !== LB.seq) return;
+  LB.item = item; $("#lbwrap")?.remove();
+  $("#stage").append(el("div", {class: "wrap", id: "lbwrap"}, el("img", {src: url("/api/image", {dataset: S.ds, split: k.s, name: k.n}), draggable: "false"}), el("div", {class: "ov", id: "lbov"})));
+  lbDraw(); lbPanel();
+  if (LB.prov.count() > LB.i + 1) { const nx = await LB.prov.get(LB.i + 1); if (nx) new Image().src = url("/api/image", {dataset: S.ds, split: nx.s, name: nx.n}); }
+}
+function lbDraw() {
+  const ov = $("#lbov"); if (!ov || !LB.item) return; ov.replaceChildren();
+  if (!S.boxes) return;
+  const names = S.info.classes;
+  LB.item.boxes.forEach(b => {
+    const [cx, cy, w, h] = b.box;
+    ov.append(el("div", {class: "bx" + (b.i === LB.sel ? " s" : ""), style: `left:${(cx - w / 2) * 100}%;top:${(cy - h / 2) * 100}%;width:${w * 100}%;height:${h * 100}%;border-color:${col(b.cls)}`, onclick: e => { e.stopPropagation(); lbPick(b.i); }},
+      el("em", {style: "background:" + col(b.cls)}, `${b.cls + 1}:${names[b.cls] || "?"}`)));
+  });
+}
+function lbPick(i) { LB.sel = LB.sel === i ? -1 : i; lbDraw(); lbPanel(); }
+function lbPanel() {
+  const it = LB.item, p = $("#panel"), src = it.source || {}, names = S.info.classes;
+  p.replaceChildren(
+    el("h3", {style: "margin-top:0"}, `${LB.i + 1} / ${fmt(LB.prov.count())}`),
+    el("div", {style: "word-break:break-all;font-weight:600"}, it.name),
+    el("table", {}, [["split", it.split], ["size", it.size ? `${it.size[0]} × ${it.size[1]} px` : "?"], ["file", kb(it.bytes)], ["source", src.id], ["license", src.license ?? "unknown"],
+      ["country", src.country ?? "unknown"], ["Philippine", src.ph === true ? "yes" : src.ph === false ? "no" : src.ph || "unknown"], ["trust", src.trust ?? "-"]].map(([a, b]) => el("tr", {}, el("td", {}, a), el("td", {}, String(b))))),
+    it.harvest ? el("div", {class: "warn"}, "Your own reviewed picture (harvest__): changes ask for confirmation.") : null,
+    it.label_missing ? el("div", {class: "warn bad"}, "No label file.") : null,
+    el("h3", {}, `Boxes (${it.boxes.length}) · click a box, 1-9 = class, Del = remove`),
+    it.boxes.map(b => el("div", {class: "brow" + (b.i === LB.sel ? " s" : ""), onclick: () => lbPick(b.i)},
+      el("span", {class: "sw", style: "background:" + col(b.cls)}), `${b.cls + 1}: ${b.name}`, el("span", {class: "muted", style: "margin-left:auto"}, b.px ? `${b.px[0]}×${b.px[1]} px` : ""))),
+    el("h3", {}, "Classes"), el("div", {class: "muted"}, names.map((n, i) => `${i + 1} ${n}`).join("  ·  ")),
+    el("h3", {}, "Actions"),
+    el("div", {style: "display:flex;gap:6px;flex-wrap:wrap"}, el("button", {class: "dng", onclick: lbQuarantine}, "Quarantine (Del)"), el("button", {onclick: lbFlag}, it.flag ? "⚑ Unflag (F)" : "⚑ Flag (F)"),
+      el("button", {onclick: lbReveal}, "Open location (O)"), el("button", {onclick: toggleBoxes}, "Boxes (B)"), el("button", {onclick: doUndo}, "Undo (Ctrl+Z)")));
+}
+async function lbMove(d) { const n = LB.i + d; if (n < 0 || n >= LB.prov.count()) return; LB.i = n; LB.sel = -1; await lbLoad(); }
+async function lbQuarantine() {
+  const it = LB.item, r = await act("/api/quarantine", {items: [{split: it.split, name: it.name}]}); if (!r) return;
+  toast("Moved to quarantine", {undo: true}); LB.sel = -1;
+  if (LB.prov.fixed) LB.prov.fixed.splice(LB.i, 1);
+  if (S.tab === "gallery") { await resetList(true); refreshFacets(); }
+  loadDatasets();
+  if (LB.i >= LB.prov.count()) LB.i = LB.prov.count() - 1;
+  if (LB.i < 0) return lbClose(); await lbLoad();
+}
+async function lbFlag() { const it = LB.item, r = await act("/api/flag", {items: [{split: it.split, name: it.name}], value: !it.flag}); if (r) { await lbLoad(); if (S.tab === "gallery") resetList(true); } }
+async function lbReveal() { const it = LB.item; try { await call("POST", "/api/reveal", {}, {dataset: S.ds, split: it.split, name: it.name}); } catch (e) { toast(e.message, {err: true}); } }
+async function lbSetClass(c) {
+  if (LB.sel < 0 || c >= S.info.classes.length) return;
+  const it = LB.item, r = await act("/api/box", {split: it.split, name: it.name, i: LB.sel, cls: c}); if (!r) return;
+  toast(`Box → ${S.info.classes[c]}`, {undo: true}); await lbLoad(); patchCache(it.split, it.name, r.boxes);
+}
+async function lbRemoveBox() {
+  const it = LB.item, r = await act("/api/box", {split: it.split, name: it.name, i: LB.sel, remove: true}); if (!r) return;
+  toast("Box removed", {undo: true}); LB.sel = -1; await lbLoad(); patchCache(it.split, it.name, r.boxes);
+}
+function patchCache(s, n, boxes) { for (const p of S.pages.values()) for (const it of p) if (it.s === s && it.n === n) it.b = boxes; for (const t of S.tiles.values()) t.remove(); S.tiles.clear(); render(); }
+$("#lbPrev").onclick = () => lbMove(-1); $("#lbNext").onclick = () => lbMove(1);
+$("#stage").addEventListener("click", e => { if (e.target.id === "stage") lbClose(); });
+
+// ---------------------------------------------------------------- keyboard
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input,textarea,select")) { if (e.key === "Escape") e.target.blur(); return; }
+  if ($("#modal").classList.contains("on")) return;
+  const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && k.toLowerCase() === "z") { e.preventDefault(); doUndo(); return; }
+  if (lbOpen()) {
+    if (k === "ArrowRight") lbMove(1); else if (k === "ArrowLeft") lbMove(-1);
+    else if (/^[1-9]$/.test(k)) lbSetClass(+k - 1);
+    else if (k === "Delete") { LB.sel >= 0 ? lbRemoveBox() : lbQuarantine(); }
+    else if (k.toLowerCase() === "f") lbFlag(); else if (k.toLowerCase() === "o") lbReveal(); else if (k.toLowerCase() === "b") toggleBoxes();
+    else if (k === "Escape") { if (LB.sel >= 0) lbPick(LB.sel); else lbClose(); }
+    return;
+  }
+  if (k === "?") { showHelp(); return; }
+  if (S.tab !== "gallery") return;
+  if (ctrl && k.toLowerCase() === "a") { e.preventDefault(); selectAll(); }
+  else if (k.toLowerCase() === "b") toggleBoxes();
+  else if (k === "Delete" && S.sel.size) bulkQuarantine();
+  else if (k.toLowerCase() === "f" && S.sel.size) bulkFlag(true);
+  else if (k === "Escape") { S.sel.clear(); render(); }
+});
+$("#btnHelp").onclick = showHelp;
+function showHelp() {
+  modal("Keyboard", el("table", {class: "t"}, [["Click", "open the picture"], ["Ctrl/Shift + click, drag, Ctrl+A", "select"], ["B", "show / hide boxes"], ["Del", "quarantine (selection or picture)"], ["F", "flag"], ["O", "open the file location"],
+    ["← →", "previous / next in the viewer"], ["click a box, then 1-9", "change its class"], ["Del on a box", "remove the box"], ["Ctrl+Z", "undo the last change"], ["Esc", "deselect / close"]].map(([a, b]) => el("tr", {}, el("td", {}, el("code", {}, a)), el("td", {}, b)))), [{text: "Close", value: 1}]);
+}
+
+// ---------------------------------------------------------------- overview
+let ovTimer = 0;
+async function openOverview() {
+  clearTimeout(ovTimer);
+  let o; try { o = await getReady("/api/overview", {dataset: S.ds}); hideVeil(); } catch (e) { $("#ovbody").textContent = e.message; return; }
+  const body = $("#ovbody"), names = o.classes, SP = ["train", "val", "test"];
+  const hbar = rows => el("div", {}, rows.map(r => { const tot = r.segs.reduce((a, s) => a + s.v, 0), mx = r.max || tot || 1;
+    return el("div", {class: "hb"}, el("div", {class: "l", title: r.label}, r.label), el("div", {class: "t"}, r.segs.map(s => el("div", {title: s.title || "", style: `width:${100 * s.v / mx}%;background:${s.c}`}))), el("div", {class: "v"}, fmt(tot))); }));
+  const legend = () => el("div", {style: "margin-top:6px;font-size:12px"}, names.map((n, i) => el("span", {style: "margin-right:12px"}, el("span", {class: "sw", style: "background:" + col(i)}), n)));
+  const hist = (d, color) => { const mx = Math.max(1, ...d.map(x => x.n)), w = 30, H = 120, E = s => String(s).replace(/[<>&]/g, c => ({"<": "&lt;", ">": "&gt;", "&": "&amp;"}[c]));
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", `0 0 ${d.length * w} ${H + 34}`); svg.style.cssText = "width:100%;max-height:200px";
+    svg.innerHTML = d.map((x, i) => { const h = Math.round(H * x.n / mx);
+      return `<rect x="${i * w + 2}" y="${H - h}" width="${w - 4}" height="${h}" fill="${color}"><title>${E(x.label)}: ${x.n}</title></rect><text x="${i * w + w / 2}" y="${H + 12}" font-size="8" fill="#8a97a8" text-anchor="middle" transform="rotate(35 ${i * w + w / 2} ${H + 12})">${E(x.label)}</text>`; }).join("");
+    return svg; };
+  const card = (t, ...k) => el("div", {class: "card"}, el("h2", {}, t), ...k);
+  const splitMax = Math.max(1, ...Object.values(o.images_per_split));
+  const bpcMax = Math.max(1, ...SP.map(s => o.boxes_per_class[s].reduce((a, b) => a + b, 0)));
+  const srcRows = Object.entries(o.per_source).map(([s, v]) => ({label: `${s} (${fmt(v.images)} img)`, segs: v.boxes.map((n, i) => ({v: n, c: col(i), title: `${names[i]}: ${n}`}))}));
+  const srcMax = Math.max(1, ...srcRows.map(r => r.segs.reduce((a, s) => a + s.v, 0))); srcRows.forEach(r => r.max = srcMax);
+  const phTot = Object.values(o.ph).reduce((a, b) => a + b, 0) || 1, phC = {ph: "#4ade80", foreign: "#f87171", mixed: "#fbbf24", unknown: "#64748b"};
+  const sz = o.sizes, sp = sz.progress || {};
+  const sizeNote = sz.state === "ready" ? null : el("div", {class: "muted"}, sz.state === "running" ? `Reading picture sizes in the background: ${fmt(sp.done)} / ${fmt(sp.total)}` : "Picture sizes not read yet.",
+    el("div", {class: "prog", style: "margin:4px 0"}, el("div", {style: `width:${sp.total ? 100 * sp.done / sp.total : 0}%`})));
+  body.replaceChildren(
+    el("div", {style: "margin-bottom:12px"}, `${fmt(o.images)} images · ${names.length} classes · ${fmt(o.empty)} pictures without boxes`,
+      o.report ? el("span", {class: "badge " + (o.report.match ? "b-idx" : "b-warn"), style: "margin-left:8px", title: o.report.diffs.join("\n")}, o.report.match ? `matches curator report (${o.report.when})` : `differs from curator report.json (${o.report.when}): ${o.report.diffs.length} differences`) : null),
+    o.warnings.length ? el("div", {class: "card"}, el("h2", {}, "Class balance warnings"), o.warnings.map(w => el("div", {class: "warn " + w.level}, w.text))) : null,
+    el("div", {class: "grid2"},
+      card("Images per split", hbar(Object.entries(o.images_per_split).map(([s, n]) => ({label: s, max: splitMax, segs: [{v: n, c: "#4cc2ff"}]})))),
+      card("Boxes per class per split", hbar(SP.map(s => ({label: s, max: bpcMax, segs: o.boxes_per_class[s].map((n, i) => ({v: n, c: col(i), title: `${names[i]}: ${n}`}))}))), legend(),
+        el("table", {class: "t", style: "margin-top:8px"}, el("tr", {}, el("th", {}, ""), SP.map(s => el("th", {}, s))), names.map((n, i) => el("tr", {}, el("td", {}, n), SP.map(s => { const v = o.boxes_per_class[s][i]; return el("td", {style: v < 50 && s !== "train" ? "color:var(--bad)" : ""}, fmt(v)); }))))),
+      card("Boxes per source", hbar(srcRows), legend()),
+      card("Philippine vs foreign (images)", hbar(Object.entries(o.ph).map(([k, n]) => ({label: `${k} (${Math.round(100 * n / phTot)}%)`, max: phTot, segs: [{v: n, c: phC[k]}]})))),
+      card("Boxes per image", hist(o.boxes_per_image, "#4cc2ff")),
+      card("Box size (share of the picture)", hist(o.box_area, "#c084fc")),
+      card("Image size (long side, px)", sizeNote, hist(sz.long_side.length ? sz.long_side : [{label: "-", n: 0}], "#4ade80")),
+      card("Picture aspect ratio (w/h)", hist(sz.aspect, "#fbbf24")),
+      card("Box aspect ratio (w/h)", hist(sz.box_aspect, "#fb923c"))));
+  if (sz.state !== "ready") { if (sz.state === "idle") get("/api/sizes", {dataset: S.ds}); ovTimer = setTimeout(() => { if (S.tab === "overview") openOverview(); }, 2500); }
+}
+
+// ---------------------------------------------------------------- about
+function md(text) {
+  const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inl = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>").replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener" style="color:var(--ac)">$1</a>');
+  const out = []; let list = null, tbl = null, code = null;
+  const flush = () => { if (list) { out.push(`<ul>${list.join("")}</ul>`); list = null; } if (tbl) { out.push(`<table>${tbl.join("")}</table>`); tbl = null; } };
+  for (const line of text.split(/\r?\n/)) {
+    if (/^```/.test(line)) { if (code) { out.push(`<pre>${esc(code.join("\n"))}</pre>`); code = null; } else { flush(); code = []; } continue; }
+    if (code) { code.push(line); continue; }
+    let m;
+    if (/^\|.*\|\s*$/.test(line)) { if (/^\|[\s:|-]+\|\s*$/.test(line)) continue; if (list) flush(); const tag = tbl ? "td" : "th"; tbl = tbl || []; tbl.push("<tr>" + line.trim().slice(1, -1).split("|").map(c => `<${tag}>${inl(c.trim())}</${tag}>`).join("") + "</tr>"); continue; }
+    if ((m = line.match(/^\s*[-*] (.*)/))) { if (tbl) flush(); list = list || []; list.push(`<li>${inl(m[1])}</li>`); continue; }
+    flush();
+    if ((m = line.match(/^(#{1,4}) (.*)/))) { const l = Math.min(3, m[1].length); out.push(`<h${l}>${inl(m[2])}</h${l}>`); }
+    else if (line.trim()) out.push(`<p>${inl(line)}</p>`);
+  }
+  flush(); return out.join("");
+}
+async function openAbout() {
+  let a; try { a = await getReady("/api/about", {dataset: S.ds}); hideVeil(); } catch (e) { $("#aboutbody").textContent = e.message; return; }
+  const body = $("#aboutbody"), ta = el("textarea", {style: "width:100%;height:160px", placeholder: "Your notes about this dataset (saved to NOTES.md next to the data)…"}); ta.value = a.notes;
+  const status = el("span", {class: "muted"}, "");
+  const card = el("div", {class: "card md"}); card.innerHTML = a.card ? md(a.card) : "<p class='muted'>No DATASET_CARD.md yet (python training_lab/data.py report).</p>";
+  body.replaceChildren(
+    el("div", {class: "card"}, el("h2", {}, "My notes"), ta, el("div", {style: "margin-top:6px;display:flex;gap:10px;align-items:center"}, el("button", {class: "pri", onclick: async () => { const r = await act("/api/notes", {text: ta.value}); status.textContent = r ? "Saved " + new Date().toLocaleTimeString() : ""; }}, "Save notes"), status)),
+    el("div", {class: "card"}, el("h2", {}, "Classes"), el("div", {}, a.classes.map((n, i) => el("span", {class: "chip", style: "margin-right:6px"}, el("span", {class: "sw", style: "background:" + col(i)}), `${i + 1}: ${n}`)))),
+    el("div", {class: "card"}, el("h2", {}, "Sources"), el("table", {class: "t"}, el("tr", {}, ["source", "images", "license", "country", "Philippine", "trust", "notes"].map(h => el("th", {}, h))),
+      a.sources.map(s => el("tr", {}, el("td", {}, s.id), el("td", {}, fmt(s.images)), el("td", {}, s.license ?? "?"), el("td", {}, s.country ?? "?"), el("td", {}, s.ph === true ? "yes" : s.ph === false ? "no" : s.ph ?? "?"), el("td", {}, s.trust ?? "?"), el("td", {style: "max-width:380px"}, s.notes ?? ""))))),
+    a.catalog ? el("div", {class: "card"}, el("h2", {}, "Catalog row"), el("table", {class: "t"}, el("tr", {}, a.catalog.header.map(h => el("th", {}, h))), el("tr", {}, a.catalog.row.map(c => el("td", {}, c))))) : null,
+    card);
+}
+
+// ---------------------------------------------------------------- clean
+const ISSUE = {corrupt_image: ["Corrupt picture", "cannot be opened: moves to quarantine"], tiny_image: ["Tiny picture", "too small to learn from: moves to quarantine"], no_label: ["No label file", "picture without a label: moves to quarantine"],
+  no_boxes: ["No boxes", "empty label: moves to quarantine"], leak: ["Leak between splits", "same photo in val/test and in train: the eval copy moves to quarantine"], duplicate: ["Duplicate", "copy of another picture: moves to quarantine"],
+  fixed_boxes: ["Fixed boxes", "boxes out of range or degenerate: rewritten, the picture stays"], resave: ["Resaved", "oversized picture shrunk, stays"],
+  kept_no_boxes: ["Empty, kept", "empty pictures that stay"], kept_duplicate_of_protected: ["Copy of your picture", "kept: it duplicates a harvest__ picture"], kept_duplicate_kept_protected: ["Your duplicate, kept", "harvest__ pictures are never moved"]};
+async function openClean() {
+  $("#cleanbody").replaceChildren(el("div", {class: "card"}, el("h2", {}, "Cleaning check (dry run)"), el("p", {class: "muted"}, "Runs the project's curator without changing anything and lists what it would fix or move to the quarantine."),
+    el("button", {class: "pri", onclick: startClean}, "Run check")), el("div", {id: "cleanout"}));
+}
+async function startClean() {
+  const out = $("#cleanout"), prog = el("div", {class: "prog"}, el("div")), txt = el("div", {class: "muted"}, "starting…");
+  out.replaceChildren(el("div", {class: "card"}, txt, prog));
+  let job; try { job = await call("POST", "/api/clean", {}, {dataset: S.ds}); } catch (e) { toast(e.message, {err: true}); return; }
+  job = await pollJob(job.id, j => { txt.textContent = j.text; prog.firstChild.style.width = j.total ? 100 * j.done / j.total + "%" : "5%"; });
+  if (job.state === "error") { out.replaceChildren(el("div", {class: "warn bad"}, job.error)); return; }
+  showFindings(job.result);
+}
+async function pollJob(id, on) { for (;;) { const j = await get("/api/job", {id}); on && on(j); if (j.state !== "running") return j; await sleep(800); } }
+function showFindings(res) {
+  const out = $("#cleanout"), f = res.findings, rep = res.report, keys = Object.keys(f);
+  const moving = keys.filter(k => !k.startsWith("kept_") && !["fixed_boxes", "resave"].includes(k)).reduce((a, k) => a + f[k].count, 0);
+  out.replaceChildren(
+    el("div", {class: "card"}, el("h2", {}, "Result"), `${fmt(moving)} pictures would go to the quarantine, ${fmt(rep.fixed_labels || 0)} labels would be fixed.`,
+      el("div", {style: "margin-top:10px"}, el("button", {class: "dng", disabled: !(moving || rep.fixed_labels), onclick: applyClean}, "Apply cleaning…"))),
+    keys.length ? null : el("div", {class: "card"}, "Nothing to clean."),
+    keys.map(k => { const v = f[k], name = ISSUE[k] || [k, ""];
+      return el("div", {class: "card"}, el("h2", {}, `${name[0]} · ${fmt(v.count)}`, v.protected ? el("span", {class: "badge b-idx"}, v.protected + " of yours (never moved)") : null), el("div", {class: "muted"}, name[1]),
+        el("div", {class: "fnd"}, v.samples.map((s, i) => el("img", {src: thumbUrl(s.split, s.name), title: s.name, loading: "lazy", onclick: () => openLightbox(fixedProvider(v.samples.slice()), i)}))));
+    }));
+}
+async function applyClean() {
+  if (!await confirmBox("Apply cleaning", "The listed pictures move to the quarantine folder (never deleted), labels are rewritten, and the report is updated. Training must not be running. Continue?", "Apply", "dng")) return;
+  let job; try { job = await call("POST", "/api/clean/apply", {}, {dataset: S.ds, confirm: true}); } catch (e) { toast(e.message, {err: true}); return; }
+  const txt = el("div", {class: "muted"}, "working…"), prog = el("div", {class: "prog"}, el("div"));
+  $("#cleanout").replaceChildren(el("div", {class: "card"}, txt, prog));
+  job = await pollJob(job.id, j => { txt.textContent = j.text; prog.firstChild.style.width = j.total ? 100 * j.done / j.total + "%" : "5%"; });
+  if (job.state === "error") { toast(job.error, {err: true}); return; }
+  toast("Cleaning applied. Re-reading the dataset…"); S.facets = null; $("#cleanout").replaceChildren(el("div", {class: "card"}, "Done. See the Quarantine tab for what was moved.")); loadDatasets();
+}
+
+// ---------------------------------------------------------------- quarantine
+const Q = {reason: null, items: [], total: 0, sel: new Map(), anchor: -1};
+async function openQuarantine() {
+  const body = $("#qbody"); let r;
+  try { r = await get("/api/quarantine", {dataset: S.ds}); } catch (e) { body.textContent = e.message; return; }
+  if (!Q.reason || !r.reasons.some(x => x.reason === Q.reason)) Q.reason = r.reasons.length ? r.reasons[0].reason : null;
+  Q.sel.clear(); Q.anchor = -1;
+  body.replaceChildren(el("div", {style: "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"}, r.reasons.map(x => el("span", {class: "chip" + (x.reason === Q.reason ? " on" : ""), onclick: () => { Q.reason = x.reason; openQuarantine(); }}, x.reason, el("i", {}, fmt(x.count))))),
+    el("div", {id: "qbar", style: "margin-bottom:10px;display:flex;gap:8px;align-items:center"}), el("div", {class: "qgrid", id: "qgrid"}), el("div", {id: "qmore", style: "margin:12px 0"}));
+  Q.items = []; Q.total = 0;
+  if (Q.reason) await qMore(); else $("#qgrid").replaceChildren(el("div", {class: "muted"}, "The quarantine is empty."));
+}
+async function qMore() {
+  const r = await get("/api/quarantine", {dataset: S.ds, reason: Q.reason, offset: Q.items.length, limit: 200});
+  Q.total = r.total; const grid = $("#qgrid");
+  for (const it of r.items) { const idx = Q.items.push(it) - 1;
+    grid.append(el("div", {class: "tile", "data-i": idx, onclick: e => qClick(e, idx)}, el("img", {src: url("/api/qthumb", {dataset: S.ds, reason: Q.reason, name: it.name}), loading: "lazy", style: "max-width:140px;max-height:140px"}),
+      el("div", {class: "tag"}, it.split ? el("span", {}, "from " + it.split) : el("span", {style: "color:var(--warn)"}, "split ?")), el("div", {class: "cap", style: "display:block"}, it.name))); }
+  $("#qmore").replaceChildren(Q.items.length < Q.total ? el("button", {onclick: qMore}, `Load more (${fmt(Q.total - Q.items.length)} left)`) : null);
+  qBar();
+}
+function qPaint() { document.querySelectorAll("#qgrid .tile").forEach(t => t.classList.toggle("sel", Q.sel.has(Q.items[+t.dataset.i].name))); qBar(); }
+function qClick(e, i) {
+  const it = Q.items[i];
+  if (e.shiftKey && Q.anchor >= 0) for (let j = Math.min(i, Q.anchor); j <= Math.max(i, Q.anchor); j++) Q.sel.set(Q.items[j].name, Q.items[j]);
+  else { Q.sel.has(it.name) ? Q.sel.delete(it.name) : Q.sel.set(it.name, it); Q.anchor = i; }
+  qPaint();
+}
+function qBar() {
+  $("#qbar").replaceChildren(el("span", {class: "muted"}, `${fmt(Q.total)} pictures`), el("button", {onclick: () => { Q.items.forEach(i => Q.sel.set(i.name, i)); qPaint(); }}, "Select all loaded"),
+    el("button", {class: "pri", disabled: !Q.sel.size, onclick: qRestore}, `Restore ${Q.sel.size || ""} selected`), el("span", {class: "muted"}, "Removed in the viewer = split remembered. Moved by the curator = you choose the split."));
+}
+async function qRestore() {
+  let items = [...Q.sel.values()].map(i => ({name: i.name, split: i.split}));
+  const unknown = items.filter(i => !i.split);
+  if (unknown.length) {
+    const sel = el("select", {}, ["train", "val", "test"].map(s => el("option", {value: s}, s)));
+    const ok = await modal("Restore to which split?", el("div", {}, `${unknown.length} pictures were moved by the curator, so their original split is not known. `, el("b", {}, "Putting a photo in val/test while a copy is in train leaks data. "), sel), [{text: "Cancel", value: false}, {text: "Restore", value: true, cls: "pri"}]);
+    if (!ok) return; items = items.map(i => i.split ? i : {...i, split: sel.value});
+  }
+  const r = await act("/api/restore", {reason: Q.reason, items}); if (!r) return;
+  toast(`${r.count} restored`, {undo: true}); loadDatasets(); S.facets = null; openQuarantine();
+}
+
+// ---------------------------------------------------------------- start
+(async function init() {
+  await loadDatasets(); setInterval(loadDatasets, 10000);
+  if (S.list.length) selectDs(S.list[0].name);
+})();
+</script></body></html>

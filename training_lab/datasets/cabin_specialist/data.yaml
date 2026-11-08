@@ -1,0 +1,24 @@
+# Cabin Specialist Dataset
+# Input: Cropped car bounding boxes (from primary anchor)
+# Task: Assess cabin interior for seatbelt, phone use, and window tint
+#
+# ANNOTATION RULES:
+# - clear_window / tinted_window: Annotate the windshield region only.
+#   The tinted_window class GATES all seatbelt and phone checks — it must be reliable.
+# - seatbelt: Annotate the diagonal strap crossing the driver's chest, not the clip.
+# - driver_phone: Annotate the phone itself if held near the head or at the steering wheel.
+# - side_mirror: Annotate visible side mirrors on MOTORCYCLE crops only.
+#   If a mirror is missing from a motorcycle, Count(side_mirror) < 2 triggers the violation.
+
+path: datasets/cabin_specialist
+train: images/train
+val: images/val
+
+nc: 5
+names:
+  0: clear_window    # Untinted windshield — seatbelt/phone checks are allowed
+  1: tinted_window   # Tinted windshield — all checks are skipped (Safety Override Gate)
+  2: seatbelt        # Diagonal strap crossing the driver's torso
+  3: driver_phone    # Phone held near driver's head or hands
+  4: side_mirror     # Visible side mirror (used for motorcycle violation check)
+test: images/test

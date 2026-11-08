@@ -1,0 +1,782 @@
+HULI-KAMOTE PROGRESS DECK: SPEAKING SCRIPT (48 slides)
+One sentence per line. Pause at each line break. Slides in [brackets] are optional if time is short.
+
+==================================================
+SLIDE 1: Huli-Kamote (title)
+==================================================
+Good day, everyone.
+This is Huli-Kamote.
+It is a system that watches road videos and finds traffic violations.
+It is for non-contact apprehension, built around Zamboanga City roads.
+A person reviews every flag. The system does not decide alone.
+Look at the four numbers on this slide.
+Fourteen violation rules are coded. Thirteen are from our thesis list, plus restricted lane.
+Three specialist models are trained: plate, helmet, and cabin.
+Six public datasets are merged. All of them are CC BY 4.0.
+And the last number is zero. We have no real-footage benchmark runs yet.
+I put zero on purpose. Kasi gusto kong maging honest.
+The system is built. The field test is the next milestone.
+
+==================================================
+SLIDE 2: What this session covers
+==================================================
+This is the plan for today.
+First, the goal and the scope of the thesis.
+Second, what changed since the August 25 update. This includes the 14 violation rules and the law behind each one.
+Third, the data. Every source, where it came from, and how we cleaned it.
+Fourth, the models and results. What is trained, and what the numbers really mean.
+Fifth, how we will prove it works.
+Sixth, our limits, risks, and the plan.
+Last, the questions I expect, and the decisions I need from you.
+At the end, I will ask for three decisions: the evaluation protocol, the data you will accept, and which violations to prioritize.
+
+==================================================
+SLIDE 3: Goal and scope
+==================================================
+Our goal is simple.
+We build a prototype that shows contactless detection is technically possible with local tools.
+The thesis promises these things.
+We train and validate the detection models. The software around them is required, but it is secondary.
+The pipeline has three stages: YOLO detection, DeepSORT tracking, and EasyOCR plate reading.
+All testing is on pre-recorded footage. Live cameras are supported by the design, but they are not part of the study.
+A human operator reviews every flag. There are no automatic legal decisions.
+How do we measure success?
+First, mAP at 50. This is detection accuracy when the box overlaps the real object by at least half.
+Second, logging accuracy. Is the violation type, plate, vehicle, and evidence frame recorded correctly?
+Third, false positives and false negatives. We track them separately.
+The thesis list has 13 unique violations.
+Eight are for motorcycles, five are for cars, and five are stretch goals.
+We also built restricted lane. It is not in the thesis list. We kept it as an extra.
+
+==================================================
+SLIDE 4: System at a glance
+==================================================
+Let me walk through the system from left to right.
+A video comes in. It can be a recorded clip or a stream. We cap it to 720p to keep it fast.
+Step one, detect. YOLO finds vehicles and people in every frame.
+Step two, track. DeepSORT gives each vehicle one ID. If a track breaks, we stitch it back.
+Then the rules and the specialists work. Zones and geometry judge the movement. Helmet and cabin models look at crops.
+Step three, plate. We find the plate, make it sharper, and read it with two-pass voting.
+At the end, we make a ticket with the violation, the plate, the track ID, and photos with "why" boxes.
+Around it, we have four apps.
+The backend runs locally. It uses FastAPI, SQLite, and ONNX on the GPU.
+The enforcer dashboard is for review and training.
+The citizen app is for notices and appeals.
+The visualizer teaches each violation to non-technical people. It is a teaching aid, not part of the detection claim.
+One design choice is important.
+We use specialists on cropped vehicles, not one big model on the whole frame.
+That keeps it fast on a 6 GB laptop GPU, and we can retrain each model alone.
+
+==================================================
+SLIDE 5: Before and after
+==================================================
+This slide compares August 25 and today.
+On August 25, we had prototype scripts and a basic video router.
+The detection was one block of logic. It broke when the detector dropped a frame.
+Now the architecture is a cascade: anchor detector, tracker, ledger, and specialists.
+Tracking was a simple IoU tracker. Now it is DeepSORT with ID stitching and duplicate-ticket review.
+We had two violation prototypes. Now we have 14 rules with 57 scripted-track tests.
+Plates were a basic crop and read. Now we have a plate detector, an enhancer, and two-pass voting.
+Models were stock COCO weights. Now helmet and cabin are trained and deployed.
+There was no review. Now we have the Forensic Analyzer with merge, split, and plate correction.
+Before, training was manual scripts. Now we have Training Studio, a terminal Training Lab, and pause and resume.
+We had no data. Now we have six merged public sets and a harvest loop for our own data.
+Speed was a stutter at 1080p. Now we use a 720p working size and round-robin specialists, about three times faster.
+The biggest change is this.
+We moved from a prototype that detected two violations to a pipeline that can be trained, reviewed, and measured.
+
+==================================================
+SLIDE 6: Milestones, Aug 25 to Sep 17
+==================================================
+This first half is "make it run".
+August 25 to September 3. We built the citizen app and the platform base.
+September 9 to 11. We separated the detector from the specialists. We also built the enforcer inbox and the Training Lab.
+September 14 to 16. We built offline analysis with several zones per violation, and runtime model switching.
+September 17. We moved to GPU-first. We fixed a CUDA crash and made the zones scale with any resolution.
+So this half is about architecture, UI, GPU, and stability.
+
+==================================================
+SLIDE 7: Milestones, Sep 18 to Oct 13
+==================================================
+This second half is "make it measurable".
+September 18 to 21. We added streaming, DeepSORT, and two-stage plate reading with voting.
+September 23 to 26. We added the model manager, YOLO11 and YOLO26 support, and the Real-ESRGAN enhancer.
+We also started the "pop quiz" corrections that feed an OCR dataset.
+September 27 to October 3. We found the DeepSORT box-format bug, stitched broken tracks, and built in-frame review.
+We also added seven new violation rules, including red light with a simulated light.
+October 3 to 13. We merged and cleaned six public datasets.
+We trained and deployed helmet at 0.98 and cabin at 0.79.
+We added pause and resume, the model catalog, the terminal Training Lab, and the harvest tool.
+We also found the model-input mismatch.
+I want to stress three of these as real engineering: the tracker bug, the data leakage fix, and the input mismatch.
+They show that we test our own system.
+
+==================================================
+SLIDE 8: The 14 violation rules
+==================================================
+Here are all 14 rules. I will not read every row. I will group them.
+Nine rules are geometry on tracked vehicles. Counterflow, illegal parking, restricted lane, pedestrian lane, illegal turn, swerving, overloading, red light, and disregarding signs.
+The operator draws a zone, sets a limit, and the rule decides.
+Four rules depend on trained models. No plate, no helmet, no seatbelt, and missing side mirror.
+Signal light is a heuristic. It checks for a blinking light before a turn.
+It cannot see hand signals, and hand signals are legal. So we mark it "needs review".
+Look at the status column. Please be careful with it.
+"Rule tested" means scripted tracks pass, including false-positive traps.
+It does not mean we measured it on field footage yet.
+No plate is "model v1 weak". Missing mirror is "no mirror data", so it stays a stretch item until we label our own.
+
+==================================================
+SLIDE 9: Source of each violation (1 of 2)
+==================================================
+Every rule points back to a written rule, a law.
+The base is RA 4136, the Land Transportation and Traffic Code of 1964.
+Counterflow. RA 4136 section 37. You pass oncoming vehicles on the right. Plus one-way street rules of the LGU or MMDA.
+Illegal parking. RA 4136 sections 46 and 47, and Zamboanga City Ordinance 248. No parking on crosswalks, corners, hydrants, or driveways.
+Restricted lane. It is not in RA 4136. It comes from MMDA and LGU lane rules. It is an extra for us.
+Pedestrian lane. Section 46(b) no parking on a crosswalk, section 54 obstruction, and section 42(c) yield to pedestrians.
+Illegal turn. Section 45, turning at intersections, and the "no turn" signs.
+Swerving. This is not named in the law. We use it as a measurable proxy for reckless driving, section 48. We say this openly.
+Overloading. Sections 32 and 33 on registered capacity, and LTO order AHS-2008-015: one back rider per motorcycle.
+Amounts marked "reported" come from news. We must check them against the signed order before we quote them.
+
+==================================================
+SLIDE 10: Source of each violation (2 of 2)
+==================================================
+Here are the next seven. There are two honest findings.
+Finding one. Red light and disregarding signs are not in RA 4136. RA 4136 has no general "obey signals" section.
+They come from JAO 2014-01, the joint administrative order, and from MMDA and LGU codes.
+Signal light. Section 44 accepts a hand signal or an approved device. And section 34(f) says motorcycles need no signal light.
+So our blinking-light check can flag turns that are legal. That is finding two. We keep it as "needs review".
+No plate. Section 18, plates visible front and rear. For motorcycles, RA 11235 as amended by RA 12209 in May 2025. Now only the rear plate is needed.
+No helmet. RA 10054, the Motorcycle Helmet Act. The driver and the back rider must wear helmets.
+No seatbelt. RA 8750, the Seat Belts Use Act. The driver and front-seat passengers.
+Missing side mirror. LTO order AHS-2008-015. RA 4136 has no mirror rule.
+Fines here are from different sources. Check them before quoting.
+
+==================================================
+SLIDE 11: Legal context: non-contact apprehension
+==================================================
+The panel may ask: "Is this even allowed?"
+Here is the context.
+In August 2022, the Supreme Court issued a TRO. It stopped the No Contact Apprehension Policy of the MMDA and some cities.
+In May 2025, the TRO was partly lifted for the MMDA on major roads like EDSA and C5. City ordinances were not covered.
+In mid-2026, the Court dismissed the petitions as moot.
+It did not say that the policy is valid. Reports give different dates, so we must confirm the date.
+The petitioners raised privacy, conditions like blocking registration renewal, and due process for owners who were not the driver.
+For our thesis, the answer is clear.
+We study the detection technology, not the legal power to fine.
+A human reviews every flag, and owners are not notified automatically.
+Masked personal data and plate correction answer the privacy concern, at least in part.
+Our source is news reports. Before quoting, confirm the case numbers and the decision date on the Supreme Court website.
+
+==================================================
+SLIDE 12: 15 more violations we could add (1 of 2)
+==================================================
+These are not promises. They are candidates.
+They follow the same pattern: a zone, a class, a time, or a model we already have.
+Number one, overspeeding. RA 4136 sections 35 and 36. We need a measured real distance on the road.
+Number two, phone use while driving. RA 10913. Our cabin model already has 3,924 phone objects.
+Number three, overtaking in a no-passing zone. Section 41.
+Number four, driving or parking on the sidewalk. Section 52. Easy: a sidewalk zone.
+Number five, blocking the intersection. Section 54 and 46(a). Easy.
+Number six, not giving way to pedestrians. Section 42(c).
+Number seven, riding on the roof or footboard. Section 32 and 51.
+Number eight, a child on a motorcycle without the safety conditions. RA 10666. This is hard to judge from a camera.
+
+==================================================
+SLIDE 13: 15 more violations we could add (2 of 2)
+==================================================
+Here are the other seven.
+Number nine, smoke belching. RA 8749, the Clean Air Act. The law needs an emission test. So the camera can only flag "suspected".
+Number ten, missing or defective lights. Section 34. At night, a vehicle with no lit lamps.
+Number eleven, covered or unreadable plate. Section 18 and RA 11235. We need a plate found but not readable.
+Number twelve, tricycle on its rest day. This is Zamboanga City Ordinance 185. The rest day depends on the last plate digit.
+This one is local, and easy once plate reading works.
+Number thirteen, tricycle on a national highway. DILG circulars 2020-036 and 2023-195.
+Number fourteen, illegal tint. There is no final national standard we could find. So the rule is unclear.
+Number fifteen, parking too close to corners, hydrants, or driveways. Section 46. Six meters from a corner, four meters from a hydrant.
+We left out two on purpose.
+Number coding is Metro Manila. We found no Zamboanga scheme.
+Drunk driving is not visible to a camera.
+
+==================================================
+SLIDE 14: How a ticket is decided
+==================================================
+This slide answers: "How do you control false positives?"
+Six steps.
+One, never trust one frame. Model checks vote over the last 10 looks. One wrong guess cannot make a ticket.
+Two, judge fairly. A plate look only counts if the vehicle is big enough and its class is settled.
+Three, decide at the end. No plate is only a suspicion while the car is on screen.
+It becomes a ticket only if no plate was found when the car leaves. Photos of cleared suspicions are deleted.
+Four, show why. The evidence photos have boxes: the zone, the vehicle, and the part that caused the flag.
+Five, a human decides. The reviewer confirms, rejects, or corrects.
+Six, learn from it. Rejected tickets and corrections go to the harvest inbox for the next training round.
+So we have four independent layers: voting, fair-look rules, end-of-track decisions, and human review.
+
+==================================================
+SLIDE 15: Problems found and fixed
+==================================================
+This slide builds trust. These are problems we found in our own system.
+First, the tracker box format. DeepSORT expects center boxes. We sent top-left boxes.
+One car got several IDs. One test run made 29 tickets, and track 19 twice. We fixed it and added a stitcher.
+Second, the same photo in train and test. Two public sets had identical photos on both sides.
+About 1,600 copies were moved into training, so the test score is not inflated.
+Third, a dataset we rejected. A 6,608-image helmet set had only 21 "no helmet" labels. We did not use it.
+Fourth, no-plate was too eager. It fired after two misses and never cleared. Now it needs six fair looks, and it is decided when the car leaves.
+Fifth, speed. We fixed the 1080p stutter with a 720p working size and round-robin specialists.
+Sixth, the model input mismatch. The app feeds models differently from how they were trained. That is the next slide.
+Three of these came from measuring, not guessing.
+
+==================================================
+SLIDE 16: Measured: the model input mismatch
+==================================================
+This is a measurement, not an opinion.
+Same model, same photos. Only the way we prepare the picture changes.
+Today, the app uses BGR, stretched, and only the bottom 40 percent of the vehicle. The plate is found in only 7 percent.
+If we only fix the colors to RGB, it is 11 percent.
+RGB plus letterbox, still bottom 40 percent, is 29 percent.
+RGB plus letterbox, on the whole vehicle, is 85 percent.
+Why? Only 51 percent of plates sit in the bottom 40 percent of the vehicle box. That is the only area the app searched.
+Also, from 28 real "no plate" tickets, 18 percent had a plate the model can find when fed properly.
+The fix has three pieces: convert BGR to RGB, letterbox instead of stretching, and search the whole vehicle.
+Important: the fix is queued, not applied yet.
+And the 85 percent is on the plate set's own domain. It is not on Zamboanga footage.
+
+==================================================
+SLIDE 17: Every data source at a glance
+==================================================
+Now, the data.
+All training photos come from public Roboflow Universe datasets.
+None are known to be from Zamboanga. Let me say this clearly.
+Our own data is the review loop and a small set of working clips.
+Helmet. flashys-workspace, helmet-detection-fsrgu, version 2. 4,868 training photos.
+Cabin. mennaworkspace, ds-5cu4e, version 2, and skripsinew, tpnew. 9,901 training photos.
+Vehicles. capstone-xgfsp, v4 Best Philippine Vehicle Dataset, and research-3wj93, Philippine Plate and Vehicle. 20,212 training photos.
+Plates. thesis-dzclp, License Plate Detection, and an original plate set. 7,116 training photos.
+For the original plate set, I have not recorded the source name. This is a "confirm" item.
+For plate reading, we only have 42 corrections of our own. It is too few to train.
+Note: the export size includes augmented copies. The real number of unique photos is much smaller.
+About 1,600 helmet, 2,500 cabin, 4,700 vehicles, and 2,700 plates.
+
+==================================================
+SLIDE 18: Reading the data tables
+==================================================
+Let's read this table together.
+Each row is one dataset: helmet, cabin, vehicles, and plates.
+"Train files" is how many pictures the model learns from.
+Look at helmet. 4,868 files.
+But only 1,623 are real, different photos.
+Why? Kasi each photo has about three copies. Flipped, blurred, or brighter.
+So "files" is not the real size. "Unique photos" is the real size.
+"Objects" means the boxes we drew. One picture can have many objects.
+Validation and test together are small, only 6 to 13 percent. So their scores are less certain.
+Also, there are zero pictures with nothing in them.
+So the model rarely learns "walang nakikita". This can cause false alarms.
+The harvest tool will add those pictures.
+And the vehicles are lopsided. 27 thousand people, but only 4 thousand tricycles.
+
+==================================================
+SLIDE 19: Helmet data
+==================================================
+Helmet data. The source is "Helmet Detection" by flashys-workspace.
+Version 2, dated May 15, 2026. License CC BY 4.0.
+The export is 5,276 images, with three augmented versions per source photo.
+The original classes are Helmet, Motorcycle, and No helmet.
+We mapped Helmet to rider with helmet, and No helmet to rider without helmet. We dropped Motorcycle.
+We hold 4,868 training files from 1,623 source photos, 305 validation, and 102 test.
+It is balanced: 2,927 with helmet and 3,177 without.
+Why this set? It was the only one we found with a real, balanced "no helmet" class.
+But what do the photos show? Mostly lifestyle and stock-style pictures of people on scooters.
+They are not traffic camera views.
+So the 0.98 score is on this set's own validation photos.
+How it behaves on a CCTV angle in Zamboanga is not measured yet.
+Next step: local helmet crops through the harvest tool.
+
+==================================================
+SLIDE 20: Cabin data
+==================================================
+Cabin data has two sources.
+The first is "ds", or Last2-Traffic-violation, by mennaworkspace. Version 2, February 2026. 10,117 images.
+The classes are windshield, seat belt, no seat belt, using mobile, plate, and vehicle.
+We mapped windshield to clear window, seat belt to seatbelt, and using mobile to driver phone.
+The second is "tpnew" by skripsinew. 455 images. All were placed in training.
+Here is the split. Training has 9,901 files from 2,545 unique photos. Validation 275. Test 396.
+Look at the last two columns: tinted window and side mirror. Both are zero.
+That is not a modelling failure. There is simply no public data.
+So the tint check and the mirror check cannot work until we label our own.
+The photos show close, front-facing car photos in daylight, with Arabic-script plates.
+It is a good windshield view, but from another country.
+
+==================================================
+SLIDE 21: Vehicle data
+==================================================
+Vehicle data. We need motorcycle, car, bus, truck, person, and tricycle.
+The first source is "v4 Best Philippine Vehicle Dataset" by capstone-xgfsp. 23,804 images.
+We mapped pedestrian to person, and jeepney to bus. We dropped bicycle.
+Jeepney into bus is a design choice. We can revisit it.
+The second source is "Philippine Plate and Vehicle" by research-3wj93. Only 101 images.
+Training has 20,212 files from 4,724 unique photos.
+The person class matters more than it looks. Overloading and the helmet crop both use person boxes.
+Be careful with the word "Philippine". It describes the project name more than every photo.
+Some photos look like they are from other countries, and some are stock images with watermarks.
+Validation and test hold only 76 and 25 tricycles. So tricycle scores will have wide uncertainty.
+This model is training now. Epoch 19 of 30.
+
+==================================================
+SLIDE 22: Plate data
+==================================================
+This is the most important data slide.
+The plate model is the weakest link. Let me say why.
+Set one is the original plate set. 2,824 training files from 1,228 photos.
+It is a Roboflow export, but the project name and owner are not recorded. We must find them.
+It trained plate version one, which scores 0.765.
+Set two is "License Plate Detection" by thesis-dzclp. 4,907 images.
+We checked eight random photos from each set.
+Both look like grayscale parking-barrier camera footage, with Vietnamese-format plates.
+Neither set seems to have Philippine plates.
+Good news. There is no leakage. Zero of 1,669 photos matched between the two sets.
+Why it matters. The plate model has probably never seen a Philippine plate.
+This, plus the input mismatch, may explain the weak plate finding.
+So fixing the data is the highest-value change.
+The plan is to collect local plates with the harvest tool.
+Public Philippine plate sets exist, but they are small, 63 to 480 photos. The larger share must come from our own footage.
+
+==================================================
+SLIDE 23: Rejected sets and gaps
+==================================================
+Showing a rejected dataset is a rigor signal.
+We rejected "Helmet Detector" by jayz-workspace. It has 6,608 images.
+But it has only 21 "no helmet" labels in training, and none in validation or test.
+It is mostly product photos. A model could not learn or be tested on the violation.
+So size alone does not make a set good.
+Now, what is still missing.
+Zero photos known from Zamboanga.
+Zero Philippine plates seen in the samples.
+Zero tinted windshields and zero motorcycle mirrors.
+Night, rain, and glare. We do not know the coverage.
+And plate text for OCR training. We have 42 of about 500 needed.
+We also saw candidate datasets in search. They are leads, not facts. We will check license and content before using any.
+
+==================================================
+SLIDE 24: Our own data and footage
+==================================================
+This is our own data. It is early, but the loop works.
+We ran 11 forensic analyses. They produced 229 tickets.
+In the harvest inbox, 345 plate pictures are waiting for a human check. 22 are ready, and none are added yet.
+We saved 42 corrected plate crops for OCR training. We need about 500.
+For car matching, we have 4 vehicles with two or more photos. Training needs about 5, ideally 30.
+These are our working clips. They are from 1080p to 4K, and from 1 minute 45 seconds to 15 minutes.
+Please note. They are files on the development machine, not a registry yet.
+Do not call them the final test set.
+Still to do: for each clip, I must write who recorded it, where and when, the camera setup, and the permission.
+Panels ask about provenance and privacy, so I will prepare this.
+
+==================================================
+SLIDE 25: Data integrity and ethics
+==================================================
+How did we keep the data honest?
+First, splits and leakage.
+Each public set keeps its own split.
+We group augmented copies by source photo, so a photo and its flipped copy count as one.
+We found identical photos on both sides in the cabin and vehicle sets. About 1,600 copies were moved into training.
+Between the two plate sets, zero matched.
+Second, reproducibility. A manifest lists every dataset, version, and class mapping.
+One script downloads and merges them. Every training run keeps its settings and per-epoch scores.
+Third, licenses. All six sets are CC BY 4.0, and we cite the owners.
+But some images show watermarks. So the dataset label may not cover every image.
+We use them for academic training only, and we do not redistribute.
+Fourth, privacy under RA 10173.
+Road footage has faces and plates. Access is limited and nothing is posted publicly.
+Operators see masked personal data.
+One thing is still open: the evidence retention rule. Evidence photos once grew to 27 GB before being cleared.
+
+==================================================
+SLIDE 26: The AI architecture in one picture
+==================================================
+This is the whole AI system in one picture.
+There are four kinds of model, and one part that is not AI.
+First, the detector. It finds vehicles and people in each frame.
+Second, the tracker. It gives each vehicle one ID, so we don't count the same car twice.
+Third, the specialists. They look at a small crop: helmet, cabin, or plate.
+Fourth, the plate reader. It makes the plate sharper, then reads the letters and numbers.
+The last block is not AI. It is plain rules and votes. Doon nagdedesisyon kung may violation.
+Notice: the detector and the three specialists are the same small model, YOLOv8 nano.
+Each one has about 3 million parameters. So it can run on a laptop.
+The detector sees the whole frame at 640 by 640. The specialists see crops at 320 by 320.
+We fine-tuned the four YOLO models ourselves, starting from COCO weights.
+The tracker and the plate reader are pretrained. We did not train them ourselves.
+For plate reading, we need about 500 labelled plates. We have 42.
+
+==================================================
+SLIDE 27: Inside the detector
+==================================================
+Now, what happens inside the detector?
+Step one: we resize the picture to 640 by 640. We do not stretch it. We add padding.
+Step two: the backbone. It turns pixels into features. First edges, then parts, then whole objects.
+Step three: the neck. It mixes three picture sizes, so we can find small and big objects.
+Step four: the head. It checks 8,400 grid cells. Each cell gives one box and one score per class.
+Where is 8,400 from? 80 times 80, plus 40 times 40, plus 20 times 20.
+Step five: the filter. We throw away scores below 0.45. Then we remove duplicate boxes.
+How does it learn? We start from a model that already knows 80 common objects. This is called transfer learning.
+Then we train it on our photos. Each round: it guesses, we measure the mistakes, it adjusts a little.
+There are three kinds of mistake: box, class, and dfl. Remember them. They are in the training graph.
+Why YOLO? One pass over the picture gives every box. It is fast enough for video.
+Why nano? 3 million parameters. It runs in real time on our laptop GPU.
+
+==================================================
+SLIDE 28: Tracking and plate reading
+==================================================
+Two small stories here.
+First, the tracker, DeepSORT. Its question is: "Is this the same car as one second ago?"
+It guesses where the car should be now. Then it matches new boxes to old cars.
+It uses position, and also how the car looks. The look is a fingerprint of 512 numbers.
+A car needs three good frames before it gets an ID.
+If it disappears, we keep its ID for up to 90 frames.
+Second story: the plate. First we find the plate inside the vehicle. We cut it with a little padding.
+We keep up to 40 crops per vehicle.
+Then Real-ESRGAN makes it bigger and sharper. Then EasyOCR reads the text.
+We fix common mistakes by position. In a PH plate, the first three are letters and the last four are numbers.
+So a zero in a letter place becomes O.
+Finally, we vote across all the crops. The text with the most reads wins.
+Why vote? One blurry frame can read B as 8. Many frames together are more reliable.
+That is why one car becomes one ticket with one plate.
+
+==================================================
+SLIDE 29: How the models were trained
+==================================================
+How did we train the models?
+The method is transfer learning. We start from COCO-pretrained YOLOv8 nano weights.
+The hardware is an NVIDIA RTX 3050 laptop GPU with 6 GB.
+The software is Ultralytics, PyTorch, ONNX Runtime, and Python 3.12.
+We train up to 100 epochs. Vehicles are 30. Batch size is 16.
+We stop early after 30 epochs without improvement.
+We use augmentation: mosaic, color shifts, flips, and small rotation.
+The best weights are exported to ONNX and registered in the model catalog.
+Why this design?
+Specialists on crops are smaller, faster, and we can retrain them one at a time.
+Every run keeps its settings and its scores, so it is reproducible.
+We can pause and resume, because the GPU is shared with other work.
+I must mention one thing before you ask.
+Helmet, cabin, and plate were trained at 640 pixels. But the pipeline feeds them 320 pixel crops.
+So we must re-check the scores at 320 before we call them field numbers.
+
+==================================================
+SLIDE 30: Reading the training graph
+==================================================
+This is the real training of the helmet model. 62 epochs. One epoch is one full pass over the photos.
+Left chart: scores. Higher is better.
+They go up fast, then flatten. mAP at 50 starts at 0.93 and reaches about 0.98.
+The strict score keeps rising, from 0.56 to 0.75. That means the boxes get tighter.
+Right chart: mistakes. Lower is better.
+Blue is training photos. Orange is validation photos. The model never learns from the orange.
+After about epoch 35, blue keeps going down but orange stops.
+This is the start of overfitting. That is why we don't use the last epoch.
+The dashed line is the saved model: epoch 32.
+We choose it with a blend: 10 percent mAP at 50, and 90 percent the strict score. Kasi we want tight boxes for the plate reader.
+So it is not the epoch with the highest mAP at 50. That one is epoch 18.
+Training stopped at epoch 62, because 30 epochs had no improvement.
+
+==================================================
+SLIDE 31: Every column in the training file
+==================================================
+This table explains every column in the training file. These are real numbers: epoch 1, and the saved epoch 32.
+Group one: losses. These are mistakes. Lower is better.
+Box loss is how far the box is from the true box. It went from 1.1 to 0.81.
+Class loss is "helmet or no helmet". It went from 1.7 to 0.43.
+DFL loss is how blurry the box edge is.
+Group two: scores. Higher is better.
+Precision: of the boxes we drew, how many are correct. 96 percent. We call it trust.
+Recall: of the real riders, how many we found. 95 percent. We call it coverage.
+mAP at 50: the overall score when the box overlaps the truth by half. 0.978.
+mAP at 50 to 95: same, but stricter. 0.762.
+Group three: the "val" columns. Same mistakes, but on photos the model never studied.
+Last, learning rate. It is the step size. Small at the start, then it goes down.
+Remember: these are validation numbers from public photos. Not field accuracy.
+
+==================================================
+SLIDE 32: Results so far
+==================================================
+Here are the results. Please listen to the warning first.
+These scores are on each dataset's own validation split. The photos are from public sets, not Zamboanga.
+They show the models learn their task. They are not field accuracy.
+Helmet. mAP at 50 is 0.98. Strict score 0.76. Trust 96 percent, coverage 95 percent. Saved epoch 32 of 62.
+Cabin. 0.79. Strict score 0.63. Trust 96 percent, coverage 78 percent. Saved epoch 70 of 100.
+It is just under our 0.80 target. Good trust, but it misses about a fifth of cases.
+Plate version one. 0.77. Strict score 0.33. Trust 78 percent, coverage 74 percent. Saved epoch 82 of 100.
+This is the weak one. The target was 0.90.
+The strict score of 0.33 says its boxes are loose. That is bad for the plate reader.
+Vehicles are still training. Epoch 19 of 30, 0.67 so far.
+The test split and our own footage are still to be run.
+I will not say "99 percent accurate". That would be wrong.
+
+==================================================
+SLIDE 33: The learning loop
+==================================================
+This answers: "How will accuracy improve beyond public data?"
+Mistakes become training data.
+One, analyze. We run a clip in the Forensic Analyzer.
+Two, review. A person confirms, rejects, or corrects the plate.
+Three, collect. The harvest tool copies uncertain and rejected pictures, with the model's own boxes.
+Four, check. One picture at a time. Enter means the box is right. Drag to draw. N means nothing here.
+Five, train. Accept into the dataset, retrain, and deploy.
+Six, benchmark. Same clips, compare with the previous model.
+Each ticket type teaches a different model.
+A "no plate" ticket teaches the plate model. A "no helmet" ticket teaches the helmet model.
+A corrected plate text teaches the plate reader. A merge or "different car" decision teaches the car matcher.
+There are safeguards.
+Benchmark clips can be protected from harvesting.
+The test split is never written to.
+And nothing enters a dataset without a human check.
+
+==================================================
+SLIDE 34: Evaluation plan
+==================================================
+This answers: "How will you know it works?"
+Please note, the runner is not built yet.
+The protocol has five steps.
+One, a clip registry. For each clip, we store the zones, the expected events, and the pass criteria.
+Two, ground truth. Two people count the violations independently. We settle and record disagreements.
+Three, two sets of clips. Tuning clips, where we can adjust thresholds. And held-out test clips, which we touch once.
+Four, run with fixed settings. Score each event as true positive, false positive, or false negative.
+Five, report precision, recall, and logging accuracy, with confidence intervals and a failure analysis.
+We will also compare.
+YOLOv8n versus YOLO11n versus YOLO26n on the same clips and rules.
+We will do ablations: with and without plate enhancement, DeepSORT versus ByteTrack, and bottom 40 percent versus whole vehicle.
+We report plate reading separately from plate detection.
+Precision is: of the tickets raised, how many were real.
+Recall is: of the real violations, how many got a ticket.
+And I want to ask: how many events per violation do you consider enough?
+
+==================================================
+SLIDE 35: Limits and risks
+==================================================
+This is what we cannot claim yet. I say it before you ask.
+Evidence. No benchmark on field footage yet.
+The scores are validation numbers. The test split is unused.
+Helmet and cabin were trained at 640, but deployed at 320. We must re-validate.
+Data. No photo is known to be from Zamboanga.
+The plate model has probably never seen a Philippine plate.
+There is no public data for tinted windows or mirrors. We need our own labels.
+System. The app feeds the models differently from training. The fix is queued.
+The signal light check is a heuristic and cannot see hand signals.
+The live camera setup does not have the new violations yet.
+Outcome. Tickets do not reach owners yet. There is no plate-to-owner registry.
+And the rules assume a fixed camera view. Each site needs threshold tuning, by design.
+What is safe to say?
+The pipeline is built end to end. Each violation has a tested rule. Three specialists are trained.
+We found and measured our own failure modes.
+What do I avoid saying?
+"99 percent accurate". "Works on Philippine roads". "Ready for deployment". And "detects all 13 violations" without saying that field measurement is pending.
+
+==================================================
+SLIDE 36: Roadmap
+==================================================
+The plan has three parts: now, next, and before the defense.
+Now.
+Fix the model input path: RGB, letterbox, whole-vehicle plate search, and NMS on specialist outputs.
+Finish the vehicle detector retrain.
+Re-validate helmet and cabin at 320 pixels, and run the test split once.
+Commit and document the work since October 3.
+Next.
+Record or collect Zamboanga clips with ground truth for every violation.
+Build the benchmark runner and the clip registry.
+Harvest and label local plates, then retrain the plate model.
+Compare YOLOv8n, YOLO11n, and YOLO26n.
+Before the defense.
+Label tinted windows and motorcycle mirrors from local footage.
+Build the plate-to-owner registry, so a confirmed ticket reaches the owner.
+Add the new violations to the live camera wizard.
+Make the final tables: precision, recall, false alarms, and misses per violation.
+One dependency to watch.
+Everything in "Next" needs footage with known ground truth. The footage is the real critical path, not the code.
+
+==================================================
+SLIDE 37: Questions: data and validity
+==================================================
+Question 1. Are your training and test sets really separate?
+Each public set keeps its own split. We group copies by source photo.
+We found identical photos on both sides in two sets, and moved them to training.
+But validation and test come from the same sources as training. They measure "the same kind of photo", not Zamboanga.
+That is why the field benchmark is next.
+Question 2. None of your photos are from Zamboanga. Why would it transfer?
+It may not, and we say so.
+The public data teaches the task. The benchmark measures the gap. The harvest loop adds local examples every round.
+The gap between public score and field score is itself a result we will report.
+Question 3. Who labelled the data, and how good are the labels?
+Public labels are community-made and unverified. We sampled them, and rejected one set.
+Labels we add are checked by a person, picture by picture.
+Question 4. Why is the plate model the weakest?
+Both public plate sets look like Vietnamese parking-gate footage. Philippine sets are small.
+And the app fed the model badly: 7 percent found versus 85 percent when fed correctly.
+The plan: fix the input path, then retrain with plates from our own clips.
+Question 5. You list tinted windows and mirrors, but have no data.
+Correct. Those two stay off until we label local footage.
+If there is no time, the thesis says "rule implemented, model pending data". We will not claim a score.
+
+==================================================
+SLIDE 38: Questions: method
+==================================================
+Question 6. Why a cascade of specialists, not one detector with every class?
+Small models on small crops are fast on a laptop GPU. We can retrain and compare them one at a time.
+The trade-off: errors compound. A missed vehicle means no helmet check.
+We will test it with an ablation against one multi-class model, if time allows.
+Question 7. Why YOLOv8n, and why compare YOLO11 and YOLO26?
+Nano runs in real time on a 6 GB GPU.
+All three generations are supported. So the comparison changes only the detector.
+Question 8. Most violations are geometry rules. Where is the AI?
+The AI is in perception: detection, tracking appearance, plate reading, helmet and cabin checks.
+The violation itself is a traffic definition. Counterflow is, by definition, movement against the legal direction.
+So a rule on a learned track is the correct tool.
+We tune the thresholds on clips, and we test the rules with scripted tracks.
+Question 9. How do you deal with the same car getting several IDs?
+We found a real bug and fixed it. We added a stitcher.
+Reviewers can merge or separate cars, and those decisions become ReID data.
+We will report ID switches per clip.
+Question 10. How do you control false positives?
+Four layers: votes, fair-look rules, end-of-track decisions, and human review.
+Our rule tests include traps, like a car waiting on a stop line.
+
+==================================================
+SLIDE 39: Questions: evaluation (1 of 2)
+==================================================
+Question 11. What is your accuracy?
+I answer carefully.
+Per model, on each dataset's validation split: helmet 0.98, cabin 0.79, plate version one 0.77.
+These show the models learn their task. They are not field accuracy.
+The field numbers will come from the benchmark: precision, recall, false alarms, and misses per violation.
+Question 12. How many test events are enough?
+This is where I ask for your guidance.
+My proposal: at least 30 real events per violation, where footage allows, with confidence intervals.
+Where there are fewer, we state the count and the wide interval. We do not give one number.
+Question 13. How is ground truth established?
+A clip registry stores the zones, the expected events, and the pass criteria.
+Two people count independently. We resolve and log disagreements.
+
+==================================================
+SLIDE 40: Questions: evaluation (2 of 2)
+==================================================
+Question 14. Why mAP at 50, and what does mAP at 50 to 95 say?
+mAP at 50 is the thesis metric.
+We also record the strict one: helmet 0.76, cabin 0.63, plate 0.33.
+The low plate value says its boxes are loose. That matters, because OCR needs a tight crop.
+Question 15. Does it run in real time?
+Scheduling gave about three times the FPS. Specialists run on every fifth inference frame.
+We will measure the final FPS at 720p on the RTX 3050 with all checks on.
+The study itself uses recorded footage.
+Question 16. Will it hold up across lighting, angle, and resolution?
+We do not know yet.
+Our working clips span 1080p to 4K and several camera positions.
+The benchmark will tag each clip, day or night, angle, and resolution, so we can group failures.
+Diagonal views are a known weak point for the plate step.
+
+==================================================
+SLIDE 41: Questions: scope and ethics (1 of 2)
+==================================================
+Question 17. Is this legally enforceable? Who is liable for a wrong ticket?
+This is out of scope by design.
+The system flags. A human operator confirms, rejects, or corrects. Every flag keeps its evidence.
+For context: the policy was contested in court.
+The Supreme Court restrained it in 2022, partly lifted it for the MMDA in 2025, and dismissed the petitions as moot in 2026, without ruling on validity.
+Question 18. How do you handle privacy under RA 10173?
+Footage is recorded and pre-existing. Personal data is masked in review. Access is limited.
+Still open: a formal retention rule for evidence photos, and a written consent statement for the clips.
+Question 19. Fourteen violations is a lot. What would you cut?
+Here I ask the panel to help me shrink the scope.
+Core: helmet, no plate, counterflow, illegal parking, illegal turn, disregarding signs.
+Second: overloading, red light, seatbelt, pedestrian lane.
+Stretch: signal light, swerving, missing mirror because there is no data, and restricted lane.
+Which tier do you prefer?
+
+==================================================
+SLIDE 42: Questions: scope and ethics (2 of 2)
+==================================================
+Question 20. What is new here?
+It is not a new network.
+The contribution is a complete, reviewable pipeline for Philippine road classes, like tricycle and motorcycle-heavy scenes.
+Plus a documented human-in-the-loop learning cycle.
+And an evaluation on local footage, with its failure modes written down.
+Question 21. Can it run on a live camera?
+The design accepts RTSP and HLS streams, and we ran it on them during development.
+But live deployment is outside the tested scope, as the thesis states.
+Question 22. Does a confirmed ticket reach the vehicle owner?
+Not yet. I answer directly.
+Users are keyed by driver's license. There is no plate-to-owner registry. So a plate never resolves to a person.
+It is planned: a small registry, and a notification on confirm.
+The review screen no longer says otherwise.
+
+==================================================
+SLIDE 43: Decisions needed
+==================================================
+Here is what I need from you today.
+One, the evaluation protocol. How many events per violation, and what split between tuning clips and test clips, is enough?
+Two, the data. Are public datasets plus our own harvested local data acceptable, with licenses cited?
+Do we need more local data before the benchmark?
+Three, the scope. Which violations are core, and which may be reported as "rule only" or "pending data"?
+Should restricted lane stay in?
+Four, the footage. Which sites, how many clips, and what consent statement do you want?
+Five, the comparison set. Are YOLOv8n, YOLO11n, and YOLO26n enough?
+Or should we add larger variants or a non-YOLO baseline?
+Six, the timeline. The dates for the benchmark and the plate retrain, against the defense schedule.
+I will write your answers down. They will become the design of the evaluation chapter.
+Thank you.
+
+==================================================
+SLIDE 44: A. Dataset ledger (appendix, for citations)
+==================================================
+This is a reference slide. Leave it up when someone asks: "Where exactly did that come from?"
+It lists each dataset with its Roboflow address, version, date, export size, and use.
+Eight datasets are listed. One was rejected.
+All are CC BY 4.0, except the original plate set. Its license must be confirmed.
+We downloaded them in October 2026, in YOLOv8 format.
+
+==================================================
+SLIDE 45: B. Class mapping (appendix)
+==================================================
+This answers: "Why did you merge jeepney into bus?"
+Their labels become our labels. Helmet maps to with helmet. No helmet maps to without helmet.
+For cabin, windshield becomes clear window, seat belt becomes seatbelt, and using mobile becomes driver phone.
+For vehicles, jeepney becomes bus, pedestrian becomes person, and semi-truck becomes truck.
+The plate has one class.
+Missing in every public source: tinted window and side mirror.
+The mapping is kept in one manifest file, and it is printed at every merge.
+
+==================================================
+SLIDE 46: C. Stack and reproducibility (appendix)
+==================================================
+Use this slide when asked: "Could someone reproduce this?"
+The answer is yes, for the data and the training.
+The manifest and one script rebuild the data.
+Each run folder keeps its settings and per-epoch scores.
+The Training Lab trains, pauses, resumes, and deploys.
+We have 108 backend tests and 17 training-lab tests.
+The violation rules are tested with scripted tracks.
+And docs slash SESSION LOG is the dated record of every session.
+The field benchmark will add the clip registry.
+
+==================================================
+SLIDE 47: D. Glossary (appendix)
+==================================================
+This slide is for panel members outside computer vision.
+mAP at 50. How well boxes match real objects. A box is correct if it overlaps by at least half. 1.00 is perfect.
+mAP at 50 to 95. The same, but stricter. Low values mean loose boxes.
+Precision, or "trust". Of the things flagged, how many were real.
+Recall, or "coverage". Of the real things, how many were found.
+Validation versus test. Validation is checked during training and picks the best epoch. Test is one final exam.
+Letterbox. Resizing without stretching, with padding on the sides.
+ReID. A small model that tells if two photos show the same vehicle.
+Transfer learning. Start from a model that knows everyday objects, then teach it our classes.
+
+==================================================
+SLIDE 48: E. Legal sources (appendix)
+==================================================
+Use this slide when asked for the exact reference.
+RA 4136 is the base. It is the Land Transportation and Traffic Code.
+JAO 2014-01 supplies the violation names used on tickets.
+The special laws cover the rest. RA 10054 for helmets. RA 8750 for seatbelts. RA 10913 for phone use. RA 10666 for children on motorcycles.
+RA 11235, amended by RA 12209, for motorcycle plates.
+LTO order AHS-2008-015 for one back rider and mirrors.
+RA 8749 for smoke belching. DILG circulars for tricycles on highways.
+Zamboanga City ordinances 248 and 185 for parking, towing, and tricycle rest days.
+For the court status of non-contact apprehension, I cite the news reports.
+I read the RA 4136 sections from the lawphil text.
+Fines from news must be checked against the signed order. For citing, prefer the Official Gazette or the Supreme Court e-Library.

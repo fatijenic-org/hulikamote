@@ -1,0 +1,94 @@
+{
+  "model": "primary_anchor",
+  "applied": true,
+  "seconds": 1080.9,
+  "classes": [
+    "motorcycle",
+    "car",
+    "bus",
+    "truck",
+    "person",
+    "tricycle"
+  ],
+  "layout_moves": [],
+  "checked": 32891,
+  "kept": 29421,
+  "dropped": {
+    "leak": 3144,
+    "duplicate": 326
+  },
+  "fixed_labels": 17,
+  "resaved_pictures": 3241,
+  "issues_kept": {},
+  "images_per_split": {
+    "train": 27108,
+    "val": 1531,
+    "test": 782
+  },
+  "eval_pictures_with_train_twin": {
+    "val": 782,
+    "test": 364
+  },
+  "boxes_per_class": {
+    "train": {
+      "car": 16245,
+      "motorcycle": 7288,
+      "bus": 11087,
+      "tricycle": 5676,
+      "person": 27109,
+      "truck": 6821
+    },
+    "val": {
+      "car": 1461,
+      "tricycle": 238,
+      "bus": 568,
+      "truck": 498,
+      "motorcycle": 892,
+      "person": 1815
+    },
+    "test": {
+      "motorcycle": 487,
+      "car": 824,
+      "truck": 301,
+      "bus": 290,
+      "tricycle": 124,
+      "person": 1082
+    }
+  },
+  "per_source": {
+    "ph_plate_vehicle": {
+      "train": 67,
+      "val": 20,
+      "test": 13
+    },
+    "ph_vehicle_classification": {
+      "train": 2345,
+      "val": 655,
+      "test": 352,
+      "dropped": 3470
+    },
+    "ph_vehicles": {
+      "train": 19490,
+      "val": 856,
+      "test": 417
+    },
+    "ph_vehicles_selfdev": {
+      "train": 5206
+    }
+  },
+  "long_side_px": {
+    "min": 115,
+    "median": 640,
+    "max": 1280
+  },
+  "box_area_share": {
+    "p10": 0.0014,
+    "median": 0.03223,
+    "p90": 0.59191
+  },
+  "empty_pictures_kept": 0,
+  "eval_twins_before_first_cleaning": {
+    "val": 81,
+    "test": 27
+  }
+}

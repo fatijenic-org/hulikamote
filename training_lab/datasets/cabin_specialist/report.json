@@ -1,0 +1,83 @@
+{
+  "model": "cabin_specialist",
+  "applied": true,
+  "seconds": 418.2,
+  "classes": [
+    "clear_window",
+    "tinted_window",
+    "seatbelt",
+    "driver_phone",
+    "side_mirror"
+  ],
+  "layout_moves": [],
+  "checked": 16391,
+  "kept": 16387,
+  "dropped": {
+    "duplicate": 4
+  },
+  "fixed_labels": 0,
+  "resaved_pictures": 0,
+  "issues_kept": {},
+  "images_per_split": {
+    "train": 15685,
+    "val": 300,
+    "test": 402
+  },
+  "eval_pictures_with_train_twin": {},
+  "boxes_per_class": {
+    "train": {
+      "seatbelt": 6685,
+      "clear_window": 9860,
+      "driver_phone": 3430,
+      "side_mirror": 3133,
+      "tinted_window": 11142
+    },
+    "val": {
+      "seatbelt": 215,
+      "clear_window": 306,
+      "driver_phone": 69
+    },
+    "test": {
+      "clear_window": 407,
+      "seatbelt": 255,
+      "driver_phone": 104
+    }
+  },
+  "per_source": {
+    "govviolation_cabin": {
+      "train": 1251,
+      "val": 112,
+      "test": 69
+    },
+    "mc_helmet_overload": {
+      "train": 3068,
+      "dropped": 4
+    },
+    "menna_cabin": {
+      "train": 7967,
+      "val": 188,
+      "test": 333
+    },
+    "tint_windows": {
+      "train": 2994
+    },
+    "tpnew_seatbelt": {
+      "train": 405
+    }
+  },
+  "long_side_px": {
+    "min": 33,
+    "median": 640,
+    "max": 1280
+  },
+  "box_area_share": {
+    "p10": 0.00165,
+    "median": 0.01374,
+    "p90": 0.1854
+  },
+  "empty_pictures_kept": 0,
+  "eval_twins_before_first_cleaning": {
+    "val": 196,
+    "test": 283
+  }
+}

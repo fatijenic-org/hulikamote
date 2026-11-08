@@ -1,0 +1,25 @@
+clip A: 24 cars, 488 photos   clip B: 43 cars, 831 photos   device cuda
+
+=== train on clip B -> test on clip A (a different road)   [43 training cars, 24 unseen test cars]
+  stock ckpt.t7 (what the app uses now)         rank-1  62.4%   mAP  56.7%   AUC  82.2%
+  (guessing would give rank-1 about 4.2%)
+      epoch  1: loss 2.201  train accuracy 44.9%
+      epoch  5: loss 0.140  train accuracy 95.5%
+      epoch 10: loss 0.063  train accuracy 98.4%
+  fine-tuned on harvested cars, run 1          rank-1  65.3%   mAP  57.1%   AUC  82.9%
+  fine-tuned on harvested cars, run 2          rank-1  62.4%   mAP  56.7%   AUC  82.2%
+  same, but 30% of the cars wrongly split in two rank-1  65.7%   mAP  56.7%   AUC  82.3%
+  seconds so far: 701
+
+=== train on clip A -> test on clip B (a different road)   [24 training cars, 43 unseen test cars]
+  stock ckpt.t7 (what the app uses now)         rank-1  72.2%   mAP  59.5%   AUC  89.3%
+  (guessing would give rank-1 about 2.3%)
+      epoch  1: loss 1.765  train accuracy 57.6%
+      epoch  5: loss 0.084  train accuracy 97.3%
+      epoch 10: loss 0.075  train accuracy 98.4%
+  fine-tuned on harvested cars, run 1          rank-1  74.7%   mAP  58.4%   AUC  87.8%
+  fine-tuned on harvested cars, run 2          rank-1  73.8%   mAP  58.9%   AUC  88.1%
+  same, but 30% of the cars wrongly split in two rank-1  75.2%   mAP  57.4%   AUC  87.5%
+  seconds so far: 1094
+
+seconds: 1094

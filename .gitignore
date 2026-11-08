@@ -1,0 +1,106 @@
+# General
+.DS_Store
+node_modules/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+
+# Flutter/Dart
+.dart_tool/DS_Store
+.packages
+build/
+.pub-cache/
+.pub/
+*.log
+
+# Others
+z_**/
+.env
+hulikamote_backend/media
+hulikamote_backend/outbox/
+hulikamote_backend/demo.db*
+dataset-images/
+hulikamote_backend/snapshots/*.jpg
+**/snapshots/**
+downloads/*.pt
+temp_scripts/
+temp_scripts/
+temp_scripts/*
+
+temp_scripts/*.pt
+
+# Added Session 014: local state, weights and collected training data (data, not code)
+/hulikamote.db
+*.pt
+training_lab/datasets/plate_ocr/
+training_lab/datasets/reid/
+.graphify_env/
+hulikamote_backend/.coverage
+# Public datasets: re-created by training_lab/scripts/fetch_datasets.py (cache + merged "<id>__" files)
+training_lab/datasets/_downloads/
+training_lab/datasets/**/*__*
+# Curator output: files it moved out (reversible), picture grids for eyeballing, public identity sets, enhancer crops
+training_lab/datasets/_quarantine/
+training_lab/datasets/_sheets/
+training_lab/datasets/reid_public/
+training_lab/datasets/sr_plates/
+
+# Harvest inbox: CCTV pictures + your decisions (local only, never committed)
+training_lab/harvest_inbox/
+training_lab/**/__pycache__/
+*.cache
+
+# Local training state (machine-specific paths / app history, regenerated)
+training_lab/runs/history.jsonl
+training_lab/runs/logs/lab_counts.json
+training_lab/runs/*/data_resolved.yaml
+# Duplicates and previews next to a run's results (the deployed model lives in hulikamote_backend/models/)
+training_lab/runs/*/*/weights/*.onnx
+training_lab/runs/*/*/*.jpg
+
+# Ultralytics' default output folder: appears when a training is started from the wrong folder (safe to delete)
+/runs/
+# A rejected Roboflow download that landed in training_lab/ itself (safe to delete)
+/training_lab/train/
+/training_lab/valid/
+/training_lab/test/
+/training_lab/data.yaml
+/training_lab/README.dataset.txt
+/training_lab/README.roboflow.txt
+
+# Dataset Viewer: thumbnails, index cache and action log (machine-specific)
+training_lab/dataset_viewer_cache/
+
+# Benchmark clips are big videos (the registry, settings and reports are committed)
+benchmarks/clips/
+# Public evaluation clips fetched by tools/benchmark/fetch_public_clips.py (other people's data: never commit)
+benchmarks/public_clips/
+
+# A reference clone of a public project (has its own .git); not part of this repo
+/Real-time-Traffic-violation-detection-system/
+
+# Jump-counter output (cached vehicle boxes + results of reid_ab.py): local only
+training_lab/runs/reid_ab/
+
+# Documentation site: your Q&A answers are local only (serve.py writes this file); the generated pages can be rebuilt any time
+tools/doc_site/data/
+
+# Decommissioned training data and scratch runs in archive
+_archive/runs/
+_archive/training_lab/train/
+_archive/training_lab/valid/
+_archive/training_lab/test/
+_archive/training_lab/data.yaml
+_archive/training_lab/README.dataset.txt
+_archive/training_lab/README.roboflow.txt
+
+# Public benchmark clip downloads in progress (multi-GB, local only)
+benchmarks/_staging/
+
+# Car-matcher checkpoints of experiment / candidate runs (46 MB each); the deployed one lives in hulikamote_backend/engine/deep_sort/deep/checkpoint/
+training_lab/runs/reid/**/*.t7

@@ -1,0 +1,10 @@
+67 cars, 783 photos (12 per car at most), device cuda
+split 1: 46 training cars, 21 unseen test cars | rank-1  stock 73.4  careful 85.5  script-default 82.3   (596s)
+split 2: 46 training cars, 21 unseen test cars | rank-1  stock 71.2  careful 80.0  script-default 80.0   (1188s)
+split 3: 46 training cars, 21 unseen test cars | rank-1  stock 85.6  careful 90.4  script-default 89.6   (1498s)
+
+stock ckpt.t7 (the app now)            rank-1  76.7 ±6.3%   mAP  69.5 ±5.2%   AUC  91.3 ±2.1%
+fine-tuned, careful (lr 0.01)          rank-1  85.3 ±4.2%   mAP  74.8 ±5.5%   AUC  91.9 ±1.8%
+fine-tuned, train.py defaults (lr 0.1) rank-1  84.0 ±4.1%   mAP  74.5 ±4.5%   AUC  92.6 ±1.6%
+
+seconds: 1498

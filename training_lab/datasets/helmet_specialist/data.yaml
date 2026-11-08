@@ -1,0 +1,19 @@
+# Helmet Specialist Dataset
+# Input: Cropped motorcycle box joined with its riders' person boxes (as engine/pipeline.py crops it,
+#        so heads are not cut off). Harvest training crops the same way.
+# Task: Detect whether each rider has a valid helmet on their head
+#
+# CRITICAL ANNOTATION RULE:
+# Use composite classes — annotate the WHOLE RIDER, not just the helmet.
+# This prevents the "helmet on lap" false negative described in AI_ENGINEERING_PLAN.md.
+# The rider's bounding box should span their full torso + head.
+
+path: datasets/helmet_specialist
+train: images/train
+val: images/val
+
+nc: 2
+names:
+  0: rider_with_helmet     # Helmet center is in the top 20% of this box
+  1: rider_without_helmet  # No helmet, or helmet held in hand/on lap
+test: images/test

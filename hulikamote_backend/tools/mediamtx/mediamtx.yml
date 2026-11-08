@@ -1,0 +1,21 @@
+# MediaMTX configuration for huli-kamote HLS transport
+# Docs: https://github.com/bluenviron/mediamtx
+
+# RTSP server — ffmpeg pushes raw H.264 frames here
+rtsp: yes
+rtspAddress: :8554
+
+# HLS server — Flutter video_player reads from here
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigins: ["*"]   # Allow CORS for Flutter web/desktop
+
+# Tuning for low latency (global settings)
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+
+# Paths — one entry per stream
+paths:
+  all_others:
+    source: publisher  # Accept push from our ffmpeg process

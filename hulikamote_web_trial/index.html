@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Huli-Kamote Edge AI Trial</title>
+    <!-- Import TensorFlow.js and the Object Detection Model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    
+    <style>
+        body { 
+            margin: 0; 
+            background-color: #121212; 
+            color: white; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+        }
+        h1 { margin-top: 20px; color: #00e676; }
+        p { color: #aaaaaa; max-width: 600px; text-align: center; line-height: 1.5; }
+        
+        .upload-btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background-color: #00e676;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .upload-btn:hover { background-color: #00c853; }
+        input[type="file"] { display: none; }
+
+        /* The container stacks the transparent canvas directly over the video player */
+        .container { 
+            position: relative; 
+            margin-top: 20px; 
+            border: 2px solid #333; 
+            border-radius: 8px; 
+            overflow: hidden; 
+            background: #000; 
+            box-shadow: 0 4px 20px rgba(0,230,118,0.2); 
+            display: none; /* Hidden until video loads */
+        }
+        video { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            object-fit: cover; 
+            /* No mirroring since this is a traffic video, not a webcam */
+        }
+        canvas { 
+            position: absolute; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            z-index: 10; 
+            pointer-events: none; /* Let clicks pass through to the video controls */
+        }
+        #status { margin-top: 15px; font-weight: bold; color: #ffeb3b; padding: 10px; border-radius: 4px; background: rgba(255,235,59,0.1); }
+    </style>
+</head>
+<body>
+    <h1>Edge AI Sandbox (Video Upload)</h1>
+    <p>Select a local video file (e.g. <b>test_video.mp4</b>). The video is <b>never</b> uploaded to the internet or backend. The AI runs completely inside your browser using your Graphics Card (WebGL), drawing the detection layer dynamically as the video plays.</p>
+    
+    <label class="upload-btn">
+        Select Local Video File
+        <input type="file" id="videoUpload" accept="video/mp4,video/x-m4v,video/*">
+    </label>
+
+    <div id="status">Loading AI Model via WebGL... Please wait.</div>
+    
+    <div class="container" id="videoContainer">
+        <!-- Native Video Feed with controls -->
+        <video id="videoPlayer" controls autoplay loop playsinline muted></video>
+        <!-- Transparent AI Overlay Layer -->
+        <canvas id="overlay"></canvas>
+    </div>
+
+    <script>
+        const video = document.getElementById('videoPlayer');
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const videoUpload = document.getElementById('videoUpload');
+        const container = document.getElementById('videoContainer');
+
+        let model = null;
+        let isDetecting = false;
+        let currentObjectUrl = null;
+
+        async function loadModel() {
+            try {
+                // 1. Download/Load the AI Model (COCO-SSD)
+                model = await cocoSsd.load();
+                statusText.innerText = 'AI Model Loaded! You can now select a video.';
+                statusText.style.color = '#00e676';
+                statusText.style.background = 'rgba(0,230,118,0.1)';
+            } catch (e) {
+                statusText.innerText = 'Error loading model: ' + e.message;
+                statusText.style.color = '#ff5252';
+                statusText.style.background = 'rgba(255,82,82,0.1)';
+            }
+        }
+
+        videoUpload.addEventListener('change', function(e) {
+            if (!model) {
+                alert('Please wait for the AI model to finish loading first.');
+                return;
+            }
+            
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Clean up old video memory if exists
+            if (currentObjectUrl) {
+                URL.revokeObjectURL(currentObjectUrl);
+            }
+            
+            // Create a local URL for the selected video file and play it
+            currentObjectUrl = URL.createObjectURL(file);
+            video.src = currentObjectUrl;
+            container.style.display = 'block';
+            
+            statusText.innerText = 'Video Loaded! Running Local Edge AI Processing...';
+        });
+
+        video.addEventListener('loadeddata', () => {
+            // Dynamically scale the HTML container to perfectly match the video's aspect ratio
+            // This prevents black bars and ensures our canvas coordinates map perfectly 1:1
+            const aspectRatio = video.videoWidth / video.videoHeight;
+            const containerWidth = 800;
+            container.style.width = containerWidth + 'px';
+            container.style.height = (containerWidth / aspectRatio) + 'px';
+            
+            // Set internal canvas resolution to match actual video pixels
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            if (!isDetecting) {
+                isDetecting = true;
+                detectFrame();
+            }
+        });
+
+        function detectFrame() {
+            // If paused or buffering, just wait and check again shortly
+            if (video.paused || video.ended) {
+                setTimeout(detectFrame, 100);
+                return;
+            }
+
+            // The browser AI analyzes the current frame directly from the HTML video element
+            model.detect(video).then(predictions => {
+                // Clear the transparent layer from the previous frame
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Draw the new AI bounding boxes as an overlay
+                predictions.forEach(prediction => {
+                    const [x, y, width, height] = prediction.bbox;
+                    
+                    // Responsive styling based on video resolution
+                    const lineWidth = Math.max(3, canvas.width / 350);
+                    const fontSize = Math.max(16, canvas.width / 70);
+                    
+                    // Draw Box
+                    ctx.strokeStyle = '#00e676';
+                    ctx.lineWidth = lineWidth;
+                    ctx.strokeRect(x, y, width, height);
+
+                    // Draw Label Background
+                    ctx.fillStyle = '#00e676';
+                    const label = `${prediction.class.toUpperCase()} - ${Math.round(prediction.score * 100)}%`;
+                    ctx.font = `bold ${fontSize}px "Segoe UI", sans-serif`;
+                    const textWidth = ctx.measureText(label).width;
+                    
+                    // Draw background rectangle for the text
+                    ctx.fillRect(x, y - (fontSize + 10), textWidth + 10, fontSize + 10);
+
+                    // Draw Label Text
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(label, x + 5, y - 6);
+                });
+                
+                // THROTTLE: Wait 100 milliseconds before scanning the next frame (~10 FPS).
+                // This prevents your Graphics Card's VRAM from overflowing and crashing the tab.
+                setTimeout(detectFrame, 100);
+            }).catch(err => {
+                console.error("AI Error:", err);
+                setTimeout(detectFrame, 500); // Back off heavily on error
+            });
+        }
+
+        // Boot up
+        loadModel();
+    </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+device cuda  input 96x192  A:24 cars  B:43 cars  C:16 cars  D:14 cars  E:11 cars  = 108 cars, 1262 photos
+SimVeRi: 650 synthetic cars, 3900 photos (14s)
+pre-trained on SimVeRi, CE only (145s)
+pre-trained on SimVeRi, CE + triplet (287s)
+test clip A (24 cars, trained on 84): stock 63.6 | CE (old recipe) 65.0 | CE + triplet 63.6 | CE + strong aug 64.3 | SimVeRi, then CE 64.3 | SimVeRi, then CE+tri 63.6   (571s)
+test clip B (43 cars, trained on 65): stock 75.2 | CE (old recipe) 77.6 | CE + triplet 75.2 | CE + strong aug 75.2 | SimVeRi, then CE 76.0 | SimVeRi, then CE+tri 76.4   (782s)
+test clip C (16 cars, trained on 92): stock 84.2 | CE (old recipe) 75.8 | CE + triplet 81.1 | CE + strong aug 74.7 | SimVeRi, then CE 83.2 | SimVeRi, then CE+tri 78.9   (1083s)
+test clip D (14 cars, trained on 94): stock 89.9 | CE (old recipe) 89.9 | CE + triplet 91.1 | CE + strong aug 89.9 | SimVeRi, then CE 88.6 | SimVeRi, then CE+tri 91.1   (1381s)
+test clip E (11 cars, trained on 97): stock 60.3 | CE (old recipe) 61.9 | CE + triplet 65.1 | CE + strong aug 66.7 | SimVeRi, then CE 60.3 | SimVeRi, then CE+tri 61.9   (1691s)
+
+mean over the five held-out clips (each clip counts once)
+stock                    rank1  74.6  mAP  68.8  AUC  88.0
+CE (old recipe)          rank1  74.0  mAP  66.8  AUC  86.6
+CE + triplet             rank1  75.2  mAP  67.1  AUC  86.6
+CE + strong aug          rank1  74.2  mAP  66.7  AUC  87.3
+SimVeRi, then CE         rank1  74.5  mAP  67.0  AUC  86.5
+SimVeRi, then CE+tri     rank1  74.4  mAP  66.7  AUC  86.8
+
+seconds: 1691

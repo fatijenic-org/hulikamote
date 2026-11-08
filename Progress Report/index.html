@@ -1,0 +1,1611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Huli-Kamote Progress Deck</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Concept: a road-signage deck. Asphalt neutrals, lane-marking yellow as the one accent,
+   a dashed centre-line as the progress rail, signal red / amber / green only for status. */
+:root {
+  --bg: #e9ebee;
+  --surface: #ffffff;
+  --surface-2: #f3f4f6;
+  --ink: #14181d;
+  --muted: #55606b;
+  --line: #cdd2d8;
+  --accent: #f0b400;
+  --accent-ink: #1a1400;
+  --accent-text: #7a5700;
+  --ok: #1a7f43;     --ok-bg: #dcf3e5;
+  --warn: #a15c00;   --warn-bg: #fff0cf;
+  --bad: #b3261e;    --bad-bg: #fde3e0;
+  --info: #1f5fa8;   --info-bg: #dfeafb;
+  --todo: #5b4bb0;   --todo-bg: #e9e5fa;
+  --shadow: 0 1px 2px rgba(20,24,29,.08), 0 8px 24px rgba(20,24,29,.06);
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Barlow", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --surface: #181c22; --surface-2: #1f242b; --ink: #eceff2; --muted: #9aa5b0; --line: #2d343d;
+    --accent: #f5c518; --accent-ink: #181200; --accent-text: #f5c518;
+    --ok: #4ad387; --ok-bg: #12301f; --warn: #ffb53d; --warn-bg: #3a2a0a; --bad: #ff7a6e; --bad-bg: #3d1713;
+    --info: #78b2ff; --info-bg: #13294a; --todo: #b3a6ff; --todo-bg: #241f48;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1216; --surface: #181c22; --surface-2: #1f242b; --ink: #eceff2; --muted: #9aa5b0; --line: #2d343d;
+  --accent: #f5c518; --accent-ink: #181200; --accent-text: #f5c518;
+  --ok: #4ad387; --ok-bg: #12301f; --warn: #ffb53d; --warn-bg: #3a2a0a; --bad: #ff7a6e; --bad-bg: #3d1713;
+  --info: #78b2ff; --info-bg: #13294a; --todo: #b3a6ff; --todo-bg: #241f48;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: clamp(14px, 0.5vw + 9px, 18px); line-height: 1.45;
+  overflow: hidden; -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: .005em; }
+h1 { font-size: clamp(3rem, 9vw, 7.2rem); text-transform: uppercase; }
+h2 { font-size: clamp(1.9rem, 3.6vw, 3.1rem); }
+h3 { font-size: 1.35em; font-weight: 600; }
+h4 { font-size: 1.05em; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+p { margin: 0; }
+a { color: var(--accent-text); text-underline-offset: 3px; }
+code, .mono { font-family: var(--font-mono); font-size: .86em; }
+small, .small { font-size: .82em; }
+.muted { color: var(--muted); }
+.nowrap { white-space: nowrap; }
+
+/* ---- deck chrome ---- */
+.topbar {
+  position: fixed; inset: 0 0 auto 0; z-index: 20; display: flex; align-items: center; gap: 12px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 8px;
+  background: linear-gradient(var(--bg) 70%, transparent);
+}
+.brand { font-family: var(--font-display); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: .95em; }
+.brand b { background: var(--accent); color: var(--accent-ink); padding: 1px 7px; margin-right: 8px; }
+.partlabel { color: var(--muted); font-size: .85em; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn {
+  font: inherit; font-size: .8em; color: var(--ink); background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+.btn:hover { border-color: var(--ink); }
+.btn:focus-visible, .chip-btn:focus-visible, .ov-item:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.counter { font-family: var(--font-mono); font-size: .8em; color: var(--muted); min-width: 4.8em; text-align: right; }
+
+.deck { position: fixed; inset: 0; }
+.slide {
+  position: absolute; inset: 0; display: none; overflow-y: auto; overflow-x: hidden;
+  padding: calc(52px + env(safe-area-inset-top, 0px)) clamp(16px, 5vw, 72px) calc(76px + env(safe-area-inset-bottom, 0px));
+}
+.slide.is-active { display: block; }
+.slide > .inner { max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: clamp(10px, 1.7vh, 18px); }
+.eyebrow { font-family: var(--font-mono); font-size: .72em; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
+.lead { font-size: 1.12em; color: var(--muted); max-width: 62ch; }
+.slide.title-slide .inner { min-height: 100%; justify-content: center; }
+
+/* road-line progress rail */
+.rail { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 0 16px calc(10px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; gap: 12px;
+  background: linear-gradient(transparent, var(--bg) 40%); padding-top: 22px; }
+.road { position: relative; flex: 1; height: 18px; }
+.road::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 3px dashed var(--line); transform: translateY(-50%); }
+.road .car { position: absolute; top: 50%; width: 26px; height: 12px; background: var(--accent); border-radius: 3px; transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg); transition: left .25s ease; }
+.road .car::after { content: ""; position: absolute; right: 3px; top: 2px; width: 6px; height: 8px; background: var(--accent-ink); opacity: .35; border-radius: 1px; }
+.navbtn { font: inherit; font-size: 1.1em; width: 38px; height: 34px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.navbtn:hover { border-color: var(--ink); }
+.navbtn:disabled { opacity: .35; cursor: default; }
+
+/* ---- content blocks ---- */
+.grid { display: grid; gap: clamp(12px, 1.6vw, 22px); }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.g-1-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.g-2-1 { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 860px) { .g2, .g3, .g4, .g-1-2, .g-2-1 { grid-template-columns: minmax(0, 1fr); } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card.plain { background: transparent; }
+.card h3 { margin-bottom: 6px; }
+.card ul, .list { margin: 6px 0 0; padding-left: 1.15em; }
+.card li, .list li { margin: 3px 0; }
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat b { font-family: var(--font-display); font-size: 2.6em; line-height: 1; }
+.stat span { color: var(--muted); font-size: .88em; }
+.callout { border-left: 5px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 10px 10px 0; }
+.callout.bad { border-color: var(--bad); }
+.callout.ok { border-color: var(--ok); }
+.callout.info { border-color: var(--info); }
+.confirm { border: 2px dashed var(--warn); background: var(--warn-bg); color: var(--ink); border-radius: 10px; padding: 10px 14px; }
+.confirm::before { content: "CONFIRM BEFORE PRESENTING"; display: block; font-family: var(--font-mono); font-size: .68em; letter-spacing: .12em; color: var(--warn); margin-bottom: 4px; }
+
+.chip { display: inline-block; font-family: var(--font-mono); font-size: .68em; letter-spacing: .04em; padding: 2px 8px; border-radius: 999px; white-space: nowrap; vertical-align: middle; }
+.chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.bad { background: var(--bad-bg); color: var(--bad); }
+.chip.info { background: var(--info-bg); color: var(--info); }
+.chip.todo { background: var(--todo-bg); color: var(--todo); }
+
+.tbl-wrap.dense table { font-size: .8em; }
+.tbl-wrap.dense table { font-size: .8em; }
+.tbl-wrap.dense table { font-size: .8em; }
+.tbl-wrap.dense table { font-size: .8em; }
+.tbl-wrap.dense table { font-size: .8em; }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .88em; line-height: 1.35; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: .74em; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); background: var(--surface-2); position: sticky; top: 0; }
+tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .mono, td code { word-break: break-all; }
+
+/* flow / pipeline */
+.flow { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+.step { flex: 1 1 150px; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-top: 5px solid var(--accent); border-radius: 8px; padding: 10px 12px; position: relative; }
+.step h3 { font-size: 1.15em; }
+.step p { font-size: .84em; color: var(--muted); margin-top: 4px; }
+.step.sec { border-top-color: var(--info); }
+.step.out { border-top-color: var(--ok); }
+.arrow { align-self: center; font-family: var(--font-mono); color: var(--muted); }
+@media (max-width: 860px) { .arrow { display: none; } }
+
+/* bars (results, input probe) */
+.bars { display: flex; flex-direction: column; gap: 10px; }
+.bar-row { display: grid; grid-template-columns: minmax(7em, 14em) minmax(0, 1fr) 4.6em; gap: 10px; align-items: center; font-size: .9em; }
+.bar-track { height: 22px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; position: relative; overflow: hidden; }
+.bar-fill { position: absolute; inset: 0 auto 0 0; background: var(--info); }
+.bar-fill.ok { background: var(--ok); }
+.bar-fill.warn { background: var(--warn); }
+.bar-fill.bad { background: var(--bad); }
+.bar-target { position: absolute; top: -2px; bottom: -2px; width: 3px; background: var(--ink); }
+.bar-row .val { font-family: var(--font-mono); text-align: right; }
+@media (max-width: 600px) { .bar-row { grid-template-columns: minmax(0, 1fr) 4.2em; } .bar-row .bar-track { grid-column: 1 / -1; order: 3; } }
+
+/* timeline */
+.tl { display: flex; flex-direction: column; border-left: 3px dashed var(--line); margin-left: 8px; }
+.tl-item { position: relative; padding: 4px 0 14px 22px; }
+.tl-item::before { content: ""; position: absolute; left: -10px; top: 9px; width: 17px; height: 17px; background: var(--accent); border: 3px solid var(--bg); border-radius: 50%; }
+.tl-item .when { font-family: var(--font-mono); font-size: .76em; color: var(--accent-text); letter-spacing: .04em; }
+.tl-item h3 { font-size: 1.12em; margin: 2px 0; }
+.tl-item p { font-size: .88em; color: var(--muted); }
+
+/* Q&A */
+.qa { display: flex; flex-direction: column; gap: 10px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; }
+.q .qt { font-family: var(--font-display); font-weight: 600; font-size: 1.22em; line-height: 1.15; display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.q .qa-a { margin-top: 6px; font-size: .92em; }
+.q .qa-a + .qa-a { color: var(--muted); }
+.q .tag { font-family: var(--font-mono); font-size: .72em; color: var(--accent-text); }
+
+/* speaker notes drawer + overview */
+.notes-panel { position: fixed; left: 0; right: 0; bottom: 52px; z-index: 30; max-height: 42vh; overflow: auto; display: none;
+  background: var(--ink); color: var(--bg); padding: 14px clamp(16px, 5vw, 72px); border-top: 4px solid var(--accent); font-size: .95em; }
+body.show-notes .notes-panel { display: block; }
+.notes-panel b { color: var(--accent); font-family: var(--font-mono); font-size: .8em; letter-spacing: .1em; }
+.overview { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; padding: calc(60px + env(safe-area-inset-top, 0px)) clamp(16px, 4vw, 56px) 40px; display: none; }
+body.show-overview .overview { display: block; }
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 12px; max-width: 1400px; margin: 0 auto; }
+.ov-item { text-align: left; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; min-height: 84px; }
+.ov-item:hover { border-color: var(--ink); }
+.ov-item .n { font-family: var(--font-mono); font-size: .72em; color: var(--accent-text); }
+.ov-item .part { font-size: .72em; color: var(--muted); }
+.ov-item.current { outline: 3px solid var(--accent); }
+.hint { position: fixed; right: 16px; bottom: 56px; z-index: 25; font-size: .74em; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+@media (max-width: 700px) { .hint { display: none !important; } .brand span, #btn-full, #btn-theme, .partlabel { display: none; } .topbar { gap: 8px; } .counter { margin-left: auto; } }
+
+@media (prefers-reduced-motion: reduce) { .road .car { transition: none; } }
+@media print {
+  body { overflow: visible; height: auto; background: #fff; color: #000; }
+  .topbar, .rail, .hint, .notes-panel, .overview { display: none !important; }
+  .deck { position: static; }
+  .slide { display: block !important; position: static; page-break-after: always; padding: 24px; overflow: visible; }
+  .card, .q, .tbl-wrap, .step { break-inside: avoid; }
+}
+</style>
+
+<div class="deck" id="deck">
+
+<!-- 1 ───────────────────────────── -->
+<section class="slide title-slide" data-part="Opening" data-title="Huli-Kamote">
+  <div class="inner">
+    <div class="eyebrow">Capstone consultation · October 2026</div>
+    <h1>Huli-Kamote</h1>
+    <p class="lead">Computer-vision traffic violation detection for non-contact apprehension, built around Zamboanga City roads.</p>
+    <div class="grid g4">
+      <div class="card stat"><b>14</b><span>violation rules coded (13 from the thesis list + restricted lane)</span></div>
+      <div class="card stat"><b>3</b><span>specialist models trained so far: plate (v1), helmet, cabin</span></div>
+      <div class="card stat"><b>6</b><span>public datasets merged into training, all CC BY 4.0</span></div>
+      <div class="card stat"><b>0</b><span>real-footage benchmark runs yet. This is the next milestone.</span></div>
+    </div>
+    <p class="muted small">College of Computing Studies · progress since the August 25 update (Aug 25 to Oct 13, 2026)</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Open with the goal in one sentence: the system watches recorded road footage, finds violations, and hands a reviewer a ticket with the evidence. Then be upfront that the last number on this slide is zero on purpose: the detection logic and models are built, the field benchmark is the next step. Naming that early makes everything after it more credible.</aside>
+</section>
+
+<!-- 2 ───────────────────────────── -->
+<section class="slide" data-part="Opening" data-title="What this session covers">
+  <div class="inner">
+    <div class="eyebrow">Roadmap of this talk</div>
+    <h2>What this session covers</h2>
+    <ol class="list" style="font-size:1.15em; line-height:1.9">
+      <li><b>Goal and scope</b>: what the thesis promises, and where the system boundary is</li>
+      <li><b>What changed since Aug 25</b>: before and after, timeline, the 14 violation rules and the law behind each one</li>
+      <li><b>The data</b>: every source, where it came from, how it was cleaned</li>
+      <li><b>Models and results</b>: what is trained, what the numbers do and do not mean</li>
+      <li><b>How we will prove it</b>: evaluation protocol and the learning loop</li>
+      <li><b>Limits, risks and the plan</b></li>
+      <li><b>Questions to expect</b> and the decisions needed from the panel</li>
+    </ol>
+  </div>
+  <aside class="notes"><b>SAY</b> About ten minutes of content, the rest is discussion. Tell them up front that you want decisions on three things at the end: the evaluation protocol, the data they will accept, and which violations to prioritise.</aside>
+</section>
+
+<!-- 3 ───────────────────────────── -->
+<section class="slide" data-part="1 · Goal and scope" data-title="Goal and scope">
+  <div class="inner">
+    <div class="eyebrow">1 · Goal and scope</div>
+    <h2>A prototype that shows contactless detection is technically feasible with local tools</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>What the thesis commits to</h3>
+        <ul>
+          <li>Train and validate detection models; software around them (backend, dashboard, visualizer) is required but secondary.</li>
+          <li>Three-stage pipeline: <b>YOLO</b> detection, <b>DeepSORT</b> tracking, <b>EasyOCR</b> plate reading with preprocessing.</li>
+          <li>All testing on <b>pre-recorded</b> footage. Live cameras are supported by the architecture but not part of the study.</li>
+          <li>Human operators review every flag. No autonomous legal decisions.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>How success is measured</h3>
+        <ul>
+          <li><b>mAP@50</b>: detection accuracy at 50% box overlap.</li>
+          <li><b>Logging and organization accuracy rate</b>: is the violation type, plate, vehicle identity and evidence frame recorded correctly for a ground-truth event?</li>
+          <li><b>False positive</b> and <b>false negative</b> rates, tracked separately.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="grid g3">
+      <div class="card"><h3>Motorcycle (8)</h3><p class="small muted">Counterflow, illegal parking, illegal turn, disregarding signs, no plate, no helmet, missing side mirror, overloading</p></div>
+      <div class="card"><h3>Car (5)</h3><p class="small muted">Counterflow, illegal parking, illegal turn, disregarding signs, no plate</p></div>
+      <div class="card"><h3>Extended, stretch goals (5)</h3><p class="small muted">Signal light, red light running, swerving, no seatbelt, pedestrian lane obstruction</p></div>
+    </div>
+    <p class="muted small">Unique violation types across the three lists: 13. The system also implements restricted lane (bus lane), which is not in the thesis list.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Anchor everything to the thesis scope. The point of this slide is that the claim is feasibility, evaluated on recorded footage, with a human in the loop. If a panel member pushes toward "is it production-ready", this slide is where you pull back to scope.</aside>
+</section>
+
+<!-- 4 ───────────────────────────── -->
+<section class="slide" data-part="1 · Goal and scope" data-title="System at a glance">
+  <div class="inner">
+    <div class="eyebrow">1 · Goal and scope</div>
+    <h2>System at a glance</h2>
+    <div class="flow">
+      <div class="step"><h3>Video</h3><p>Recorded clip or RTSP stream, capped to 720p working size</p></div><span class="arrow">→</span>
+      <div class="step"><h3>1 · Detect</h3><p>YOLO finds vehicles and people in every frame</p></div><span class="arrow">→</span>
+      <div class="step"><h3>2 · Track</h3><p>DeepSORT keeps one ID per vehicle; broken tracks are stitched</p></div><span class="arrow">→</span>
+      <div class="step sec"><h3>Rules + specialists</h3><p>Zones and geometry for movement; helmet and cabin models on crops</p></div><span class="arrow">→</span>
+      <div class="step"><h3>3 · Plate</h3><p>Plate detector, enhancement, two-pass OCR voting</p></div><span class="arrow">→</span>
+      <div class="step out"><h3>Ticket</h3><p>Violation, plate, track ID, evidence photos with "why" boxes</p></div>
+    </div>
+    <div class="grid g4">
+      <div class="card"><h3>Backend</h3><p class="small muted">FastAPI, SQLite, ONNX Runtime on GPU, FFmpeg. Runs locally.</p></div>
+      <div class="card"><h3>Enforcer dashboard</h3><p class="small muted">Flutter. Forensic Analyzer, review inbox, Training Studio, model catalog.</p></div>
+      <div class="card"><h3>Citizen app</h3><p class="small muted">Flutter. Violation notices, appeals, notifications.</p></div>
+      <div class="card"><h3>Visualizer</h3><p class="small muted">Flutter desktop. Teaches each violation's logic to non-technical audiences.</p></div>
+    </div>
+    <div class="callout">Specialists run on cropped vehicles, not whole frames, and only every few frames. That keeps the system fast enough on a 6 GB laptop GPU and lets each model be retrained on its own.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> Walk left to right once. Stress two design choices a panel will care about: a cascade of specialists instead of one big model, and a human review step after the model. Mention the visualizer only as a teaching aid, it is not part of the detection claim.</aside>
+</section>
+
+<!-- 5 ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="Before and after">
+  <div class="inner">
+    <div class="eyebrow">2 · What changed since Aug 25</div>
+    <h2>Aug 25 versus today</h2>
+    <p class="lead">On Aug 25 the repository held prototype scripts, a basic video router and disconnected UI mockups. Detection was one block of logic that broke when the detector dropped a frame.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Area</th><th>Aug 25</th><th>Oct 13</th></tr></thead>
+      <tbody>
+        <tr><td><b>Architecture</b></td><td>Monolithic detection logic</td><td>Decoupled cascade: anchor detector, tracker, ledger, specialists</td></tr>
+        <tr><td><b>Tracking</b></td><td>Simple IoU tracker</td><td>DeepSORT, ID stitching, duplicate-ticket review, ReID data capture</td></tr>
+        <tr><td><b>Violations</b></td><td>Counterflow and parking prototypes</td><td>14 rules with 57 scripted-track tests, red light with a simulated light</td></tr>
+        <tr><td><b>Plates</b></td><td>Basic crop and read</td><td>Plate detector, enhancer (Real-ESRGAN), two-pass OCR voting, end-of-track no-plate decision</td></tr>
+        <tr><td><b>Models</b></td><td>Stock COCO weights</td><td>Helmet and cabin trained and deployed; plate v1; vehicle detector retraining</td></tr>
+        <tr><td><b>Review</b></td><td>None</td><td>Forensic Analyzer with in-frame review, merge/split, plate correction, harvest tool</td></tr>
+        <tr><td><b>Training workflow</b></td><td>Manual scripts</td><td>Training Studio, terminal Training Lab, pause/resume, model catalog</td></tr>
+        <tr><td><b>Data</b></td><td>None collected</td><td>6 public datasets merged and de-duplicated, own-data harvest loop</td></tr>
+        <tr><td><b>Speed</b></td><td>Stutter at 1080p</td><td>720p working size, round-robin specialists (about 3x FPS), GPU pinned</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <aside class="notes"><b>SAY</b> The Aug 25 column comes from the August progress audit in docs/COMPREHENSIVE_PROGRESS_AUG25.md. If asked "what is the single biggest change", say: from a prototype that detected two violations to a pipeline that can be trained, reviewed and measured.</aside>
+</section>
+
+<!-- 6 ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="Milestones, Aug 25 to Sep 17">
+  <div class="inner">
+    <div class="eyebrow">2 · Milestones</div>
+    <h2>Aug 25 to Sep 17: from prototype to a working pipeline</h2>
+    <div class="tl">
+      <div class="tl-item"><div class="when">AUG 25 · SEP 3</div><h3>Citizen app and platform base</h3><p>Ticket appeals, violation notices, profile, offline assets; visualizer set up for Windows and web.</p></div>
+      <div class="tl-item"><div class="when">SEP 9 · SEP 11</div><h3>Decoupled cascading pipeline</h3><p>Primary detector separated from specialists; enforcer inbox with evidence timelines; Training Lab and GUI; 4-phase visualizers for the first violations.</p></div>
+      <div class="tl-item"><div class="when">SEP 14 · SEP 16</div><h3>Offline analysis and multi-zone ROI</h3><p>Frame scrubber, zoomable ROI canvas, several zones per violation, runtime model switching, visualizers for all 13 violations.</p></div>
+      <div class="tl-item"><div class="when">SEP 17</div><h3>GPU-first runtime and hardening</h3><p>CUDA with CPU fallback and tests, 720p working size, single-threaded tracker execution (fixed a CUDA crash), resolution-independent ROI scaling.</p></div>
+    </div>
+    <p class="muted small">Source: docs/PROGRESS_SINCE_AUG25.md, git history of branch nekolaiv/polishing-progress.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> This half of the timeline is "make it run": architecture, UI, GPU, stability. The next slide is "make it measurable": tracking, data, training, review.</aside>
+</section>
+
+<!-- 7 ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="Milestones, Sep 18 to Oct 13">
+  <div class="inner">
+    <div class="eyebrow">2 · Milestones</div>
+    <h2>Sep 18 to Oct 13: from running to measurable</h2>
+    <div class="tl">
+      <div class="tl-item"><div class="when">SEP 18 · SEP 21</div><h3>Streaming, DeepSORT, plate reading</h3><p>RTSP/HLS with media_kit, DeepSORT integration, two-stage plate extraction, two-pass OCR voting, round-robin specialist scheduling (about 3x FPS), Forensic Analyzer.</p></div>
+      <div class="tl-item"><div class="when">SEP 23 · SEP 26</div><h3>Models, enhancer, feedback loop</h3><p>Model manager by category, YOLO11 and YOLO26 support, Real-ESRGAN enhancer, "pop quiz" corrections feeding an OCR dataset, OCR fine-tuning scripts, Training Studio.</p></div>
+      <div class="tl-item"><div class="when">SEP 27 · OCT 3</div><h3>Tracking reliability and review</h3><p>Found the DeepSORT box-format bug, stitched broken tracks, in-frame review with merge/split, Training Studio for every model, project map, and 7 new violation rules including red light with a simulated light.</p></div>
+      <div class="tl-item"><div class="when">OCT 3 · OCT 13</div><h3>Data, training and harvest</h3><p>Six public datasets merged and cleaned, helmet (0.98) and cabin (0.79) trained and deployed, pause/resume, model catalog, terminal Training Lab, harvest tool, and the model-input mismatch finding.</p></div>
+    </div>
+    <p class="muted small">Source: git log since 2026-08-25 and docs/SESSION_LOG.md (sessions 009 to 014 plus the work since).</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Name two or three of these as real engineering, not features: the tracker bug, the data leakage fix, the input mismatch. They show you test your own system.</aside>
+</section>
+
+<!-- 8 ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="The 14 violation rules">
+  <div class="inner">
+    <div class="eyebrow">2 · What changed since Aug 25</div>
+    <h2>The 14 violation rules, and how each is decided</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th>Violation</th><th>How it is detected</th><th>Operator sets</th><th>Depends on</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><b>Counterflow</b></td><td>Movement vector against the legal direction, inside a zone</td><td>Zone, arrow</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>2</td><td><b>Illegal parking</b></td><td>Stationary longer than the limit inside a zone</td><td>Zone, time limit</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>3</td><td><b>Restricted lane</b></td><td>Vehicle class not allowed in the zone</td><td>Zone, allowed classes</td><td>Detector classes</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>4</td><td><b>Pedestrian lane obstruction</b></td><td>Stopped on a crosswalk past the limit</td><td>Zone, time limit</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>5</td><td><b>Illegal turn</b></td><td>Heading changes into a prohibited direction inside a zone</td><td>Zone, arrow</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>6</td><td><b>Swerving</b></td><td>Repeated side-to-side swings, measured in box widths</td><td>Zone</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>7</td><td><b>Overloading</b></td><td>Riders counted on a motorcycle, voted over looks</td><td>Max riders</td><td>Person detections</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>8</td><td><b>Red light running</b></td><td>Crosses the stop line while the light is red (camera-read or simulated light)</td><td>Zone, stop line, light</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>9</td><td><b>Disregarding signs</b></td><td>No entry, no turn, no stopping, banned vehicle type, stop sign</td><td>Zone per sign</td><td>Tracker</td><td><span class="chip ok">rule tested</span></td></tr>
+        <tr><td>10</td><td><b>Signal light</b></td><td>Turn with no blinking indicator in the seconds before. Hand signals, which are legal, are not seen</td><td>Zone</td><td>Video quality</td><td><span class="chip warn">needs review</span></td></tr>
+        <tr><td>11</td><td><b>No plate</b></td><td>No plate in any fair look; decided when the vehicle leaves</td><td>None</td><td>Plate model</td><td><span class="chip warn">model v1 weak</span></td></tr>
+        <tr><td>12</td><td><b>No helmet</b></td><td>Bare rider in most looks of the motorcycle + riders crop</td><td>None</td><td>Helmet model</td><td><span class="chip ok">model trained</span></td></tr>
+        <tr><td>13</td><td><b>No seatbelt</b></td><td>Clear windshield and no seatbelt seen, voted</td><td>None</td><td>Cabin model</td><td><span class="chip ok">model trained</span></td></tr>
+        <tr><td>14</td><td><b>Missing side mirror</b></td><td>Fewer than two mirrors, only judged from front or rear view</td><td>None</td><td>Cabin model</td><td><span class="chip bad">no mirror data</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">"Rule tested" means scripted vehicle tracks pass, including false-positive traps. It does not yet mean measured on field footage.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Be precise with the status column. Nine rules are geometry on tracked vehicles. Four depend on trained models. Signal light is a heuristic and is labelled as one. Missing side mirror has no training data anywhere public, so it stays a stretch item until you label your own.</aside>
+</section>
+
+<!-- ───── LEGAL SOURCES (inserted after the 14-rules slide) ───── -->
+
+<section class="slide" data-part="2 · Legal sources" data-title="Source of each violation (1 of 2)">
+  <div class="inner">
+    <div class="eyebrow">2 · Legal sources · where each violation is defined</div>
+    <h2>Source of each violation (1 of 2)</h2>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>#</th><th>Violation</th><th>Where it is defined</th><th>In plain words</th><th>Penalty noted</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><b>Counterflow</b></td><td>RA 4136 <b>§37</b> "Driving on right side of highway"; one-way street rules of the LGU or MMDA</td><td>Pass oncoming vehicles on the right, overtake on the left. Going against the legal direction breaks this.</td><td>Per JAO 2014-01 / local table</td></tr>
+        <tr><td>2</td><td><b>Illegal parking</b></td><td>RA 4136 <b>§46–47</b>; Zamboanga City <b>Ordinance 248</b> (Revised Traffic Code): "No Parking" zones and towing</td><td>No parking on crosswalks, at corners, hydrants, driveways, or where a sign says so.</td><td>City fine and towing fee (check current)</td></tr>
+        <tr><td>3</td><td><b>Restricted lane</b></td><td>Not in RA 4136. MMDA and LGU lane rules (for example bus or motorcycle lanes)</td><td>A lane reserved for some vehicle types. Not in the thesis list, kept as an extra.</td><td>Depends on the local rule</td></tr>
+        <tr><td>4</td><td><b>Pedestrian lane obstruction</b></td><td>RA 4136 <b>§46(b)</b> no parking on a crosswalk; <b>§54</b> obstruction of traffic; <b>§42(c)</b> yield to pedestrians</td><td>Do not stop on the crosswalk or block people crossing.</td><td>"Obstruction" item in JAO 2014-01</td></tr>
+        <tr><td>5</td><td><b>Illegal turn</b></td><td>RA 4136 <b>§45</b> "Turning at intersections"; "No turn" and "No U-turn" signs</td><td>Turn from the proper lane; left turns pass left of the centre of the intersection.</td><td>Per JAO 2014-01 / sign rule</td></tr>
+        <tr><td>6</td><td><b>Swerving</b></td><td>RA 4136 <b>§48</b> "Reckless driving". Swerving is not named; it is our measurable proxy.</td><td>No driving "recklessly or without reasonable caution" that endangers others.</td><td>Reported: ₱2,000 first offense (JAO 2014-01, secondary source)</td></tr>
+        <tr><td>7</td><td><b>Overloading</b></td><td>RA 4136 <b>§32</b> (registered capacity; nobody on the roof or running board) and <b>§33</b>; LTO <b>AO AHS-2008-015</b> (one back rider per motorcycle, with seat and footrest)</td><td>More people or load than registered. On a motorcycle: driver plus one.</td><td>Per JAO 2014-01 (check amount)</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">Amounts marked "reported" come from news or commentary and should be checked against the signed order.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Every rule in the system points back to a written rule. Two points to make: first, RA 4136 is the 1964 Land Transportation and Traffic Code and holds most of the movement rules. Second, swerving is not named in the law, so we measure it as a proxy for reckless driving, and we say so.</aside>
+</section>
+
+<section class="slide" data-part="2 · Legal sources" data-title="Source of each violation (2 of 2)">
+  <div class="inner">
+    <div class="eyebrow">2 · Legal sources · where each violation is defined</div>
+    <h2>Source of each violation (2 of 2)</h2>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>#</th><th>Violation</th><th>Where it is defined</th><th>In plain words</th><th>Penalty noted</th></tr></thead>
+      <tbody>
+        <tr><td>8</td><td><b>Red light running</b></td><td>"Disregarding traffic signs" in <b>JAO 2014-01</b> and MMDA/LGU codes. RA 4136 itself has no general "obey signals" section; it mentions signals in §41(c), §42, §44, §46(h).</td><td>Do not cross the stop line on red.</td><td>MMDA table lists a separate red-light code (check amount)</td></tr>
+        <tr><td>9</td><td><b>Disregarding signs</b></td><td>Same: <b>JAO 2014-01</b> item "Disregarding traffic signs"; RA 4136 §38 (signs approved by the Commissioner), §46(h) (parking signs)</td><td>Obey regulatory signs: no entry, no turn, no stopping, stop.</td><td>Reported ₱150 (MMDA table) to ₱1,000 (secondary)</td></tr>
+        <tr><td>10</td><td><b>Signal light</b></td><td>RA 4136 <b>§44</b> "Signals on starting, stopping or turning"</td><td>Signal by hand and arm <i>or</i> by an approved device. <b>§34(f):</b> motorcycles need no signal light.</td><td>Per JAO 2014-01</td></tr>
+        <tr><td>11</td><td><b>No plate</b></td><td>RA 4136 <b>§5</b> registration, <b>§18</b> plates shown front and rear and visible; <b>RA 11235</b> as amended by <b>RA 12209</b> (May 9, 2025) for motorcycles</td><td>A registered vehicle shows its plate. Since 2025 a motorcycle needs the rear plate only.</td><td>Reported ₱5,000 (RA 12209), down from ₱50,000 to ₱100,000</td></tr>
+        <tr><td>12</td><td><b>No helmet</b></td><td><b>RA 10054</b> Motorcycle Helmet Act of 2009 §5; IRR: DOTC-DTI JAO 2011-01</td><td>Driver and back rider wear a standard helmet. The driver answers for the back rider. Tricycle drivers are exempt.</td><td>₱1,500, ₱3,000, ₱5,000, then ₱10,000 and licence confiscation</td></tr>
+        <tr><td>13</td><td><b>No seatbelt</b></td><td><b>RA 8750</b> Seat Belts Use Act of 1999</td><td>Driver and front-seat occupants wear seatbelts. The driver is liable for passengers.</td><td>₱100 to ₱1,000, then ₱200 to ₱2,000, then ₱500 to ₱5,000 with 1-week suspension (statute, as reported)</td></tr>
+        <tr><td>14</td><td><b>Missing side mirror</b></td><td>LTO <b>AO AHS-2008-015</b> (motorcycle equipment and use). RA 4136 has no mirror rule.</td><td>A motorcycle runs with its required accessories, including mirrors.</td><td>Reported ₱5,000 in one LTO decision</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout bad"><b>Finding for our own rules.</b> Because §44 accepts a hand signal and §34(f) removes signal lights for motorcycles, our blinking-light check can flag turns that are legal. We treat signal light as "needs review" and say so.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> Two honest findings come out of reading the law. One, red light and disregarding signs do not live in RA 4136; they come from the joint administrative order and local rules. Two, signal light: the code allows hand signals, and motorcycles do not even need signal lights, so our blinking-light heuristic can over-flag. We keep it as a "needs review" item.</aside>
+</section>
+
+<section class="slide" data-part="2 · Legal sources" data-title="Legal context: non-contact apprehension">
+  <div class="inner">
+    <div class="eyebrow">2 · Legal sources · context for the whole thesis</div>
+    <h2>Non-contact apprehension in the courts</h2>
+    <div class="tl">
+      <div class="tl-item"><div class="when">AUG 2022</div><h3>Supreme Court TRO</h3><p>The Court restrained the No Contact Apprehension Policy of the MMDA and several Metro Manila cities.</p></div>
+      <div class="tl-item"><div class="when">MAY 2025</div><h3>Partly lifted for the MMDA</h3><p>The TRO was lifted for MMDA enforcement on major roads such as EDSA and C5. Enforcement resumed on May 26, 2025. City ordinances were not covered.</p></div>
+      <div class="tl-item"><div class="when">MID 2026</div><h3>Petitions dismissed as moot</h3><p>The Court dismissed the consolidated petitions: a unified Metro Manila traffic code changed the situation, and the petitioners had procedural problems. It did not rule that NCAP is valid. Reports give different dates (June 3 or July 9).</p></div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><h3>Issues the petitioners raised</h3><ul>
+        <li>Privacy: anyone could look up violations with a plate number.</li>
+        <li>Conditions such as blocking registration renewal until fines are paid.</li>
+        <li>Due process for owners who were not the driver.</li>
+      </ul></div>
+      <div class="card"><h3>What it means for this thesis</h3><ul>
+        <li>We study the detection technology, not the legal power to fine.</li>
+        <li>A human reviews every flag; owners are not notified automatically.</li>
+        <li>Plate corrections and masked personal data answer the privacy concern in part.</li>
+      </ul></div>
+    </div>
+    <p class="muted small">From news reports (GMA News, Philstar, Tribune, Top Gear). Confirm the G.R. numbers and the decision date on the Supreme Court website before quoting.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> The panel may ask if this is even allowed. Our answer: it is a research prototype on recorded footage, with a person reviewing every flag. The courts have not settled the policy question; the last ruling did not decide validity. We name that risk and stay inside our scope.</aside>
+</section>
+
+<section class="slide" data-part="2 · Legal sources" data-title="15 more violations we could add (1 of 2)">
+  <div class="inner">
+    <div class="eyebrow">2 · Legal sources · extension candidates</div>
+    <h2>15 more violations we could add (1 of 2)</h2>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>#</th><th>Violation</th><th>Where it is defined</th><th>How we could see it</th><th>Effort</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td><b>Overspeeding</b></td><td>RA 4136 <b>§35–36</b>: reasonable speed within set maximums, uniform nationwide</td><td>Tracked speed after measuring a real distance on the road</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>2</td><td><b>Phone use while driving</b></td><td><b>RA 10913</b> Anti-Distracted Driving Act (2016): ₱5,000, ₱10,000, ₱15,000, ₱20,000</td><td>"Phone" class in the cabin model (3,924 labelled objects already)</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>3</td><td><b>Overtaking in a no-passing zone</b></td><td>RA 4136 <b>§41</b>: not at hill crests, curves, railway crossings, work zones, uncontrolled intersections</td><td>One track passes another inside a marked zone</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>4</td><td><b>Driving or parking on the sidewalk</b></td><td>RA 4136 <b>§52</b></td><td>Vehicle inside a sidewalk zone</td><td><span class="chip ok">easy</span></td></tr>
+        <tr><td>5</td><td><b>Obstruction / blocking the intersection</b></td><td>RA 4136 <b>§54</b>; <b>§46(a)</b> no stopping within an intersection</td><td>Stopped inside the intersection zone past a limit</td><td><span class="chip ok">easy</span></td></tr>
+        <tr><td>6</td><td><b>Not giving way to pedestrians</b></td><td>RA 4136 <b>§42(c)</b>: yield to a pedestrian in a crosswalk</td><td>Person inside the crosswalk zone while a vehicle passes through</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>7</td><td><b>Riding on the roof, footboard or outside</b></td><td>RA 4136 <b>§32(b), (c)</b>; <b>§51</b> hitching</td><td>Person boxes above or outside a jeepney, truck or tricycle body</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>8</td><td><b>Child on a motorcycle without the safety conditions</b></td><td><b>RA 10666</b> Children's Safety on Motorcycles Act (2015): ₱3,000, ₱5,000, ₱10,000 + 1-month suspension</td><td>Small rider; feet on peg, arms around waist, helmet. Hard to judge from a camera.</td><td><span class="chip bad">hard</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <aside class="notes"><b>SAY</b> These are not promises. They are candidates that follow the same pattern as what we have built: a zone, a class, a time, or a model we already have. The easy ones need almost no new data.</aside>
+</section>
+
+<section class="slide" data-part="2 · Legal sources" data-title="15 more violations we could add (2 of 2)">
+  <div class="inner">
+    <div class="eyebrow">2 · Legal sources · extension candidates</div>
+    <h2>15 more violations we could add (2 of 2)</h2>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>#</th><th>Violation</th><th>Where it is defined</th><th>How we could see it</th><th>Effort</th></tr></thead>
+      <tbody>
+        <tr><td>9</td><td><b>Smoke belching</b></td><td><b>RA 8749</b> Clean Air Act (§21 standards, §46 enforcement); RA 4136 <b>§34(j)</b></td><td>Smoke plume from the tailpipe. Law needs an emission test, so the camera only flags "suspected".</td><td><span class="chip bad">hard</span></td></tr>
+        <tr><td>10</td><td><b>Missing or defective lights</b></td><td>RA 4136 <b>§34(c), (d), (e)</b>: headlight, taillight, stop light (motorcycles: one of each)</td><td>At night, a vehicle with no lit lamps</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>11</td><td><b>Covered, dirty or unreadable plate</b></td><td>RA 4136 <b>§18</b> "entirely visible"; <b>RA 11235 / RA 12209</b>: readable from 15 m; concealing a plate is punishable</td><td>Plate found but not readable, or a covered plate class</td><td><span class="chip warn">medium</span></td></tr>
+        <tr><td>12</td><td><b>Tricycle on its rest day</b></td><td>Zamboanga City <b>Ordinance 185</b> (Tricycle Ordinance), Art. 6 §3: rest day by last plate digit (Mon 1-2, Tue 3-4, Wed 5-6, Thu 7-8, Fri 9-0)</td><td>Tricycle class + plate reading + the date</td><td><span class="chip ok">easy</span></td></tr>
+        <tr><td>13</td><td><b>Tricycle on a national highway</b></td><td><b>DILG MC 2020-036</b>, reinforced by <b>MC 2023-195</b> (Dec 6, 2023); basis disputed; exceptions where there is no other route</td><td>Tricycle class inside a highway zone</td><td><span class="chip ok">easy</span></td></tr>
+        <tr><td>14</td><td><b>Illegally tinted windows</b></td><td>LTO memoranda ban tint on public utility vehicles (₱500 in a 1995 memo). No final national light-transmission standard found.</td><td>Our "tinted window" class, once labelled</td><td><span class="chip warn">rule unclear</span></td></tr>
+        <tr><td>15</td><td><b>Parking too close to corners, hydrants, driveways</b></td><td>RA 4136 <b>§46(c)-(f)</b>: within 6 m of a corner, 4 m of a hydrant, 4 m of a fire station driveway, in front of a private driveway</td><td>Zones drawn at those distances</td><td><span class="chip ok">easy</span></td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">Left out on purpose: number coding (MMDA Regulation 96-005 and Resolution 03-10 in Metro Manila; copied by a few cities; no Zamboanga scheme found) and driving under the influence (RA 10586; not visible to a camera).</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Three of these are special to us. The tricycle rest day is a Zamboanga ordinance, so it is local and easy once plate reading works. The tricycle highway ban is a national DILG circular. And phone use already has data in our cabin set. I left out number coding because it is Metro Manila, and I found no Zamboanga scheme.</aside>
+</section>
+
+
+<!-- 9 ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="How a ticket is decided">
+  <div class="inner">
+    <div class="eyebrow">2 · What changed since Aug 25</div>
+    <h2>How a ticket is decided</h2>
+    <div class="grid g2">
+      <div class="card"><h3>1 · Never trust one frame</h3><p class="small muted">Model-based checks vote over the last 10 looks. A single wrong guess cannot create a ticket.</p></div>
+      <div class="card"><h3>2 · Judge fairly</h3><p class="small muted">A plate look only counts if the vehicle is big enough, its class has settled and, for motorcycles, the rear faces the camera.</p></div>
+      <div class="card"><h3>3 · Decide at the end</h3><p class="small muted">No plate is a suspicion while the car is on screen and becomes a ticket only if no plate was found by the time it leaves. Photos of cleared suspicions are deleted.</p></div>
+      <div class="card"><h3>4 · Show why</h3><p class="small muted">Evidence photos carry the zone, the vehicle box and the part that caused the flag: the bare head, the phone, the plate area searched.</p></div>
+      <div class="card"><h3>5 · Human decides</h3><p class="small muted">The reviewer confirms, rejects or corrects the plate. Merge and "different car" decisions become ReID training data.</p></div>
+      <div class="card"><h3>6 · Learn from it</h3><p class="small muted">Rejected tickets and corrections feed the harvest inbox, so the next training round targets the model's real mistakes.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> This is the answer to "how do you control false positives". Voting, fair-look rules, end-of-track decisions and human review are four independent layers.</aside>
+</section>
+
+<!-- 10 ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="Problems found and fixed">
+  <div class="inner">
+    <div class="eyebrow">2 · What changed since Aug 25</div>
+    <h2>Problems we found in our own system</h2>
+    <div class="grid g3">
+      <div class="card"><h3>Tracker box format</h3><p class="small muted">DeepSORT expects centre boxes; we sent top-left boxes. One car got several IDs: a test run made 29 tickets with track 19 twice. Fixed, plus a stitcher that rejoins broken tracks.</p></div>
+      <div class="card"><h3>Same photo in train and test</h3><p class="small muted">Two public sets (cabin, vehicles) had pixel-identical photos on both sides. About 1,600 copies were moved into training so test scores are not inflated.</p></div>
+      <div class="card"><h3>A dataset we rejected</h3><p class="small muted">A 6,608-image helmet set had only 21 "no helmet" labels in training and none in validation or test, mostly product photos. Not used.</p></div>
+      <div class="card"><h3>No-plate was too eager</h3><p class="small muted">It fired after two misses and never cleared. It now needs 6 fair looks, clears when a plate appears, and is decided when the car leaves.</p></div>
+      <div class="card"><h3>Speed</h3><p class="small muted">1080p stutter fixed with a 720p working size and round-robin specialist scheduling (about 3x FPS). ONNX Runtime pinned to the discrete GPU.</p></div>
+      <div class="card"><h3>Model input mismatch</h3><p class="small muted">The app feeds models differently from how they were trained. Measured on the next slide.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> This is the slide that earns trust. Three findings came from measuring, not guessing. Be clear that the input-mismatch fix is not in the backend yet and that the 85% is on the plate set's own domain, not on Zamboanga footage.</aside>
+</section>
+
+<!-- 10b ───────────────────────────── -->
+<section class="slide" data-part="2 · Since Aug 25" data-title="Measured: the model input mismatch">
+  <div class="inner">
+    <div class="eyebrow">2 · What changed since Aug 25</div>
+    <h2>Measured: the app feeds the plate model badly</h2>
+    <p class="lead">Same model, same photos. Only the way the picture is prepared changes.</p>
+    <div class="card">
+      <h3>Plate found in held-out vehicle crops, by how the picture is fed to the model</h3>
+      <div class="bars" style="margin-top:10px">
+        <div class="bar-row"><span>App today (BGR, stretched, bottom 40%)</span><div class="bar-track"><div class="bar-fill bad" style="width:7%"></div></div><span class="val">7%</span></div>
+        <div class="bar-row"><span>RGB only</span><div class="bar-track"><div class="bar-fill bad" style="width:11%"></div></div><span class="val">11%</span></div>
+        <div class="bar-row"><span>RGB + letterbox, bottom 40%</span><div class="bar-track"><div class="bar-fill warn" style="width:29%"></div></div><span class="val">29%</span></div>
+        <div class="bar-row"><span>RGB + letterbox, whole vehicle</span><div class="bar-track"><div class="bar-fill ok" style="width:85%"></div></div><span class="val">85%</span></div>
+      </div>
+      <p class="muted small" style="margin-top:8px">Measured with <code>harvest.py probe-input</code> on held-out labelled photos from the plate set. Only 51% of plates sit in the bottom 40% of the vehicle box. On 28 real "no plate" tickets, 18% had a plate the model finds when fed properly. The fix in the backend is queued and not applied yet.</p>
+    </div>
+
+    <div class="grid g3">
+      <div class="card stat"><b>51%</b><span>of plates sit in the bottom 40% of the vehicle box, the only area the app searched</span></div>
+      <div class="card stat"><b>18%</b><span>of 28 real "no plate" tickets had a plate the model finds when fed properly</span></div>
+      <div class="card stat"><b>7 → 85%</b><span>plates found, today versus RGB + letterbox + whole vehicle</span></div>
+    </div>
+    <div class="callout bad">The fix in the backend is queued and not applied yet. The 85% is on the plate set's own domain, not on Zamboanga footage.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> This is a measurement, not an opinion. The three pieces of the fix are known: convert BGR to RGB, letterbox instead of stretching, and search the whole vehicle for the plate. It also explains why diagonal camera angles failed.</aside>
+</section>
+
+<!-- ───── DATA ───── -->
+
+<section class="slide" data-part="3 · The data" data-title="Every data source at a glance">
+  <div class="inner">
+    <div class="eyebrow">3 · The data</div>
+    <h2>Every data source at a glance</h2>
+    <p class="lead">All training photos come from public Roboflow Universe datasets. None are known to be from Zamboanga. Our own data is the review loop and a small set of working clips.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Used for</th><th>Source (Roboflow Universe)</th><th class="num">Export size</th><th class="num">Train / val / test photos we hold</th><th>Licence</th></tr></thead>
+      <tbody>
+        <tr><td><b>Helmet</b></td><td>flashys-workspace / helmet-detection-fsrgu, v2</td><td class="num">5,276</td><td class="num">4,868 / 305 / 102</td><td>CC BY 4.0</td></tr>
+        <tr><td rowspan="2"><b>Cabin</b></td><td>mennaworkspace / ds-5cu4e, v2 ("Last2-Traffic-violation")</td><td class="num">10,117</td><td class="num" rowspan="2">9,901 / 275 / 396</td><td>CC BY 4.0</td></tr>
+        <tr><td>skripsinew / tpnew, v1</td><td class="num">455</td><td>CC BY 4.0</td></tr>
+        <tr><td rowspan="2"><b>Vehicles</b></td><td>capstone-xgfsp / v4-best-philippine-vehicle-datasest-11ztu, v1</td><td class="num">23,804</td><td class="num" rowspan="2">20,212 / 1,075 / 506</td><td>CC BY 4.0</td></tr>
+        <tr><td>research-3wj93 / philippine-plate-and-vehicle, v3</td><td class="num">101</td><td>CC BY 4.0</td></tr>
+        <tr><td rowspan="2"><b>Plates</b></td><td>Original plate set (Roboflow export, source name not recorded) <span class="chip warn">confirm</span></td><td class="num">about 3,290</td><td class="num" rowspan="2">7,116 / 737 / 341</td><td>to confirm</td></tr>
+        <tr><td>thesis-dzclp / license-plate-detection-jy62w, v1</td><td class="num">4,907</td><td>CC BY 4.0</td></tr>
+        <tr><td><b>Plate reader (OCR)</b></td><td>Our own review corrections ("pop quiz")</td><td class="num">42</td><td class="num">too few to train</td><td>own data</td></tr>
+        <tr><td><b>Car matcher (ReID)</b></td><td>Our own merge / "different car" decisions</td><td class="num">4 cars</td><td class="num">needs about 5</td><td>own data</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">"Export size" includes Roboflow's augmented copies (three versions per source photo in most sets). Unique source photos are far fewer: about 1.6k helmet, 2.5k cabin, 4.7k vehicles, 2.7k plates in training.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Name the owners and project names aloud: panels want to hear that you can trace each set. Then say the key fact plainly: no training photo is known to be from Zamboanga. The rest of the data section explains what that means and how it is being addressed.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Reading the data tables">
+  <div class="inner">
+    <div class="eyebrow">3 · The data · what each number means</div>
+    <h2>Reading the data tables</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Dataset</th><th class="num">Train files</th><th class="num">Val / test files</th><th class="num">Share train / val / test</th><th class="num">Unique photos (train)</th><th class="num">Copies per photo</th><th class="num">Objects (train)</th><th class="num">Objects per file</th></tr></thead>
+      <tbody>
+<tr><td><b>Helmet</b></td><td class="num">4,868</td><td class="num">305 / 102</td><td class="num">92% / 6% / 2%</td><td class="num">1,623</td><td class="num">3.0</td><td class="num">6,104</td><td class="num">1.25</td></tr>
+<tr><td><b>Cabin</b></td><td class="num">9,901</td><td class="num">275 / 396</td><td class="num">94% / 3% / 4%</td><td class="num">2,545</td><td class="num">3.9</td><td class="num">23,879</td><td class="num">2.41</td></tr>
+<tr><td><b>Vehicles</b></td><td class="num">20,212</td><td class="num">1,075 / 506</td><td class="num">93% / 5% / 2%</td><td class="num">4,724</td><td class="num">4.3</td><td class="num">64,139</td><td class="num">3.17</td></tr>
+<tr><td><b>Plates</b></td><td class="num">7,116</td><td class="num">737 / 341</td><td class="num">87% / 9% / 4%</td><td class="num">2,659</td><td class="num">2.7</td><td class="num">14,011</td><td class="num">1.97</td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid g2">
+      <div class="card"><h3>What each term means</h3><ul>
+        <li><b>Files:</b> image files in that split, including copies made by augmentation (flips, blur, brightness).</li>
+        <li><b>Unique photos:</b> real original pictures, after grouping the copies. This is the honest size of the data.</li>
+        <li><b>Copies per photo:</b> files divided by unique photos. About 3 means each photo was used 3 times.</li>
+        <li><b>Objects:</b> labelled boxes. One picture can hold many (a street with 5 cars has 5 objects).</li>
+        <li><b>Train / validation / test:</b> learn from it, check during training, final exam.</li>
+      </ul></div>
+      <div class="card"><h3>What to notice</h3><ul>
+        <li>Validation and test together are only 6% to 13% of each set, so their scores carry more uncertainty.</li>
+        <li><b>Zero</b> background-only pictures in every set: the models almost never see "nothing here", which invites false alarms. The harvest tool adds these (key N).</li>
+        <li>Vehicles are lopsided: 27,168 people, 4,721 tricycles, 4,945 motorcycles.</li>
+        <li>Helmet is balanced (2,927 with, 3,177 without). Cabin has no tinted window and no side mirror examples.</li>
+      </ul></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Read one row aloud as the example. Helmet: 4,868 training files, but only 1,623 real photos, because each photo appears about three times. Say that a bigger "files" number is not more information. Then point at the zero background-only pictures: it explains why false alarms are a risk and why the harvest tool collects "nothing here" examples.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Helmet data">
+  <div class="inner">
+    <div class="eyebrow">3 · The data · helmet model</div>
+    <h2>Helmet: "Helmet Detection" by flashys-workspace</h2>
+    <div class="grid g-2-1">
+      <div class="tbl-wrap"><table>
+        <tbody>
+          <tr><th>Link</th><td class="mono">universe.roboflow.com/flashys-workspace/helmet-detection-fsrgu/dataset/2</td></tr>
+          <tr><th>Version / date</th><td>v2, dated 2026-05-15</td></tr>
+          <tr><th>Licence</th><td>CC BY 4.0, provided by a Roboflow user</td></tr>
+          <tr><th>Export</th><td>5,276 images, YOLOv8 format; 3 augmented versions per source photo</td></tr>
+          <tr><th>Augmentation</th><td>50% horizontal flip, crop 0-17%, shear ±10°, brightness ±15%, exposure ±5%, blur up to 1.5 px, noise 0.38%</td></tr>
+          <tr><th>Original classes</th><td>Helmet, Motorcycle, No_helmet</td></tr>
+          <tr><th>Mapped to ours</th><td><code>Helmet</code> → rider_with_helmet · <code>No_helmet</code> → rider_without_helmet · Motorcycle dropped</td></tr>
+          <tr><th>What we hold</th><td>train 4,868 files from 1,623 source photos · val 305 · test 102 (no background-only images)</td></tr>
+          <tr><th>Objects (train)</th><td>with helmet 2,927 · without helmet 3,177 (balanced)</td></tr>
+        </tbody>
+      </table></div>
+      <div class="grid">
+        <div class="callout info"><b>What the photos show.</b> In the random samples we viewed, mostly lifestyle and stock-style pictures of people on scooters and motorcycles, not traffic-camera views.</div>
+        <div class="callout bad"><b>Consequence.</b> The 0.98 score is on this set's own validation photos. How it behaves on a CCTV angle of a helmeted rider in Zamboanga is not measured yet.</div>
+      </div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Why this set: it was the only one we found with a real, balanced "no helmet" class that downloads through the API. Why a score of 0.98 is not the claim: the photos are not the target domain. Next step is local helmet crops through the harvest tool.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Cabin data">
+  <div class="inner">
+    <div class="eyebrow">3 · The data · cabin model</div>
+    <h2>Cabin: windshield, seatbelt and phone</h2>
+    <div class="grid g2">
+      <div class="card"><h3>"ds" (Last2-Traffic-violation) · mennaworkspace</h3>
+        <ul>
+          <li class="mono small">universe.roboflow.com/mennaworkspace/ds-5cu4e/dataset/2</li>
+          <li>v2, dated 2026-02-19 · CC BY 4.0 · <b>10,117 images</b>, 3 versions per source</li>
+          <li>Pre-processing: auto-orient, resize to 640×640 (stretch). Augmentation: 50% flip, brightness ±25%, blur up to 2.3 px, noise 0.5%</li>
+          <li>Original classes: car windshield, car_plate, seat-belt, un seat-belt, using_mobile, vehicle</li>
+          <li>Mapped: <code>car windshield</code> → clear_window · <code>seat-belt</code> → seatbelt · <code>using_mobile</code> → driver_phone. "un seat-belt", plate and vehicle dropped</li>
+        </ul>
+      </div>
+      <div class="card"><h3>"tpnew" · skripsinew</h3>
+        <ul>
+          <li class="mono small">universe.roboflow.com/skripsinew/tpnew/dataset/1</li>
+          <li>v1, dated 2025-04-28 · CC BY 4.0 · <b>455 images</b>, no augmentation</li>
+          <li>Original classes: person-noseatbelt, person-seatbelt, seatbelt, windshield</li>
+          <li>Mapped: <code>windshield</code> → clear_window · <code>seatbelt</code> → seatbelt</li>
+          <li>Its export had every image in "test"; all 455 were placed in training instead</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Split</th><th class="num">Files</th><th class="num">Unique photos</th><th class="num">clear_window</th><th class="num">seatbelt</th><th class="num">driver_phone</th><th class="num">tinted_window</th><th class="num">side_mirror</th></tr></thead>
+      <tbody>
+        <tr><td>train</td><td class="num">9,901</td><td class="num">2,545</td><td class="num">12,487</td><td class="num">7,468</td><td class="num">3,924</td><td class="num"><span class="chip bad">0</span></td><td class="num"><span class="chip bad">0</span></td></tr>
+        <tr><td>val</td><td class="num">275</td><td class="num">271</td><td class="num">333</td><td class="num">176</td><td class="num">123</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>test</td><td class="num">396</td><td class="num">388</td><td class="num">461</td><td class="num">256</td><td class="num">163</td><td class="num">0</td><td class="num">0</td></tr>
+      </tbody>
+    </table></div>
+    <div class="grid g2">
+      <div class="callout info"><b>What the photos show.</b> Close, front-facing car photos from a fixed camera in daylight, with Arabic-script plates, plus some top-down CCTV frames. A good windshield view, from another country.</div>
+      <div class="callout bad"><b>Gaps.</b> Zero examples of tinted windows or side mirrors, so the tint gate and the mirror check cannot work until we label our own. Validation and test are small (275 and 396) because duplicates were moved to training.</div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Be direct about the two empty columns. They are not a modelling failure, there is simply no public data. They become a labelling task on local footage.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Vehicle data">
+  <div class="inner">
+    <div class="eyebrow">3 · The data · vehicle detector</div>
+    <h2>Vehicles: Philippine vehicle types, with people and tricycles</h2>
+    <div class="grid g2">
+      <div class="card"><h3>"v4 Best Philippine Vehicle Dataset" · capstone-xgfsp</h3>
+        <ul>
+          <li class="mono small">universe.roboflow.com/capstone-xgfsp/v4-best-philippine-vehicle-datasest-11ztu/dataset/1</li>
+          <li>v1 · CC BY 4.0 · <b>23,804 images</b>, 3 versions per source (flips, rotation ±15°, brightness ±19%, blur, noise)</li>
+          <li>Original classes: bicycle, bus, car, jeepney, motorcycle, pedestrian, tricycle, truck</li>
+          <li>Mapped: bus, car, motorcycle, truck, tricycle as is · <code>pedestrian</code> → person · <code>jeepney</code> → bus · bicycle dropped</li>
+        </ul>
+      </div>
+      <div class="card"><h3>"Philippine Plate and Vehicle" · research-3wj93</h3>
+        <ul>
+          <li class="mono small">universe.roboflow.com/research-3wj93/philippine-plate-and-vehicle/dataset/3</li>
+          <li>v3, dated 2024-09-07 · CC BY 4.0 · <b>101 images</b>, no augmentation</li>
+          <li>Original classes: bike, car, e-bike, e-jeepney, e-tricycle, jeepney, motorcycle, person, semi-truck, tricycle, truck</li>
+          <li>Mapped: semi-truck → truck · e-jeepney → bus · e-tricycle → tricycle · bike and e-bike dropped. Has no plate class.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Split</th><th class="num">Files</th><th class="num">Unique photos</th><th class="num">motorcycle</th><th class="num">car</th><th class="num">bus</th><th class="num">truck</th><th class="num">person</th><th class="num">tricycle</th></tr></thead>
+      <tbody>
+        <tr><td>train</td><td class="num">20,212</td><td class="num">4,724</td><td class="num">4,945</td><td class="num">13,119</td><td class="num">8,657</td><td class="num">5,529</td><td class="num">27,168</td><td class="num">4,721</td></tr>
+        <tr><td>val</td><td class="num">1,075</td><td class="num">1,013</td><td class="num">493</td><td class="num">1,031</td><td class="num">613</td><td class="num">387</td><td class="num">1,834</td><td class="num"><span class="chip warn">76</span></td></tr>
+        <tr><td>test</td><td class="num">506</td><td class="num">498</td><td class="num">217</td><td class="num">556</td><td class="num">320</td><td class="num">250</td><td class="num">1,086</td><td class="num"><span class="chip warn">25</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout info"><b>What the photos show.</b> A mix: some Philippine tricycles, but also trucks, hatchbacks and buses that look like they are from other countries, scenes where the vehicle is tiny or far away, and stock images with a visible watermark. "Philippine" describes the project name more than every photo. Validation and test hold only 76 and 25 tricycles, so tricycle scores will carry wide uncertainty. Training is running now (epoch 19 of 30).</div>
+  </div>
+  <aside class="notes"><b>SAY</b> The person class matters more than it looks: overloading and the helmet crop both rely on person boxes. Jeepneys are folded into "bus" on purpose to keep the class list short; say that is a design choice you can revisit.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Plate data">
+  <div class="inner">
+    <div class="eyebrow">3 · The data · plate detector</div>
+    <h2>Plates: the weakest link, and why</h2>
+    <div class="grid g2">
+      <div class="card"><h3>Set 1 · original plate set</h3>
+        <ul>
+          <li>2,824 training files from 1,228 source photos, 328 val, 136 test</li>
+          <li>A Roboflow export (augmentation hashes are in the file names). <b>The project name and owner are not recorded in the repository.</b></li>
+          <li>Used to train plate v1 (Sep 24), the model scoring 0.765 mAP@50</li>
+        </ul>
+      </div>
+      <div class="card"><h3>Set 2 · "License Plate Detection" · thesis-dzclp</h3>
+        <ul>
+          <li class="mono small">universe.roboflow.com/thesis-dzclp/license-plate-detection-jy62w/dataset/1</li>
+          <li>v1, dated 2024-11-02 · CC BY 4.0 · <b>4,907 images</b>, 3 versions per source; pre-processing includes <b>grayscale</b></li>
+          <li>One class ("0") mapped to license_plate · we hold 4,292 train files (1,431 source photos), 409 val, 205 test</li>
+        </ul>
+      </div>
+    </div>
+    <div class="grid g2">
+      <div class="callout bad"><b>Domain finding (visual check of 8 random photos per set).</b> Both sets look like grayscale parking-barrier camera footage with Vietnamese-format plates (for example 51A-012.04, and two-line motorcycle plates). Neither set appears to contain Philippine plates. No photo in Set 1 matched a photo in Set 2 (0 of 1,669 by visual fingerprint), so there is no leakage between them.</div>
+      <div class="callout"><b>Why it matters.</b> The plate model has probably never seen a Philippine plate or a colour road scene. That likely explains weak plate finding on local clips, on top of the preprocessing mismatch. Fixing the data is the highest-value change for the plate model.</div>
+    </div>
+    <div class="confirm">Original plate set: find the Roboflow project name, owner and licence (check your Roboflow history or the original download) and write it here: ______________________</div>
+  </div>
+  <aside class="notes"><b>SAY</b> This is the most important data slide. Say it as a finding, not a confession: we looked at what the plate model was fed, found it is from another country and camera style, and have a plan to collect local plates with the harvest tool. If asked where Philippine plate data is: small public sets exist (63 to 480 photos); the larger share has to come from our own footage.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Rejected sets and gaps">
+  <div class="inner">
+    <div class="eyebrow">3 · The data</div>
+    <h2>What we rejected, and what is still missing</h2>
+    <div class="grid g2">
+      <div class="card"><h3>Evaluated and rejected</h3>
+        <p><b>"Helmet Detector"</b> · jayz-workspace/helmet-detector-9rzmg, v4, 6,608 images, CC BY 4.0.</p>
+        <ul>
+          <li>13 helmet-type classes (nutshell, hard hat, half face ...)</li>
+          <li>Only <b>21</b> "no helmet" labels in training and <b>none</b> in validation or test</li>
+          <li>Mostly product photos and repeated frames of one scene; most labels are polygons</li>
+        </ul>
+        <p class="small muted">A model trained on it could not learn, or be tested on, the violation.</p>
+      </div>
+      <div class="card"><h3>Still missing</h3>
+        <ul>
+          <li>Any photo known to be from Zamboanga: <span class="chip bad">0</span></li>
+          <li>Philippine plates (none seen in samples): <span class="chip bad">0</span></li>
+          <li>Tinted windshields, motorcycle side mirrors: <span class="chip bad">0</span></li>
+          <li>Night, rain, glare: <span class="chip warn">unknown coverage</span></li>
+          <li>Plate text for OCR training: 42 of about 500 needed</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card"><h3>Candidates seen in search, not downloaded <span class="chip warn">unverified listings</span></h3>
+      <ul>
+        <li>Philippine plates on Roboflow Universe: "Philiipine_License_Plate" (thesis-dzclp and colorumscan, 480 images each), zed (166), "Philippine license plates" (dsps and ccitcapstone, 63)</li>
+        <li>Helmet: tai-tpl0h/helmet-and-no-helmet-rider-detection (1,533 images, with and without helmet and plates), traffic-violation-azmlw/final-violation (2,009 images: no-helmet, overloading, safe)</li>
+        <li>AI City Challenge 2023, Track 5 (helmet rule violations, 100 training videos, driver and passenger helmet classes): research use, access by request</li>
+      </ul>
+      <p class="small muted">Check licence and content before using any of these. Size alone does not make a set suitable: that is what the helmet rejection above shows.</p>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Showing a rejected dataset with reasons is one of the strongest rigor signals you have. The candidate list comes from search results and should be treated as leads, not facts.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Our own data and footage">
+  <div class="inner">
+    <div class="eyebrow">3 · The data</div>
+    <h2>Our own data and footage</h2>
+    <div class="grid g3">
+      <div class="card stat"><b>11</b><span>forensic analyses run, producing 229 tickets in total</span></div>
+      <div class="card stat"><b>345</b><span>plate pictures waiting for a human check in the harvest inbox (22 ready, 0 added yet)</span></div>
+      <div class="card stat"><b>42</b><span>corrected plate crops saved for OCR training (about 500 needed)</span></div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Working clip</th><th class="num">Resolution</th><th class="num">FPS</th><th class="num">Length</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">petron-perfect-2.mp4</td><td class="num">1920×1080</td><td class="num">30</td><td class="num">1 min 45 s</td></tr>
+        <tr><td class="mono">petron-perfect-3.mp4, petron-perfect-4.mp4</td><td class="num">1920×1080</td><td class="num">30</td><td class="num">15 min 2 s each</td></tr>
+        <tr><td class="mono">petron-perfect-5.mp4, crossing-2-barnagay.mp4</td><td class="num">3840×2160</td><td class="num">24</td><td class="num">2 min 49 s</td></tr>
+        <tr><td class="mono">dennis-cafe-1.mp4</td><td class="num">2560×1440</td><td class="num">20</td><td class="num">10 min 2 s</td></tr>
+        <tr><td class="mono">bcc-caltext.mp4</td><td class="num">1920×1080</td><td class="num">30</td><td class="num">10 min 3 s</td></tr>
+      </tbody>
+    </table></div>
+    <div class="confirm">For each clip used as test or analysis footage, write: who recorded it, where and when, camera and mounting, and whether people in it consented or the location permits recording. Panels ask about provenance and privacy. Also list any clip taken from YouTube with its link and uploader.</div>
+    <p class="muted small">Review decisions also capture car-matching data: 4 vehicles with two or more photos so far (training needs about 5, ideally 30).</p>
+  </div>
+  <aside class="notes"><b>SAY</b> The clip list is from files on the development machine, not a registry; the registry is part of the benchmark work. Do not claim these are the final test set. The own-data counts show the loop is working: it already produces labelled material, but it is early.</aside>
+</section>
+
+<section class="slide" data-part="3 · The data" data-title="Data integrity and ethics">
+  <div class="inner">
+    <div class="eyebrow">3 · The data</div>
+    <h2>How the data was kept honest</h2>
+    <div class="grid g2">
+      <div class="card"><h3>Splits and leakage</h3><ul>
+        <li>Each public set keeps its own train / val / test split.</li>
+        <li>Augmented copies are grouped by source photo before any check, so a photo and its flipped copy count as one.</li>
+        <li>In the cabin and vehicle sets, the same photos sat on both sides (pixel-identical). About 1,600 copies were moved into training.</li>
+        <li>Between the two plate sets: 0 of 1,669 photos matched.</li>
+        <li>Benchmark clips can be protected so the harvest tool never trains on them.</li>
+      </ul></div>
+      <div class="card"><h3>Reproducibility</h3><ul>
+        <li>A manifest file lists every dataset, version and class mapping.</li>
+        <li>One script downloads and merges them, with the mapping printed for review.</li>
+        <li>Every training run keeps its settings and per-epoch scores.</li>
+        <li>Trained models carry the run name and date in the model catalog.</li>
+      </ul></div>
+      <div class="card"><h3>Licences</h3><ul>
+        <li>All six downloaded sets are CC BY 4.0: cite the owner and project for each (Appendix A).</li>
+        <li>Some images show third-party watermarks, so the licence label of the dataset may not cover every image. Use is for academic training only; images are not redistributed.</li>
+      </ul></div>
+      <div class="card"><h3>Privacy (RA 10173)</h3><ul>
+        <li>Road footage contains faces and plates: access limited, nothing posted publicly.</li>
+        <li>Operators see masked personal data in the review screens; a human reviews every flag.</li>
+        <li>Evidence retention rule is still open: evidence photos once grew to about 27 GB before being cleared.</li>
+      </ul></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Two sentences are enough here: we checked for leakage and fixed it, and we know where each dataset came from. Raise the licence caveat yourself; it is easier than being asked.</aside>
+</section>
+
+<!-- ───── MODELS & RESULTS ───── -->
+
+<section class="slide" data-part="4 · Models and results" data-title="The AI architecture in one picture">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results · architecture</div>
+    <h2>The AI architecture: four kinds of model, one job each</h2>
+    <div class="flow">
+      <div class="step"><h3>Frame</h3><p>One video frame, letterboxed to 640×640</p></div><span class="arrow">→</span>
+      <div class="step"><h3>1 · Detector</h3><p>YOLOv8n finds vehicles and people</p></div><span class="arrow">→</span>
+      <div class="step"><h3>2 · Tracker</h3><p>DeepSORT keeps one ID per vehicle</p></div><span class="arrow">→</span>
+      <div class="step sec"><h3>3 · Specialists</h3><p>Three more YOLOv8n on 320×320 crops: helmet, cabin, plate</p></div><span class="arrow">→</span>
+      <div class="step sec"><h3>4 · Plate reader</h3><p>Real-ESRGAN sharpens, EasyOCR reads</p></div><span class="arrow">→</span>
+      <div class="step out"><h3>Rules + votes</h3><p>Geometry, timers and voting make the ticket</p></div>
+    </div>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>Part</th><th>What it is</th><th>Input</th><th>Output</th><th>Size and origin</th></tr></thead>
+      <tbody>
+        <tr><td><b>Vehicle detector</b></td><td>YOLOv8n: a small convolutional neural network for object detection</td><td>Whole frame, 640×640</td><td>Boxes, class, confidence for car, motorcycle, bus, truck, person, tricycle</td><td>3.01 million parameters, about 12 MB as ONNX. Fine-tuned by us from COCO weights.</td></tr>
+        <tr><td><b>Specialists</b> (helmet, cabin, plate)</td><td>The same YOLOv8n design, a different job each</td><td>A vehicle crop resized to 320×320</td><td>Helmet / no helmet; windshield, seatbelt, phone, mirror; plate box</td><td>3.01 million parameters each (3,011,238 · 3,011,823 · 3,011,043). Fine-tuned by us.</td></tr>
+        <tr><td><b>Tracker</b></td><td>DeepSORT: a motion model plus an appearance network</td><td>Detector boxes and the frame</td><td>The same box with a track ID</td><td>Small appearance CNN that makes a 512-number fingerprint. Pretrained on people (Market-1501), not retrained by us.</td></tr>
+        <tr><td><b>Enhancer</b></td><td>Real-ESRGAN: a GAN that rebuilds detail in a small blurry picture</td><td>The plate crop</td><td>A sharper crop, about 4 times larger</td><td>67 MB ONNX file. Pretrained.</td></tr>
+        <tr><td><b>Plate reader</b></td><td>EasyOCR: a text finder plus a text recogniser</td><td>The enhanced crop in grayscale</td><td>Letters and digits (A-Z, 0-9 only) with a confidence</td><td>Pretrained. Our own fine-tuning needs about 500 labelled plates; we have 42.</td></tr>
+        <tr><td><b>Rules and votes</b></td><td>Not AI: geometry, timers, voting</td><td>Tracks, zones, model outputs</td><td>Violation decisions</td><td>Plain code, covered by scripted tests</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <aside class="notes"><b>SAY</b> Four kinds of model, and one block that is not AI. The detector finds things. The tracker remembers them. The specialists answer narrow questions on small crops. The plate chain turns a plate picture into text. Then plain rules decide. All four YOLO models are the same small size, so we can swap data without changing the design.</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="Inside the detector">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results · architecture</div>
+    <h2>Inside the detector: how one picture becomes boxes</h2>
+    <div class="flow">
+      <div class="step"><h3>1 · Letterbox</h3><p>Resize to 640×640 without stretching; pad the empty sides</p></div><span class="arrow">→</span>
+      <div class="step"><h3>2 · Backbone</h3><p>Stacked convolution blocks turn pixels into feature maps: edges, then parts, then objects</p></div><span class="arrow">→</span>
+      <div class="step"><h3>3 · Neck</h3><p>Mixes three scales: 80×80 (small objects), 40×40, 20×20 (large)</p></div><span class="arrow">→</span>
+      <div class="step sec"><h3>4 · Head</h3><p>For each of 8,400 grid cells: a box (4 numbers) and one score per class</p></div><span class="arrow">→</span>
+      <div class="step out"><h3>5 · Filter</h3><p>Drop scores under 0.45, then remove overlapping duplicates (NMS at 0.50)</p></div>
+    </div>
+    <div class="grid g3">
+      <div class="card stat"><b>8,400</b><span>candidate boxes per picture: 80×80 + 40×40 + 20×20 grid cells</span></div>
+      <div class="card stat"><b>4 + C</b><span>numbers per candidate: 4 for the box, and one score for each of C classes (helmet: C = 2)</span></div>
+      <div class="card stat"><b>3 losses</b><span>box (position), class (what it is), dfl (edge sharpness). These are the columns in the training graph.</span></div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><h3>How it learns</h3><ul>
+        <li><b>Transfer learning:</b> start from weights that already know 80 everyday object types (COCO), replace the last layer with our classes, then train on our photos.</li>
+        <li>Each epoch: predict, measure the three losses against the labels, adjust the weights a little (backpropagation).</li>
+        <li>Validation photos are only measured, never learned from.</li>
+      </ul></div>
+      <div class="card"><h3>Why YOLO and why nano</h3><ul>
+        <li>One pass over the picture gives every box: fast enough for video.</li>
+        <li>Nano: 3.01 million parameters and 8.2 GFLOPs at 640 px. At 320 px a specialist costs about a quarter of that.</li>
+        <li>YOLO11 and YOLO26 follow the same idea; YOLO26 is built to skip the NMS step.</li>
+      </ul></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Walk the five boxes left to right with one picture in mind. The 8,400 comes from three grids: 80 by 80, 40 by 40, and 20 by 20. Small objects are found on the fine grid, large objects on the coarse one. Then say the three loss names once, because the next slides use them.</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="Tracking and plate reading">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results · architecture</div>
+    <h2>Tracking and plate reading</h2>
+    <div class="grid g2">
+      <div class="card"><h3>DeepSORT: one ID per vehicle</h3>
+        <ol class="list">
+          <li><b>Predict:</b> a Kalman filter guesses where each known vehicle should be in this frame.</li>
+          <li><b>Match:</b> new boxes are matched to tracks using position and appearance. Appearance is a 512-number fingerprint made from the box crop (64×128 px); similar fingerprints mean the same car.</li>
+          <li><b>Update:</b> matched tracks move; unmatched boxes start new tracks.</li>
+          <li><b>Confirm and expire:</b> a track needs 3 confirmed frames to get an ID, and survives up to 90 frames without a match.</li>
+        </ol>
+        <p class="small muted">Our settings: appearance distance 0.4, overlap 0.7, minimum confidence 0.1, memory of 100 fingerprints per track. Our stitcher also rejoins a broken track by colour signature and timing.</p>
+      </div>
+      <div class="card"><h3>Plate: from crop to text</h3>
+        <ol class="list">
+          <li><b>Find:</b> the plate specialist boxes the plate inside the vehicle crop.</li>
+          <li><b>Crop:</b> cut the plate with 10% padding. Keep up to 40 crops per vehicle, each with its time.</li>
+          <li><b>Sharpen:</b> Real-ESRGAN enlarges the crop and rebuilds detail.</li>
+          <li><b>Read:</b> EasyOCR finds the text and recognises letters; only A-Z and 0-9 are allowed.</li>
+          <li><b>Fix by position:</b> in the PH format the first three characters are letters and the last four are digits, so a 0 in a letter slot becomes O.</li>
+          <li><b>Vote:</b> across all crops, the text with the most reads wins, ties broken by confidence, with a bonus for the right length. No read means "unidentified", never a blank.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="callout">Why vote: one blurry frame misreads a plate (O for 0, B for 8). Many frames voted together fix most single-frame mistakes.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> Two small stories. The tracker answers "is this the same car as a second ago", using where it should be and what it looks like. The plate chain answers "what does the plate say", and it votes across many frames, because any single frame can be wrong. These two are why one car becomes one ticket with one plate.</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="How the models were trained">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results</div>
+    <h2>How the models were trained</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Setup</h3>
+        <ul>
+          <li><b>Method:</b> transfer learning from COCO-pretrained YOLOv8n weights (nano size, built for a 6 GB GPU).</li>
+          <li><b>Hardware:</b> NVIDIA RTX 3050 Laptop GPU, 6 GB, Windows 11.</li>
+          <li><b>Software:</b> Ultralytics 8.4, PyTorch 2.5.1 (CUDA 12.1), ONNX Runtime GPU, Python 3.12.</li>
+          <li><b>Schedule:</b> up to 100 epochs (vehicles: 30), batch 16, early stop after 30 epochs without improvement.</li>
+          <li><b>Augmentation:</b> mosaic, HSV shifts, flips, small rotation and scale, on top of the augmented copies already in the public sets.</li>
+          <li><b>Output:</b> best-epoch weights exported to ONNX and registered in the model catalog.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Why this design</h3>
+        <ul>
+          <li><b>Specialists on crops</b> instead of one many-class detector: smaller models, faster, retrainable one at a time, and each can be compared on its own.</li>
+          <li><b>Nano model:</b> real-time on laptop hardware. Larger models are an option if scores fall short.</li>
+          <li><b>Reproducible runs:</b> every run folder keeps its settings (<code>args.yaml</code>) and per-epoch scores (<code>results.csv</code>); data sources are listed in a manifest.</li>
+          <li><b>Pause and resume</b> from the dashboard or the terminal Training Lab, because the GPU is shared with other work.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout">Note for the record: helmet, cabin and plate v1 were trained at 640 px, but the pipeline feeds specialists 320 px crops and exports them at 320 px. Scores must be re-checked at 320 before they are quoted as field numbers.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> Training is ordinary transfer learning, deliberately. The contribution is the system and the evaluation around it, not a new network. Mention the 640 versus 320 point yourself before a panel member finds it.</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="Reading the training graph">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results · the helmet run, real numbers</div>
+    <h2>Reading the training graph</h2>
+    <div class="card plain" style="padding:0"><svg viewBox="0 0 1000 256" width="100%" role="img" aria-label="Helmet training curves: scores and box loss per epoch">
+<style>.ct{font-family:var(--font-mono);font-size:11px;fill:var(--muted)}.ct.b{font-weight:500;fill:var(--ink)}.gl{stroke:var(--line);stroke-width:1}.mk{stroke:var(--accent-text);stroke-width:1.5;stroke-dasharray:5 4}</style>
+<text x="56" y="18" class="ct b">Scores (higher is better)</text>
+<line x1="56" x2="470" y1="190.0" y2="190.0" class="gl"/>
+<text x="50" y="194.0" text-anchor="end" class="ct">0.5</text>
+<line x1="56" x2="470" y1="158.8" y2="158.8" class="gl"/>
+<text x="50" y="162.8" text-anchor="end" class="ct">0.6</text>
+<line x1="56" x2="470" y1="127.6" y2="127.6" class="gl"/>
+<text x="50" y="131.6" text-anchor="end" class="ct">0.7</text>
+<line x1="56" x2="470" y1="96.4" y2="96.4" class="gl"/>
+<text x="50" y="100.4" text-anchor="end" class="ct">0.8</text>
+<line x1="56" x2="470" y1="65.2" y2="65.2" class="gl"/>
+<text x="50" y="69.2" text-anchor="end" class="ct">0.9</text>
+<line x1="56" x2="470" y1="34.0" y2="34.0" class="gl"/>
+<text x="50" y="38.0" text-anchor="end" class="ct">1.0</text>
+<text x="56.0" y="206" text-anchor="middle" class="ct">1</text>
+<text x="117.1" y="206" text-anchor="middle" class="ct">10</text>
+<text x="185.0" y="206" text-anchor="middle" class="ct">20</text>
+<text x="252.8" y="206" text-anchor="middle" class="ct">30</text>
+<text x="320.7" y="206" text-anchor="middle" class="ct">40</text>
+<text x="388.6" y="206" text-anchor="middle" class="ct">50</text>
+<text x="456.4" y="206" text-anchor="middle" class="ct">60</text>
+<text x="263" y="222" text-anchor="middle" class="ct">epoch</text>
+<line x1="266.4" x2="266.4" y1="34" y2="190" class="mk"/>
+<text x="270.4" y="182" class="ct b">saved: epoch 32</text>
+<polyline points="56.0,54.5 62.8,55.3 69.6,66.0 76.4,57.7 83.1,56.1 89.9,43.6 96.7,48.0 103.5,46.4 110.3,41.0 117.1,41.3 123.9,41.8 130.7,39.6 137.4,40.2 144.2,40.6 151.0,47.2 157.8,40.9 164.6,40.3 171.4,37.9 178.2,40.6 185.0,39.1 191.7,43.0 198.5,39.9 205.3,42.1 212.1,42.2 218.9,41.0 225.7,42.3 232.5,40.7 239.2,40.2 246.0,41.2 252.8,41.1 259.6,39.8 266.4,40.9 273.2,41.3 280.0,41.7 286.8,40.9 293.5,38.5 300.3,40.1 307.1,39.3 313.9,39.9 320.7,40.2 327.5,41.3 334.3,38.4 341.0,42.0 347.8,40.4 354.6,40.2 361.4,42.6 368.2,40.6 375.0,40.8 381.8,39.4 388.6,40.3 395.3,41.4 402.1,39.9 408.9,41.3 415.7,38.4 422.5,39.1 429.3,40.2 436.1,40.7 442.9,39.9 449.6,43.2 456.4,40.6 463.2,41.8 470.0,43.4" fill="none" style="stroke:var(--info);stroke-width:2.2"/>
+<polyline points="56.0,171.9 62.8,177.7 69.6,165.3 76.4,153.6 83.1,143.6 89.9,142.0 96.7,141.6 103.5,136.4 110.3,136.9 117.1,132.6 123.9,137.5 130.7,138.8 137.4,144.5 144.2,133.2 151.0,141.4 157.8,140.7 164.6,136.8 171.4,132.8 178.2,132.5 185.0,122.7 191.7,125.0 198.5,125.1 205.3,131.7 212.1,123.0 218.9,122.8 225.7,118.7 232.5,115.5 239.2,124.8 246.0,117.6 252.8,113.6 259.6,119.5 266.4,108.4 273.2,117.4 280.0,119.2 286.8,118.4 293.5,110.2 300.3,114.1 307.1,116.7 313.9,113.0 320.7,112.4 327.5,111.6 334.3,114.3 341.0,111.1 347.8,112.0 354.6,110.6 361.4,112.6 368.2,116.0 375.0,112.0 381.8,114.2 388.6,113.3 395.3,111.8 402.1,111.7 408.9,111.8 415.7,110.9 422.5,110.0 429.3,112.2 436.1,111.4 442.9,110.3 449.6,111.3 456.4,111.7 463.2,110.7 470.0,111.0" fill="none" style="stroke:var(--todo);stroke-width:2.2"/>
+<polyline points="56.0,65.8 62.8,70.5 69.6,64.7 76.4,72.8 83.1,75.2 89.9,48.2 96.7,54.1 103.5,49.6 110.3,52.9 117.1,44.5 123.9,45.0 130.7,43.8 137.4,45.3 144.2,47.3 151.0,56.4 157.8,48.0 164.6,44.8 171.4,42.3 178.2,52.2 185.0,44.1 191.7,50.3 198.5,46.8 205.3,48.8 212.1,51.3 218.9,50.1 225.7,47.1 232.5,46.9 239.2,45.6 246.0,49.3 252.8,51.9 259.6,48.7 266.4,47.2 273.2,45.0 280.0,44.6 286.8,47.6 293.5,43.2 300.3,46.7 307.1,46.1 313.9,47.1 320.7,48.2 327.5,48.6 334.3,46.2 341.0,50.9 347.8,45.6 354.6,43.7 361.4,48.2 368.2,41.9 375.0,44.2 381.8,49.1 388.6,43.9 395.3,44.0 402.1,48.2 408.9,44.4 415.7,45.5 422.5,45.2 429.3,45.6 436.1,49.2 442.9,44.8 449.6,45.7 456.4,44.1 463.2,45.2 470.0,45.6" fill="none" style="stroke:var(--ok);stroke-width:2.2"/>
+<polyline points="56.0,77.2 62.8,67.9 69.6,93.0 76.4,71.6 83.1,103.7 89.9,55.9 96.7,59.8 103.5,59.0 110.3,46.8 117.1,54.3 123.9,52.6 130.7,51.2 137.4,53.9 144.2,51.0 151.0,68.2 157.8,55.9 164.6,50.6 171.4,50.2 178.2,44.4 185.0,47.1 191.7,50.6 198.5,45.1 205.3,47.6 212.1,54.7 218.9,49.7 225.7,47.0 232.5,51.2 239.2,54.9 246.0,47.2 252.8,47.5 259.6,46.7 266.4,49.9 273.2,51.0 280.0,48.3 286.8,49.5 293.5,48.0 300.3,46.5 307.1,47.8 313.9,46.5 320.7,48.9 327.5,45.6 334.3,47.5 341.0,45.8 347.8,47.2 354.6,45.7 361.4,56.0 368.2,47.7 375.0,48.7 381.8,44.5 388.6,45.9 395.3,50.2 402.1,47.0 408.9,47.8 415.7,46.6 422.5,46.0 429.3,51.5 436.1,46.7 442.9,46.5 449.6,48.2 456.4,48.9 463.2,46.8 470.0,49.4" fill="none" style="stroke:var(--warn);stroke-width:2.2"/>
+<text x="560" y="18" class="ct b">Box mistakes (lower is better)</text>
+<line x1="560" x2="975" y1="190.0" y2="190.0" class="gl"/>
+<text x="554" y="194.0" text-anchor="end" class="ct">0.6</text>
+<line x1="560" x2="975" y1="151.0" y2="151.0" class="gl"/>
+<text x="554" y="155.0" text-anchor="end" class="ct">0.8</text>
+<line x1="560" x2="975" y1="112.0" y2="112.0" class="gl"/>
+<text x="554" y="116.0" text-anchor="end" class="ct">1.0</text>
+<line x1="560" x2="975" y1="73.0" y2="73.0" class="gl"/>
+<text x="554" y="77.0" text-anchor="end" class="ct">1.2</text>
+<line x1="560" x2="975" y1="34.0" y2="34.0" class="gl"/>
+<text x="554" y="38.0" text-anchor="end" class="ct">1.4</text>
+<text x="560.0" y="206" text-anchor="middle" class="ct">1</text>
+<text x="621.2" y="206" text-anchor="middle" class="ct">10</text>
+<text x="689.3" y="206" text-anchor="middle" class="ct">20</text>
+<text x="757.3" y="206" text-anchor="middle" class="ct">30</text>
+<text x="825.3" y="206" text-anchor="middle" class="ct">40</text>
+<text x="893.4" y="206" text-anchor="middle" class="ct">50</text>
+<text x="961.4" y="206" text-anchor="middle" class="ct">60</text>
+<text x="768" y="222" text-anchor="middle" class="ct">epoch</text>
+<line x1="770.9" x2="770.9" y1="34" y2="190" class="mk"/>
+<text x="774.9" y="45" class="ct b">saved: epoch 32</text>
+<polyline points="560.0,91.5 566.8,97.8 573.6,94.9 580.4,94.6 587.2,102.4 594.0,104.4 600.8,110.4 607.6,108.8 614.4,113.6 621.2,116.9 628.0,117.9 634.8,120.6 641.6,121.8 648.4,124.2 655.2,123.0 662.0,125.2 668.9,128.7 675.7,129.8 682.5,133.0 689.3,135.8 696.1,134.7 702.9,138.1 709.7,139.1 716.5,139.4 723.3,141.7 730.1,143.9 736.9,143.4 743.7,142.5 750.5,147.2 757.3,146.2 764.1,147.5 770.9,149.9 777.7,150.2 784.5,152.0 791.3,153.9 798.1,152.1 804.9,154.6 811.7,155.3 818.5,156.3 825.3,157.1 832.1,158.6 838.9,159.2 845.7,160.7 852.5,160.1 859.3,161.9 866.1,162.6 873.0,162.2 879.8,163.6 886.6,165.1 893.4,164.7 900.2,165.7 907.0,165.1 913.8,167.9 920.6,169.3 927.4,169.7 934.2,169.6 941.0,171.0 947.8,170.2 954.6,172.3 961.4,172.9 968.2,173.5 975.0,173.6" fill="none" style="stroke:var(--info);stroke-width:2.2"/>
+<polyline points="560.0,37.2 566.8,25.0 573.6,56.9 580.4,73.7 587.2,93.7 594.0,75.8 600.8,82.9 607.6,94.6 614.4,82.3 621.2,92.0 628.0,79.9 634.8,75.9 641.6,67.7 648.4,92.2 655.2,81.8 662.0,80.0 668.9,86.4 675.7,92.3 682.5,97.0 689.3,115.1 696.1,115.7 702.9,109.9 709.7,96.1 716.5,121.5 723.3,120.2 730.1,126.6 736.9,132.2 743.7,107.8 750.5,127.9 757.3,134.6 764.1,118.4 770.9,143.3 777.7,126.7 784.5,124.9 791.3,127.1 798.1,140.6 804.9,136.4 811.7,129.8 818.5,138.2 825.3,139.2 832.1,138.3 838.9,131.3 845.7,143.1 852.5,137.4 859.3,141.9 866.1,139.4 873.0,133.6 879.8,137.9 886.6,133.3 893.4,136.7 900.2,141.7 907.0,139.8 913.8,138.5 920.6,139.1 927.4,139.8 934.2,136.7 941.0,140.3 947.8,140.1 954.6,142.1 961.4,138.5 968.2,144.5 975.0,142.5" fill="none" style="stroke:var(--warn);stroke-width:2.2"/>
+<rect x="50" y="240" width="14" height="4" style="fill:var(--info)"/><text x="70" y="246" class="ct">mAP@50</text><rect x="168" y="240" width="14" height="4" style="fill:var(--todo)"/><text x="188" y="246" class="ct">mAP@50-95</text><rect x="286" y="240" width="14" height="4" style="fill:var(--ok)"/><text x="306" y="246" class="ct">precision</text><rect x="404" y="240" width="14" height="4" style="fill:var(--warn)"/><text x="424" y="246" class="ct">recall</text><rect x="560" y="240" width="14" height="4" style="fill:var(--info)"/><text x="580" y="246" class="ct">training photos</text><rect x="700" y="240" width="14" height="4" style="fill:var(--warn)"/><text x="720" y="246" class="ct">validation photos</text>
+</svg></div>
+    <div class="grid g2">
+      <div class="callout info"><b>Left: scores climb, then flatten.</b> mAP@50 goes from 0.93 at epoch 1 to 0.99 at epoch 18. The strict score mAP@50-95 keeps rising from 0.56 to 0.75: the boxes get tighter.</div>
+      <div class="callout info"><b>Right: training keeps falling, validation flattens.</b> After about epoch 35 the validation line stops improving while the training line keeps dropping. That is the start of overfitting, and it is why we keep the epoch-32 weights, not the last ones.</div>
+      <div class="callout ok"><b>Which epoch is saved?</b> Epoch 32, chosen by a mix: 10% mAP@50 + 90% mAP@50-95. That is why it is not the epoch with the highest mAP@50 (epoch 18).</div>
+      <div class="callout"><b>Why it stopped at epoch 62.</b> Early stopping: 30 epochs passed with no gain after epoch 32, so training ended.</div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Left chart: four lines, higher is better. Right chart: two lines, lower is better, and the gap that opens after the dashed line is the start of overfitting. The dashed line marks the epoch we saved. Make one point clearly: we did not save the highest mAP at 50. We save by a blend that rewards tight boxes, because the plate reader later needs tight crops. And training stopped on its own after 30 epochs without improvement.</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="Every column in the training file">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results · the helmet run, real numbers</div>
+    <h2>Every column in the training file</h2>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>Column</th><th>What it measures</th><th class="num">Epoch 1</th><th class="num">Epoch 32 (saved)</th><th>Good direction</th></tr></thead>
+      <tbody>
+<tr><td class="mono">epoch</td><td>One full pass over all the training photos.</td><td class="num">1</td><td class="num"><b>32</b></td><td>counts up</td></tr>
+<tr><td class="mono">time</td><td>Seconds since this run started.</td><td class="num">221</td><td class="num"><b>2220</b></td><td>counts up</td></tr>
+<tr><td class="mono">train/box_loss</td><td>How far the drawn boxes are from the true boxes, on training photos.</td><td class="num">1.105</td><td class="num"><b>0.806</b></td><td>down</td></tr>
+<tr><td class="mono">train/cls_loss</td><td>How wrong the class is (with or without helmet), on training photos.</td><td class="num">1.712</td><td class="num"><b>0.432</b></td><td>down</td></tr>
+<tr><td class="mono">train/dfl_loss</td><td>How blurry the box edges are. Short for distribution focal loss.</td><td class="num">1.097</td><td class="num"><b>0.979</b></td><td>down</td></tr>
+<tr><td class="mono">metrics/precision(B)</td><td>Of the boxes drawn, the share that are right. We call it trust.</td><td class="num">0.898</td><td class="num"><b>0.958</b></td><td>up</td></tr>
+<tr><td class="mono">metrics/recall(B)</td><td>Of the real objects, the share that were found. We call it coverage.</td><td class="num">0.862</td><td class="num"><b>0.949</b></td><td>up</td></tr>
+<tr><td class="mono">metrics/mAP50(B)</td><td>Overall score when a box counts if it overlaps the truth by 50%.</td><td class="num">0.934</td><td class="num"><b>0.978</b></td><td>up</td></tr>
+<tr><td class="mono">metrics/mAP50-95(B)</td><td>The same, averaged from 50% up to 95% overlap. Strict: rewards tight boxes.</td><td class="num">0.558</td><td class="num"><b>0.762</b></td><td>up</td></tr>
+<tr><td class="mono">val/box_loss</td><td>Box mistakes on validation photos. The model never learns from these.</td><td class="num">1.383</td><td class="num"><b>0.839</b></td><td>down</td></tr>
+<tr><td class="mono">val/cls_loss</td><td>Class mistakes on validation photos.</td><td class="num">1.294</td><td class="num"><b>0.391</b></td><td>down</td></tr>
+<tr><td class="mono">val/dfl_loss</td><td>Edge mistakes on validation photos.</td><td class="num">1.180</td><td class="num"><b>0.979</b></td><td>down</td></tr>
+<tr><td class="mono">lr/pg0, pg1, pg2</td><td>Learning rate: the step size, for three groups of weights (group 0 shown). Small at first (warm-up), then it decays.</td><td class="num">0.0006</td><td class="num"><b>0.0012</b></td><td>rises then falls</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">"(B)" means the box (detection) task. The file is <code>training_lab/runs/&lt;model&gt;/&lt;run&gt;/results.csv</code>, one row per epoch, written by Ultralytics. Our Training Lab and Studio charts read it live.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Go down the column names in three groups. Losses are mistakes, lower is better: box, class, edge. Metrics are scores, higher is better: precision, recall, mAP. The val losses are the same mistakes on photos the model never learns from, so they tell us if it is memorising. The last row is the learning rate, only for people who ask.</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="Results so far">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results</div>
+    <h2>Results so far</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Model</th><th>Data it learned from</th><th class="num">mAP@50</th><th class="num">mAP@50-95</th><th class="num">Trust (precision)</th><th class="num">Coverage (recall)</th><th>Epochs</th></tr></thead>
+      <tbody>
+        <tr><td><b>Helmet</b></td><td>Roboflow helmet set (stock-style photos of riders)</td><td class="num">0.978</td><td class="num">0.762</td><td class="num">96%</td><td class="num">95%</td><td>saved epoch 32 (stopped at 62)</td></tr>
+        <tr><td><b>Cabin</b> (windshield, seatbelt, phone)</td><td>Front-view car photos with Arabic-script plates</td><td class="num">0.788</td><td class="num">0.628</td><td class="num">96%</td><td class="num">78%</td><td>saved epoch 70 of 100</td></tr>
+        <tr><td><b>Plate v1</b></td><td>Roboflow plate set (Vietnamese parking-gate footage)</td><td class="num">0.765</td><td class="num">0.333</td><td class="num">78%</td><td class="num">74%</td><td>saved epoch 82 of 100</td></tr>
+        <tr><td><b>Vehicles</b> (adds person, tricycle)</td><td>Public vehicle sets, mixed countries and stock photos</td><td class="num" colspan="4"><span class="chip info">retraining: epoch 19 of 30, mAP@50 0.67 so far</span></td><td>30</td></tr>
+      </tbody>
+    </table></div>
+    <div class="bars">
+      <div class="bar-row"><span>Helmet</span><div class="bar-track"><div class="bar-fill ok" style="width:97.8%"></div><div class="bar-target" style="left:85%"></div></div><span class="val">0.98</span></div>
+      <div class="bar-row"><span>Cabin</span><div class="bar-track"><div class="bar-fill warn" style="width:78.8%"></div><div class="bar-target" style="left:80%"></div></div><span class="val">0.79</span></div>
+      <div class="bar-row"><span>Plate v1</span><div class="bar-track"><div class="bar-fill bad" style="width:76.5%"></div><div class="bar-target" style="left:90%"></div></div><span class="val">0.77</span></div>
+    </div>
+    <p class="muted small">Black marker = target from the training config (helmet 0.85, cabin 0.80, plate 0.90). The saved epoch is the one with the best blend of 10% mAP@50 and 90% mAP@50-95, so it is not always the epoch with the highest mAP@50.</p>
+    <div class="callout bad"><b>What these numbers are.</b> They are scores on each dataset's own validation split, the same split used to pick the best epoch, and the photos come from public sets, not from Zamboanga. They show the models learn their task. They are not field accuracy. The held-out test split and our own footage are still to be run.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> Read the callout aloud. Then say what you can claim: the helmet model learns its task well, the cabin model is just under its 0.80 target with good trust but misses about a fifth of cases, and the plate model is the weak link, which the data slides explain. Do not say "99% accurate".</aside>
+</section>
+
+<section class="slide" data-part="4 · Models and results" data-title="The learning loop">
+  <div class="inner">
+    <div class="eyebrow">4 · Models and results</div>
+    <h2>The learning loop: mistakes become training data</h2>
+    <div class="flow">
+      <div class="step"><h3>1 · Analyze</h3><p>Run a clip in the Forensic Analyzer</p></div><span class="arrow">→</span>
+      <div class="step"><h3>2 · Review</h3><p>Confirm, reject or correct the plate</p></div><span class="arrow">→</span>
+      <div class="step sec"><h3>3 · Collect</h3><p>Harvest tool copies uncertain and rejected pictures with the model's own boxes</p></div><span class="arrow">→</span>
+      <div class="step sec"><h3>4 · Check</h3><p>One picture at a time: Enter = box is right, drag = draw, N = nothing here</p></div><span class="arrow">→</span>
+      <div class="step"><h3>5 · Train</h3><p>Accept into the dataset, retrain, deploy</p></div><span class="arrow">→</span>
+      <div class="step out"><h3>6 · Benchmark</h3><p>Same clips, compare against the previous model</p></div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Situation in a ticket</th><th>Model that learns</th><th>Question the reviewer answers</th></tr></thead>
+      <tbody>
+        <tr><td>"No plate" ticket</td><td>Plate</td><td>Is a plate visible? Draw it.</td></tr>
+        <tr><td>Plate read, ticket confirmed</td><td>Plate</td><td>Is the box right?</td></tr>
+        <tr><td>"No helmet" ticket</td><td>Helmet</td><td>Box each rider: with or without helmet</td></tr>
+        <tr><td>Seatbelt, phone or mirror ticket</td><td>Cabin</td><td>Box what you can see</td></tr>
+        <tr><td>Plate text corrected</td><td>Plate reader (OCR)</td><td>Corrected string saved with the crop</td></tr>
+        <tr><td>Merge or "different car"</td><td>Car matcher (ReID)</td><td>Same vehicle or not</td></tr>
+        <tr><td>Zone-based violation rejected</td><td>None (rule settings)</td><td>Shown as an approve/reject rate to tune thresholds</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">Safeguards: benchmark clips can be protected from harvesting, frames of one car stay on the same side of the train/validation split, the test split is never written to, and nothing is added to a dataset without a human check.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> This answers "how will accuracy improve beyond public data". Each round the model is trained on the exact mistakes it makes on our own cameras. Source: training_lab/harvest_tool/README.md.</aside>
+</section>
+
+<!-- ───── EVALUATION & PLAN ───── -->
+
+<section class="slide" data-part="5 · Proving it works" data-title="Evaluation plan">
+  <div class="inner">
+    <div class="eyebrow">5 · How we will prove it works</div>
+    <h2>Evaluation plan <span class="chip todo">runner not built yet</span></h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Protocol</h3>
+        <ol class="list">
+          <li><b>Clip registry:</b> for each clip, store the drawn zones, the expected events and the pass criteria.</li>
+          <li><b>Ground truth:</b> two people count the violations independently; disagreements are settled and recorded.</li>
+          <li><b>Two sets of clips:</b> tuning clips (thresholds may be adjusted) and held-out test clips (touched once).</li>
+          <li><b>Run</b> with fixed settings and score each event: true positive, false positive, false negative.</li>
+          <li><b>Report</b> precision, recall, logging accuracy, with confidence intervals and a failure analysis.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h3>Comparisons</h3>
+        <ul>
+          <li><b>Detectors:</b> YOLOv8n versus YOLO11n versus YOLO26n on identical clips and rules (all three are already supported).</li>
+          <li><b>Ablations:</b> with and without plate enhancement; DeepSORT versus ByteTrack; bottom-40% versus whole-vehicle plate search; stock versus fine-tuned specialist.</li>
+          <li><b>Detector level:</b> mAP@50 on held-out labelled frames from our own footage.</li>
+          <li><b>Plate reading:</b> exact-match and character-level accuracy, reported separately from plate detection.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Metric</th><th>Definition</th></tr></thead>
+      <tbody>
+        <tr><td><b>Precision</b></td><td>Of the tickets raised, the share that were real violations</td></tr>
+        <tr><td><b>Recall</b></td><td>Of the real violations in the clip, the share that got a ticket</td></tr>
+        <tr><td><b>False positive / negative rate</b></td><td>Wrong tickets, and missed violations, reported separately as the thesis requires</td></tr>
+        <tr><td><b>Logging accuracy</b></td><td>Ticket has the right violation type, right vehicle, right plate and a usable evidence frame</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <aside class="notes"><b>SAY</b> This slide is your answer to "how will you know it works". The honest status is that the runner and registry are the next thing to build; the scripted rule tests and the model scores are the groundwork. Ask the panel how many events per violation they consider enough.</aside>
+</section>
+
+<section class="slide" data-part="5 · Proving it works" data-title="Limits and risks">
+  <div class="inner">
+    <div class="eyebrow">6 · Limits, risks and the plan</div>
+    <h2>What we cannot claim yet</h2>
+    <div class="grid g2">
+      <div class="card"><h3>Evidence</h3><ul>
+        <li>No benchmark on field footage yet <span class="chip bad">gap</span></li>
+        <li>Scores are validation-split numbers; the test split is unused <span class="chip warn">to run</span></li>
+        <li>Helmet and cabin trained at 640 px, deployed at 320 px <span class="chip warn">re-validate</span></li>
+      </ul></div>
+      <div class="card"><h3>Data</h3><ul>
+        <li>No training photo is known to be from Zamboanga <span class="chip bad">gap</span></li>
+        <li>Plate model has probably never seen a Philippine plate <span class="chip bad">gap</span></li>
+        <li>No public data for tinted windows or motorcycle mirrors <span class="chip bad">own labels needed</span></li>
+      </ul></div>
+      <div class="card"><h3>System</h3><ul>
+        <li>App feeds models differently from training; fix queued <span class="chip warn">queued</span></li>
+        <li>Signal-light check is a heuristic and cannot see hand signals, which are legal (RA 4136 §44) <span class="chip warn">needs review</span></li>
+        <li>Live camera setup lacks the new violations <span class="chip todo">planned</span></li>
+      </ul></div>
+      <div class="card"><h3>Outcome</h3><ul>
+        <li>Tickets do not reach owners: users are keyed by driver's licence and there is no plate-to-owner registry <span class="chip todo">planned</span></li>
+        <li>Rules assume a fixed camera view; thresholds need per-site tuning <span class="chip info">by design</span></li>
+      </ul></div>
+    </div>
+    <div class="grid g2">
+      <div class="callout ok"><b>Safe to say.</b> The pipeline is built end to end. Each violation has a tested rule. Three specialists are trained and the helmet model scores 0.98 mAP@50 on its validation split. We found and measured our own failure modes.</div>
+      <div class="callout bad"><b>Avoid saying.</b> "99% accurate", "works on Philippine roads", "ready for deployment", "detects all 13 violations" without the qualifier that field measurement is pending.</div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Say the left column before they ask. Panels reward a candidate who lists their own weaknesses with a plan attached.</aside>
+</section>
+
+<section class="slide" data-part="5 · Proving it works" data-title="Roadmap">
+  <div class="inner">
+    <div class="eyebrow">6 · Limits, risks and the plan</div>
+    <h2>Roadmap</h2>
+    <div class="grid g3">
+      <div class="card"><h3>Now</h3><ul>
+        <li>Fix the model input path: RGB, letterbox, whole-vehicle plate search, NMS on specialist outputs</li>
+        <li>Finish the vehicle-detector retrain</li>
+        <li>Re-validate helmet and cabin at 320 px; run the test split once</li>
+        <li>Commit and document the work since Oct 3</li>
+      </ul></div>
+      <div class="card"><h3>Next</h3><ul>
+        <li>Record or collect Zamboanga clips with ground truth for every violation</li>
+        <li>Build the benchmark runner and clip registry</li>
+        <li>Harvest and label local plates, retrain the plate model</li>
+        <li>Compare YOLOv8n, YOLO11n, YOLO26n</li>
+      </ul></div>
+      <div class="card"><h3>Before the defense</h3><ul>
+        <li>Label tinted windows and motorcycle mirrors from local footage</li>
+        <li>Plate-to-owner registry so a confirmed ticket reaches the owner</li>
+        <li>New violations in the live camera wizard</li>
+        <li>Final tables: per-violation precision, recall, false alarms, misses</li>
+      </ul></div>
+    </div>
+    <div class="callout">Dependency to watch: everything in "Next" needs footage with known ground truth. That is the real critical path, not code.</div>
+  </div>
+  <aside class="notes"><b>SAY</b> Keep it to "now, next, before the defense". If asked for dates, give them after you confirm the footage plan with the panel; the footage is the bottleneck.</aside>
+</section>
+
+<!-- ───── QUESTIONS ───── -->
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Questions: data and validity">
+  <div class="inner">
+    <div class="eyebrow">7 · Questions to expect · data and validity</div>
+    <h2>Data and validity</h2>
+    <div class="qa">
+      <div class="q"><div class="qt"><span>1 · Are your training and test sets really separate?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">Each public set keeps its own split, and augmented copies are grouped by source photo before checking. We found identical photos on both sides in two sets and moved them to training; the two plate sets share none (0 of 1,669 by visual fingerprint).</p>
+        <p class="qa-a">A limit to say openly: validation and test come from the same sources as training, so they measure "the same kind of photo", not Zamboanga. That is why a field benchmark is the next step.</p></div>
+      <div class="q"><div class="qt"><span>2 · None of your photos are from Zamboanga. Why would results transfer?</span><span class="chip bad">main risk</span></div>
+        <p class="qa-a">They may not, and we say so. The public data teaches the task. The field benchmark measures the gap, and the harvest loop adds local examples every round. The gap between public-split score and field score is itself a result we will report.</p></div>
+      <div class="q"><div class="qt"><span>3 · Who labelled the data, and how good are the labels?</span><span class="chip warn">partial</span></div>
+        <p class="qa-a">Public labels are community-made and unverified. We sampled them and rejected one set outright for unusable "no helmet" labels. Labels we add ourselves are checked by a person, picture by picture. For test clips, two people count events independently.</p></div>
+      <div class="q"><div class="qt"><span>4 · Why is the plate model your weakest, and what is its data?</span><span class="chip warn">known</span></div>
+        <p class="qa-a">Both public plate sets we hold look like grayscale parking-gate footage with Vietnamese plates; Philippine sets on Roboflow are small (63 to 480 photos). We also measured that the app feeds the model badly (7% found versus 85% when fed correctly). Plan: fix the input path, then retrain with plates harvested from our own clips.</p></div>
+      <div class="q"><div class="qt"><span>5 · You list tinted windows and side mirrors, but have no data for them.</span><span class="chip warn">scope</span></div>
+        <p class="qa-a">Correct. Those two checks stay off until we label local footage. If there is not enough time, the thesis reports them as "rule implemented, model pending data" rather than claiming a score.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Answer 2 and 4 first and plainly. Their honesty is what the panel is testing. Each answer here ends in a measured fact or a concrete next step.</aside>
+</section>
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Questions: method">
+  <div class="inner">
+    <div class="eyebrow">7 · Questions to expect · method</div>
+    <h2>Method</h2>
+    <div class="qa">
+      <div class="q"><div class="qt"><span>6 · Why a cascade of specialists instead of one detector with every class?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">Smaller models on small crops are fast on a laptop GPU, can be retrained and compared one at a time, and avoid class imbalance across very different objects (plates versus helmets).</p>
+        <p class="qa-a">Trade-off: errors compound (a missed vehicle means no helmet check). We will test it with an ablation against a single multi-class model if time allows.</p></div>
+      <div class="q"><div class="qt"><span>7 · Why YOLOv8n, and why compare YOLO11 and YOLO26?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">The nano size runs in real time on a 6 GB GPU. The three generations are all supported in the pipeline, so the comparison changes only the detector, with identical clips and rules.</p></div>
+      <div class="q"><div class="qt"><span>8 · Most violations are geometry rules. Where is the AI?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">Detection, tracking appearance, plate reading, helmet and cabin checks are learned. The violations themselves are traffic definitions: "counterflow" is, by definition, movement against the legal direction, so a deterministic rule on a learned track is the correct tool. Thresholds are tuned on clips and the rules are tested with scripted tracks.</p></div>
+      <div class="q"><div class="qt"><span>9 · How do you deal with the same car getting several IDs?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">We found a real bug (box format sent to DeepSORT) that produced duplicate tickets, fixed it, and added a stitcher that rejoins broken tracks. Reviewers can merge or separate cars, and those decisions become ReID data. ID switches per clip will be reported in the benchmark.</p></div>
+      <div class="q"><div class="qt"><span>10 · How do you control false positives?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">Four layers: votes over several looks, fair-look rules (size, class, direction), end-of-track decisions, and human review. Rule tests include false-positive traps such as a car waiting on a stop line.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> The strongest answer here is 8. Do not apologise for rules: say that a definition is the right place for a rule and that the learning sits where perception is hard.</aside>
+</section>
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Questions: evaluation (1 of 2)">
+  <div class="inner">
+    <div class="eyebrow">7 · Questions to expect · evaluation</div>
+    <h2>Evaluation (1 of 2)</h2>
+    <div class="qa"><div class="q"><div class="qt"><span>11 · What is your accuracy?</span><span class="chip warn">careful</span></div>
+        <p class="qa-a">Per model, on each dataset's validation split: helmet 0.98 mAP@50, cabin 0.79, plate v1 0.77. Those show the models learn their task; they are not field accuracy. The field numbers come from the benchmark (precision, recall, false alarms, misses per violation).</p></div>
+      <div class="q"><div class="qt"><span>12 · How many test events are enough?</span><span class="chip todo">ask the panel</span></div>
+        <p class="qa-a">Proposal: at least 30 real events per violation where footage allows, reported with confidence intervals (Wilson). Where fewer exist, we state the count and the wide interval instead of a single number.</p></div>
+      <div class="q"><div class="qt"><span>13 · How is ground truth established?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">A clip registry stores the zones, the expected events and pass criteria. Two people count events independently; disagreements are resolved and logged.</p></div>
+      </div>
+  </div>
+  <aside class="notes"><b>SAY</b> On 11, repeat the sentence "not field accuracy" in your own words. On 12, this is where you ask for their guidance rather than defend a number.</aside>
+</section>
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Questions: evaluation (2 of 2)">
+  <div class="inner">
+    <div class="eyebrow">7 · Questions to expect · evaluation</div>
+    <h2>Evaluation (2 of 2)</h2>
+    <div class="qa"><div class="q"><div class="qt"><span>14 · Why mAP@50, and what do mAP@50-95 values say?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">mAP@50 is the thesis metric. We also record mAP@50-95 (helmet 0.76, cabin 0.63, plate 0.33): the low plate value says its boxes are loose, which matters because OCR needs a tight crop.</p></div>
+      <div class="q"><div class="qt"><span>15 · Does it run in real time?</span><span class="chip warn">to measure</span></div>
+        <p class="qa-a">Scheduling changes gave about a 3x FPS gain, and specialists run on every 5th inference frame. Final frames-per-second at 720p on the RTX 3050 with all checks on will be measured and reported. The study itself uses recorded footage.</p></div>
+      <div class="q"><div class="qt"><span>16 · Will it hold up across lighting, angle and resolution?</span><span class="chip warn">unknown yet</span></div>
+        <p class="qa-a">Working clips already span 1080p to 4K and several camera positions. The benchmark will tag each clip (day or night, angle, resolution) so failures can be grouped. Diagonal views are a known weak point for the plate step.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> On 14, say plainly: the plate boxes are loose, and the reader needs tight crops. On 15, give the 3x gain but do not promise a frame rate yet. On 16, name diagonal views as a known weak point.</aside>
+</section>
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Questions: scope and ethics (1 of 2)">
+  <div class="inner">
+    <div class="eyebrow">7 · Questions to expect · scope, ethics, deployment</div>
+    <h2>Scope, ethics and deployment (1 of 2)</h2>
+    <div class="qa"><div class="q"><div class="qt"><span>17 · Is this legally enforceable? Who is liable for a wrong ticket?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">Out of scope by design. The system flags, a human operator confirms, rejects or corrects, and every flag keeps its evidence. The legal basis for non-contact apprehension is not part of this thesis.</p>
+        <p class="qa-a">Context: the policy has been contested in court. The Supreme Court restrained it in 2022, partly lifted that for the MMDA in 2025, and dismissed the petitions as moot in 2026 without ruling on validity (see the legal context slide).</p></div>
+      <div class="q"><div class="qt"><span>18 · How do you handle privacy under RA 10173?</span><span class="chip warn">partial</span></div>
+        <p class="qa-a">Footage is recorded and pre-existing, personal data is masked in the review screens, and access is limited. Still open: a formal retention rule for evidence photos and a written consent statement for the clips.</p></div>
+      <div class="q"><div class="qt"><span>19 · Fourteen violations is a lot. What would you cut?</span><span class="chip todo">ask the panel</span></div>
+        <p class="qa-a">Proposed tiers. Core: helmet, no plate, counterflow, illegal parking, illegal turn, disregarding signs. Second: overloading, red light, seatbelt, pedestrian lane. Stretch: signal light, swerving, missing mirror (no data), restricted lane.</p></div>
+      </div>
+  </div>
+  <aside class="notes"><b>SAY</b> 19 is a chance to get the panel to shrink your scope for you. Offer the tiers and let them choose.</aside>
+</section>
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Questions: scope and ethics (2 of 2)">
+  <div class="inner">
+    <div class="eyebrow">7 · Questions to expect · scope, ethics, deployment</div>
+    <h2>Scope, ethics and deployment (2 of 2)</h2>
+    <div class="qa"><div class="q"><div class="qt"><span>20 · What is new here?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">Not a new network. The contribution is a complete, reviewable pipeline for Philippine road classes (tricycle, motorcycle-heavy scenes), a documented human-in-the-loop learning cycle, and an evaluation on local footage with its failure modes written down.</p></div>
+      <div class="q"><div class="qt"><span>21 · Can it run on a live camera?</span><span class="chip ok">ready</span></div>
+        <p class="qa-a">The architecture accepts RTSP and HLS streams and was run on them during development. Live deployment is outside the tested scope, as the thesis states.</p></div>
+      <div class="q"><div class="qt"><span>22 · Does a confirmed ticket reach the vehicle owner?</span><span class="chip bad">not yet</span></div>
+        <p class="qa-a">No. Users are keyed by driver's licence and there is no plate-to-owner registry, so a plate never resolves to a person. Planned as a small registry plus notification on confirm; the review screen no longer implies otherwise.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> On 20, say the contribution is the pipeline, the review loop and the local evaluation, not a new network. On 22, answer "not yet" directly and give the plan.</aside>
+</section>
+
+<section class="slide" data-part="7 · Questions to expect" data-title="Decisions needed">
+  <div class="inner">
+    <div class="eyebrow">What I need from you today</div>
+    <h2>Decisions to ask for</h2>
+    <ol class="list" style="font-size:1.1em; line-height:1.8">
+      <li><b>Evaluation protocol.</b> How many events per violation, and which split between tuning clips and test clips, count as enough?</li>
+      <li><b>Data.</b> Are public datasets plus our own harvested local data acceptable, with licences cited? Do we need more local data before the benchmark?</li>
+      <li><b>Scope.</b> Which violations are core, and which may be reported as "rule only" or "pending data"? Is restricted lane to stay in?</li>
+      <li><b>Footage.</b> Which sites and how many clips are enough, and what consent or permission statement do you want attached?</li>
+      <li><b>Comparison set.</b> Are YOLOv8n, YOLO11n and YOLO26n enough, or should larger variants or a non-YOLO baseline be added?</li>
+      <li><b>Timeline.</b> Dates for the benchmark and the plate retrain against the defense schedule.</li>
+    </ol>
+  </div>
+  <aside class="notes"><b>SAY</b> End on these. Write the answers down in the meeting; they become the evaluation chapter's design.</aside>
+</section>
+
+<!-- ───── APPENDIX ───── -->
+
+<section class="slide" data-part="Appendix" data-title="A · Dataset ledger">
+  <div class="inner">
+    <div class="eyebrow">Appendix A</div>
+    <h2>Dataset ledger (for citations)</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Dataset</th><th>Roboflow Universe address</th><th>Ver · date</th><th class="num">Export</th><th>Used as</th></tr></thead>
+      <tbody>
+        <tr><td>Helmet Detection · flashys-workspace</td><td class="mono">universe.roboflow.com/flashys-workspace/helmet-detection-fsrgu/dataset/2</td><td>v2 · 2026-05-15</td><td class="num">5,276</td><td>Helmet model</td></tr>
+        <tr><td>ds (Last2-Traffic-violation) · mennaworkspace</td><td class="mono">universe.roboflow.com/mennaworkspace/ds-5cu4e/dataset/2</td><td>v2 · 2026-02-19</td><td class="num">10,117</td><td>Cabin model</td></tr>
+        <tr><td>tpnew · skripsinew</td><td class="mono">universe.roboflow.com/skripsinew/tpnew/dataset/1</td><td>v1 · 2025-04-28</td><td class="num">455</td><td>Cabin model</td></tr>
+        <tr><td>v4 Best Philippine Vehicle Dataset · capstone-xgfsp</td><td class="mono">universe.roboflow.com/capstone-xgfsp/v4-best-philippine-vehicle-datasest-11ztu/dataset/1</td><td>v1</td><td class="num">23,804</td><td>Vehicle detector</td></tr>
+        <tr><td>Philippine Plate and Vehicle · research-3wj93</td><td class="mono">universe.roboflow.com/research-3wj93/philippine-plate-and-vehicle/dataset/3</td><td>v3 · 2024-09-07</td><td class="num">101</td><td>Vehicle detector</td></tr>
+        <tr><td>License Plate Detection · thesis-dzclp</td><td class="mono">universe.roboflow.com/thesis-dzclp/license-plate-detection-jy62w/dataset/1</td><td>v1 · 2024-11-02</td><td class="num">4,907</td><td>Plate detector</td></tr>
+        <tr><td>Original plate set</td><td><span class="chip warn">source not recorded</span></td><td>n/a</td><td class="num">about 3,290</td><td>Plate detector v1</td></tr>
+        <tr><td>Helmet Detector · jayz-workspace <b>(rejected)</b></td><td class="mono">universe.roboflow.com/jayz-workspace/helmet-detector-9rzmg/dataset/4</td><td>v4 · 2024-06-27</td><td class="num">6,608</td><td>Not used</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">All eight are listed by Roboflow as CC BY 4.0 except the original plate set, whose licence must be confirmed. Datasets were downloaded on the dates the files were created (Oct 2026) in YOLOv8 format.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Reference slide. Leave it up when someone asks "where exactly did that come from".</aside>
+</section>
+
+<section class="slide" data-part="Appendix" data-title="B · Class mapping">
+  <div class="inner">
+    <div class="eyebrow">Appendix B</div>
+    <h2>Class mapping: their labels to ours</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Our model</th><th>Our classes</th><th>Source classes used → ours</th><th>Dropped</th></tr></thead>
+      <tbody>
+        <tr><td>Helmet</td><td>rider_with_helmet, rider_without_helmet</td><td>Helmet → with helmet · No_helmet → without helmet</td><td>Motorcycle</td></tr>
+        <tr><td>Cabin</td><td>clear_window, tinted_window, seatbelt, driver_phone, side_mirror</td><td>car windshield, windshield → clear_window · seat-belt, seatbelt → seatbelt · using_mobile → driver_phone</td><td>un seat-belt, car_plate, vehicle, person-seatbelt, person-noseatbelt</td></tr>
+        <tr><td>Vehicles</td><td>motorcycle, car, bus, truck, person, tricycle</td><td>jeepney, e-jeepney → bus · pedestrian, person → person · semi-truck → truck · e-tricycle → tricycle</td><td>bicycle, bike, e-bike</td></tr>
+        <tr><td>Plate</td><td>license_plate</td><td>"0" → license_plate</td><td>none</td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">Missing in every public source: tinted_window and side_mirror. The mapping is kept in training_lab/configs/datasets_manifest.yaml and printed on every merge.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Useful for the question "why did you merge jeepney into bus". It keeps the class list short and the labels consistent with how the pipeline treats large vehicles.</aside>
+</section>
+
+<section class="slide" data-part="Appendix" data-title="C · Stack and reproducibility">
+  <div class="inner">
+    <div class="eyebrow">Appendix C</div>
+    <h2>Stack and reproducibility</h2>
+    <div class="grid g2">
+      <div class="tbl-wrap"><table><tbody>
+        <tr><th>Hardware</th><td>NVIDIA RTX 3050 Laptop GPU, 6 GB · Windows 11</td></tr>
+        <tr><th>Training</th><td>Ultralytics 8.4 · PyTorch 2.5.1 (CUDA 12.1) · Python 3.12</td></tr>
+        <tr><th>Inference</th><td>ONNX Runtime GPU (pinned for CUDA 12) · CPU fallback</td></tr>
+        <tr><th>Tracking</th><td>DeepSORT (vendored), ByteTrack as alternative</td></tr>
+        <tr><th>Plate reading</th><td>EasyOCR 1.7 with Real-ESRGAN enhancement, two-pass voting</td></tr>
+        <tr><th>Backend</th><td>FastAPI · SQLite · FFmpeg (NVENC)</td></tr>
+        <tr><th>Apps</th><td>Flutter: dashboard, citizen app, visualizer</td></tr>
+      </tbody></table></div>
+      <div class="card">
+        <h3>Reproducing a result</h3>
+        <ul>
+          <li><code>training_lab/configs/datasets_manifest.yaml</code> and <code>scripts/fetch_datasets.py</code> rebuild the data.</li>
+          <li><code>training_lab/runs/&lt;model&gt;/&lt;run&gt;/</code> keeps settings and per-epoch scores.</li>
+          <li><code>training_lab/lab_tui.py</code> trains, pauses, resumes and deploys.</li>
+          <li>108 backend tests and 17 training-lab tests; violation rules are tested with scripted tracks.</li>
+          <li><code>docs/SESSION_LOG.md</code> is the dated record of every session.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> Use when asked "could someone reproduce this". The answer is yes for the data and the training; the field benchmark will add the clip registry.</aside>
+</section>
+
+<section class="slide" data-part="Appendix" data-title="D · Glossary">
+  <div class="inner">
+    <div class="eyebrow">Appendix D</div>
+    <h2>Glossary in plain words</h2>
+    <div class="grid g2">
+      <div class="card"><h3>mAP@50</h3><p class="small muted">How well boxes match real objects, counting a box correct if it overlaps the true box by at least half. 1.00 is perfect.</p></div>
+      <div class="card"><h3>mAP@50-95</h3><p class="small muted">The same, averaged over stricter overlaps up to 95%. Low values mean loose boxes.</p></div>
+      <div class="card"><h3>Precision ("trust")</h3><p class="small muted">Of the things the model flagged, how many were real.</p></div>
+      <div class="card"><h3>Recall ("coverage")</h3><p class="small muted">Of the real things, how many the model found.</p></div>
+      <div class="card"><h3>Validation versus test</h3><p class="small muted">Validation photos are checked during training and pick the best epoch. Test photos are kept for one final exam.</p></div>
+      <div class="card"><h3>Letterbox</h3><p class="small muted">Resizing a picture without stretching it, padding the empty sides, which is how the detectors were trained.</p></div>
+      <div class="card"><h3>ReID</h3><p class="small muted">A small model that tells whether two photos show the same vehicle, used to keep one ID per car.</p></div>
+      <div class="card"><h3>Transfer learning</h3><p class="small muted">Starting from a model that already learned everyday objects, then teaching it our classes.</p></div>
+    </div>
+  </div>
+  <aside class="notes"><b>SAY</b> For panel members outside computer vision.</aside>
+</section>
+
+<section class="slide" data-part="Appendix" data-title="E · Legal sources">
+  <div class="inner">
+    <div class="eyebrow">Appendix E</div>
+    <h2>Legal sources and where to read them</h2>
+    <div class="tbl-wrap dense"><table>
+      <thead><tr><th>Instrument</th><th>What it covers here</th><th>Where to read it</th></tr></thead>
+      <tbody>
+        <tr><td><b>RA 4136</b> Land Transportation and Traffic Code (1964)</td><td>Rules of the road: capacity, lights, speed, keep right, overtaking, signals, turns, parking, reckless driving, plates</td><td class="mono"><a href="https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html" target="_blank" rel="noopener">lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html</a></td></tr>
+        <tr><td><b>JAO 2014-01</b> Uniform schedule of fines (DOTC, LTO, MMDA and others; June 2, 2014; effective Jan 5, 2015)</td><td>Violation names used on tickets</td><td class="mono"><a href="https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/10/76966" target="_blank" rel="noopener">elibrary.judiciary.gov.ph/.../10/76966</a> (LTO memorandum)</td></tr>
+        <tr><td><b>RA 10054</b> Motorcycle Helmet Act of 2009; IRR JAO 2011-01</td><td>Helmet for driver and back rider; fines</td><td class="mono"><a href="https://issuances-library.senate.gov.ph/legislative-issuance/republic-act-no-10054" target="_blank" rel="noopener">issuances-library.senate.gov.ph</a></td></tr>
+        <tr><td><b>RA 8750</b> Seat Belts Use Act of 1999</td><td>Seatbelt for driver and front-seat occupants</td><td class="mono"><a href="https://chanrobles.com/republicacts/republicactno8750.html" target="_blank" rel="noopener">chanrobles.com/republicacts/republicactno8750.html</a></td></tr>
+        <tr><td><b>RA 10913</b> Anti-Distracted Driving Act (2016)</td><td>Phone and device use while driving</td><td class="mono"><a href="https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/70326" target="_blank" rel="noopener">elibrary.judiciary.gov.ph/.../2/70326</a></td></tr>
+        <tr><td><b>RA 10666</b> Children's Safety on Motorcycles Act (2015)</td><td>Child riders: safety conditions and fines</td><td class="mono"><a href="https://issuances-library.senate.gov.ph/legislative-issuance/republic-act-no-10666" target="_blank" rel="noopener">issuances-library.senate.gov.ph</a></td></tr>
+        <tr><td><b>RA 11235</b> Motorcycle Crime Prevention Act (2019), amended by <b>RA 12209</b> (May 9, 2025)</td><td>Motorcycle plates and penalties</td><td class="mono"><a href="https://lawphil.net/statutes/repacts/ra2019/ra_11235_2019.html" target="_blank" rel="noopener">lawphil.net/statutes/repacts/ra2019/ra_11235_2019.html</a></td></tr>
+        <tr><td><b>LTO AO AHS-2008-015</b> Rules for the use and operation of motorcycles</td><td>One back rider; required accessories such as mirrors</td><td class="mono"><a href="https://dev.lawyerly.ph/laws/55941" target="_blank" rel="noopener">dev.lawyerly.ph/laws/55941</a></td></tr>
+        <tr><td><b>RA 8749</b> Philippine Clean Air Act of 1999</td><td>Smoke belching</td><td class="mono"><a href="https://batasnatin.com/doctrine/political-ra-8749-clean-air-act-1999-framework" target="_blank" rel="noopener">batasnatin.com (RA 8749 framework)</a></td></tr>
+        <tr><td><b>DILG MC 2020-036</b> and <b>MC 2023-195</b></td><td>Tricycles and pedicabs on national highways</td><td class="mono"><a href="https://batasnatin.com/laws/mc-2023-195" target="_blank" rel="noopener">batasnatin.com/laws/mc-2023-195</a></td></tr>
+        <tr><td><b>Zamboanga City Ordinance 248</b> (Revised Traffic Code) and <b>Ordinance 185</b> (Tricycle Ordinance)</td><td>Parking, towing, tricycle rest days</td><td class="mono"><a href="https://zamboangacity.gov.ph" target="_blank" rel="noopener">zamboangacity.gov.ph</a> (city news and ordinance records)</td></tr>
+        <tr><td><b>NCAP court actions</b> (2022 TRO, 2025 partial lifting, 2026 dismissal)</td><td>Legal status of non-contact apprehension</td><td class="mono"><a href="https://www.philstar.com/headlines/2025/05/21/2444617/sc-partially-lifts-tro-no-contact-apprehension" target="_blank" rel="noopener">philstar.com (May 21, 2025)</a>, <a href="https://tribune.net.ph/2026/07/09/sc-dumps-ncap-traffic-cases" target="_blank" rel="noopener">tribune.net.ph (Jul 9, 2026)</a></td></tr>
+      </tbody>
+    </table></div>
+    <p class="muted small">RA 4136 sections were read from the lawphil text. Check news-quoted fines against the signed order, and prefer the Official Gazette or Supreme Court e-Library when citing.</p>
+  </div>
+  <aside class="notes"><b>SAY</b> Use this slide when asked for the exact reference. RA 4136 is the base. The JAO supplies the ticket violation names. The special laws cover helmet, seatbelt, phone, children and motorcycle plates. Local ordinances cover Zamboanga specifics.</aside>
+</section>
+
+</div><!-- /deck -->
+
+<style>
+.slide .notes { display: none; }
+</style>
+
+<div class="topbar">
+  <div class="brand"><b>HK</b><span>Huli-Kamote</span></div>
+  <div class="partlabel" id="partlabel"></div>
+  <button class="btn" id="btn-notes" aria-pressed="false" title="Speaker notes (N)">Notes</button>
+  <button class="btn" id="btn-grid" title="All slides (G)">All slides</button>
+  <button class="btn" id="btn-theme" title="Theme (T)">Theme</button>
+  <button class="btn" id="btn-full" title="Full screen (F)">Full screen</button>
+  <span class="counter" id="counter" aria-live="polite"></span>
+</div>
+
+<div class="notes-panel" id="notes" role="region" aria-label="Speaker notes"></div>
+
+<div class="overview" id="overview" role="dialog" aria-label="All slides">
+  <div class="ov-grid" id="ovgrid"></div>
+</div>
+
+<div class="rail">
+  <button class="navbtn" id="prev" aria-label="Previous slide">&#8249;</button>
+  <div class="road" id="road" aria-hidden="true"><div class="car" id="car"></div></div>
+  <button class="navbtn" id="next" aria-label="Next slide">&#8250;</button>
+</div>
+<div class="hint">Arrows move &middot; N notes &middot; G all slides &middot; T theme &middot; F full screen</div>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length;
+  var idx = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var partLabel = $('partlabel'), counter = $('counter'), car = $('car'), notesPanel = $('notes');
+  var prevBtn = $('prev'), nextBtn = $('next');
+
+  function safeGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  function clamp(n) { return Math.max(0, Math.min(total - 1, n)); }
+
+  function show(n) {
+    idx = clamp(n);
+    slides.forEach(function (s, i) { s.classList.toggle('is-active', i === idx); });
+    var s = slides[idx];
+    s.scrollTop = 0;
+    partLabel.textContent = s.getAttribute('data-part') + ' · ' + s.getAttribute('data-title');
+    counter.textContent = (idx + 1) + ' / ' + total;
+    car.style.left = (total > 1 ? (idx / (total - 1)) * 100 : 0) + '%';
+    document.querySelector('.hint').style.display = idx === 0 ? '' : 'none';
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = idx === total - 1;
+    var note = s.querySelector('.notes');
+    notesPanel.innerHTML = note ? note.innerHTML : '<b>SAY</b> No notes for this slide.';
+    try { history.replaceState(null, '', '#s' + (idx + 1)); } catch (e) {}
+    var items = document.querySelectorAll('.ov-item');
+    for (var i = 0; i < items.length; i++) items[i].classList.toggle('current', i === idx);
+  }
+
+  function next() { show(idx + 1); }
+  function prev() { show(idx - 1); }
+
+  function setNotes(on) {
+    document.body.classList.toggle('show-notes', on);
+    $('btn-notes').setAttribute('aria-pressed', on ? 'true' : 'false');
+    safeSet('hk-notes', on ? '1' : '0');
+  }
+  function setOverview(on) { document.body.classList.toggle('show-overview', on); }
+
+  // theme: system -> light -> dark
+  function applyTheme(t) {
+    var root = document.documentElement;
+    if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+    $('btn-theme').textContent = 'Theme: ' + (t === 'light' || t === 'dark' ? t : 'auto');
+  }
+  var theme = safeGet('hk-theme') || 'auto';
+  applyTheme(theme);
+  $('btn-theme').addEventListener('click', function () {
+    theme = theme === 'auto' ? 'light' : theme === 'light' ? 'dark' : 'auto';
+    safeSet('hk-theme', theme);
+    applyTheme(theme);
+  });
+
+  $('btn-notes').addEventListener('click', function () { setNotes(!document.body.classList.contains('show-notes')); });
+  $('btn-grid').addEventListener('click', function () { setOverview(!document.body.classList.contains('show-overview')); });
+  $('btn-full').addEventListener('click', function () {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen().catch(function () {});
+    } catch (e) {}
+  });
+  prevBtn.addEventListener('click', prev);
+  nextBtn.addEventListener('click', next);
+  $('road').addEventListener('click', function (ev) {
+    var r = this.getBoundingClientRect();
+    show(Math.round(((ev.clientX - r.left) / r.width) * (total - 1)));
+  });
+
+  // overview grid
+  var grid = $('ovgrid');
+  slides.forEach(function (s, i) {
+    var b = document.createElement('button');
+    b.className = 'ov-item';
+    b.type = 'button';
+    var n = document.createElement('span'); n.className = 'n'; n.textContent = String(i + 1).padStart(2, '0');
+    var t = document.createElement('b'); t.textContent = s.getAttribute('data-title');
+    var p = document.createElement('span'); p.className = 'part'; p.textContent = s.getAttribute('data-part');
+    b.appendChild(n); b.appendChild(t); b.appendChild(p);
+    b.addEventListener('click', function () { setOverview(false); show(i); });
+    grid.appendChild(b);
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    var k = ev.key;
+    if (k === 'ArrowRight' || k === 'PageDown' || (k === ' ' && !ev.shiftKey)) { ev.preventDefault(); next(); }
+    else if (k === 'ArrowLeft' || k === 'PageUp' || (k === ' ' && ev.shiftKey)) { ev.preventDefault(); prev(); }
+    else if (k === 'Home') { ev.preventDefault(); show(0); }
+    else if (k === 'End') { ev.preventDefault(); show(total - 1); }
+    else if (k === 'n' || k === 'N') setNotes(!document.body.classList.contains('show-notes'));
+    else if (k === 'g' || k === 'G') setOverview(!document.body.classList.contains('show-overview'));
+    else if (k === 't' || k === 'T') $('btn-theme').click();
+    else if (k === 'f' || k === 'F') $('btn-full').click();
+    else if (k === 'Escape') setOverview(false);
+  });
+
+  // swipe on touch screens
+  var x0 = null;
+  document.addEventListener('touchstart', function (e) { x0 = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (x0 === null) return;
+    var dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (Math.abs(dx) > 70) { dx < 0 ? next() : prev(); }
+  }, { passive: true });
+
+  window.addEventListener('hashchange', function () {
+    var m = /^#s(\d+)$/.exec(location.hash);
+    if (m && clamp(parseInt(m[1], 10) - 1) !== idx) show(parseInt(m[1], 10) - 1);
+  });
+
+  setNotes(safeGet('hk-notes') === '1');
+  var m0 = /^#s(\d+)$/.exec(location.hash);
+  show(m0 ? parseInt(m0[1], 10) - 1 : 0);
+})();
+</script>
+
+</body>
+</html>

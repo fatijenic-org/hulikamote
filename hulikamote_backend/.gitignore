@@ -1,0 +1,4 @@
+# Secrets: never commit these.
+# The Firebase service-account key was pushed once (commit 226dd8d), so it must be rotated;
+# the backend reads it from this path and falls back to mocked push notifications when it is missing.
+firebase-service-account.json

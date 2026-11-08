@@ -1,0 +1,75 @@
+{
+  "model": "helmet_specialist",
+  "applied": true,
+  "seconds": 160.3,
+  "classes": [
+    "rider_with_helmet",
+    "rider_without_helmet"
+  ],
+  "layout_moves": [],
+  "checked": 12210,
+  "kept": 12209,
+  "dropped": {
+    "duplicate": 1
+  },
+  "fixed_labels": 0,
+  "resaved_pictures": 0,
+  "issues_kept": {},
+  "images_per_split": {
+    "train": 10589,
+    "val": 923,
+    "test": 697
+  },
+  "eval_pictures_with_train_twin": {},
+  "boxes_per_class": {
+    "train": {
+      "rider_without_helmet": 8908,
+      "rider_with_helmet": 9462
+    },
+    "val": {
+      "rider_with_helmet": 873,
+      "rider_without_helmet": 984
+    },
+    "test": {
+      "rider_without_helmet": 790,
+      "rider_with_helmet": 800
+    }
+  },
+  "per_source": {
+    "edgevision_helmet": {
+      "train": 1885,
+      "val": 265,
+      "test": 230
+    },
+    "flashys_helmet": {
+      "train": 4837,
+      "val": 303,
+      "test": 101
+    },
+    "martinez_helmet": {
+      "train": 844,
+      "dropped": 1
+    },
+    "naratip_helmet": {
+      "train": 3023,
+      "val": 355,
+      "test": 366
+    }
+  },
+  "long_side_px": {
+    "min": 36,
+    "median": 640,
+    "max": 1280
+  },
+  "box_area_share": {
+    "p10": 0.00149,
+    "median": 0.01247,
+    "p90": 0.05222
+  },
+  "empty_pictures_kept": 0,
+  "eval_twins_before_first_cleaning": {
+    "val": 15,
+    "test": 8,
+    "approx": true
+  }
+}
