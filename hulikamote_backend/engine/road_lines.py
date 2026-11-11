@@ -40,6 +40,8 @@ DECODE_BUDGET = 9e9              # source pixels the decoder may chew through (a
 TOP_W, TOP_H = 1200, 1200        # size of the top view
 FAR_FRAC = 0.18                  # how far toward the horizon the top view reaches (share of the way from the bottom row)
 PAINT_THRESHOLD = 13.0           # grey levels a thin bright thing must stand out from its surroundings to count as paint
+PAINT_LEVELS = (0.7, 1.0, 1.4, 2.0, 3.0)   # how strict, as a multiple of PAINT_THRESHOLD: the most sensitive that still gives a clean picture is used
+MAX_PAINT_SHARE = 0.30           # more of the road than this "looks like paint" means joints, cracks or texture are being read as paint
 MIN_SAMPLES = 150                # fewer moving points than this and the road direction is not trusted
 
 
@@ -136,8 +138,22 @@ def _stabilise(greys: list[np.ndarray]) -> tuple[list[np.ndarray], float, float]
     ref_keys, ref_desc = orb.detectAndCompute(ref, None)
     matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     corners = np.float32([[0, 0], [w, 0], [w, h], [0, h]]).reshape(-1, 1, 2)
+
+    def align(frames: list[np.ndarray]) -> tuple[list[np.ndarray], list[float], int]:
+        return _align_to(frames, orb, ref_keys, ref_desc, matcher, corners, w)
+
+    # A fixed camera (every CCTV, the case that matters) is told from a sample of every 8th frame; only a camera that shakes needs all of them.
+    if len(greys) >= 24:
+        sample_mats, sample_moves, sample_failed = align(greys[::max(8, len(greys) // 12)])
+        if sample_failed <= 0.15 * len(sample_mats) and float(np.percentile(sample_moves, 90)) < 1.0:
+            return [np.eye(3)] * len(greys), float(np.percentile(sample_moves, 90)), sample_failed / len(sample_mats)
+    mats, moves, failed = align(greys)
+    return mats, float(np.percentile(moves, 90)), failed / len(greys)
+
+
+def _align_to(frames, orb, ref_keys, ref_desc, matcher, corners, w) -> tuple[list[np.ndarray], list[float], int]:
     mats, moves, failed = [], [], 0
-    for g in greys:
+    for g in frames:
         mat = np.eye(3)
         found = False
         if ref_desc is not None:
@@ -156,7 +172,7 @@ def _stabilise(greys: list[np.ndarray]) -> tuple[list[np.ndarray], float, float]
         mats.append(mat)
         moved = cv2.perspectiveTransform(corners, mat).reshape(-1, 2) - corners.reshape(-1, 2)
         moves.append(float(np.hypot(moved[:, 0], moved[:, 1]).mean()))
-    return mats, float(np.percentile(moves, 90)), failed / len(greys)
+    return mats, moves, failed
 
 
 def _motion(greys: list[np.ndarray], mats: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -356,27 +372,45 @@ def _runs(flags: np.ndarray) -> list[tuple[int, int]]:
     return out
 
 
-def _paint(top: np.ndarray, road: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """(white paint, yellow paint, loose white, warm-coloured pixels, contrast) in the top view: the three masks are 0/255, thin and bright,
-    kept only where traffic moved. The loose mask also holds faint paint and is only used to extend a crosswalk that is already certain."""
+def _paint(top: np.ndarray, road: np.ndarray, valid: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+    """(white paint, yellow paint, loose white, warm-coloured pixels, contrast, level) in the top view: the three masks are 0/255, thin and bright,
+    kept only where traffic moved. The loose mask also holds faint paint and is only used to extend a crosswalk that is already certain.
+
+    Two views of the road have to agree that something is paint: the plain brightness and a contrast-boosted copy (CLAHE), which makes faint paint
+    stand out but also cracks. The strictness starts hyper-sensitive (faint lines count) and is raised, level by level, until no more than
+    MAX_PAINT_SHARE of the road looks like paint, so a clean asphalt road keeps its faint lines and a slab-and-joint road does not turn to paint.
+    level is the multiple of PAINT_THRESHOLD that was used."""
     hsv = cv2.cvtColor(top, cv2.COLOR_BGR2HSV)
-    grey = cv2.GaussianBlur(cv2.cvtColor(top, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.2)
+    grey8 = cv2.cvtColor(top, cv2.COLOR_BGR2GRAY)
+    grey = cv2.GaussianBlur(grey8.astype(np.float32), (0, 0), 1.2)
+    boosted = cv2.GaussianBlur(cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8)).apply(grey8).astype(np.float32), (0, 0), 1.2)
+    gain = float(boosted.std()) / max(float(grey.std()), 1e-3)           # how much the boost amplified contrast, to compare like with like
     k = int(TOP_W * 0.075) | 1
-    tophat = cv2.morphologyEx(grey, cv2.MORPH_TOPHAT, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
+    tophat = cv2.morphologyEx(grey, cv2.MORPH_TOPHAT, kernel)
+    tophat_boost = cv2.morphologyEx(boosted, cv2.MORPH_TOPHAT, kernel)
     inside = (cv2.erode(valid, np.ones((9, 9), np.uint8)) > 0) & (road > 0)
     local = cv2.GaussianBlur(grey, (0, 0), TOP_W * 0.08)              # how bright the surroundings are (shade needs less contrast)
-    weak = (tophat > np.maximum(PAINT_THRESHOLD - 3.0, 0.07 * local)) & inside
-    strong = (tophat > np.maximum(PAINT_THRESHOLD + 5.0, 0.12 * local)) & inside
-    count, labels = cv2.connectedComponents(weak.astype(np.uint8), connectivity=8)
-    paint = np.isin(labels, np.unique(labels[strong])) & weak & (labels > 0)   # a faint region only counts if part of it clearly stands out
-    white = paint & (hsv[..., 1] < 80)
-    yellow = paint & (hsv[..., 0] >= 12) & (hsv[..., 0] <= 38) & (hsv[..., 1] >= 70) & (hsv[..., 2] >= 80)
-    loose = (tophat > np.maximum(PAINT_THRESHOLD - 5.0, 0.045 * local)) & inside & (hsv[..., 1] < 90)
+    warm_hue = ((hsv[..., 0] >= 12) & (hsv[..., 0] <= 38) & (hsv[..., 1] >= 70) & (hsv[..., 2] >= 80))
+    on_road = max(int(inside.sum()), 1)
+    for level in PAINT_LEVELS:
+        weak = ((tophat > np.maximum((PAINT_THRESHOLD - 3.0) * level, 0.07 * local * level)) & inside
+                & (tophat_boost > (PAINT_THRESHOLD - 3.0) * level * gain * 0.8))
+        strong = (tophat > np.maximum((PAINT_THRESHOLD + 5.0) * level, 0.12 * local * level)) & inside
+        if level != PAINT_LEVELS[-1] and float(weak.sum()) / on_road > 2.0 * MAX_PAINT_SHARE:
+            continue                                                      # far too much already: no need to look closer at this level
+        count, labels = cv2.connectedComponents(weak.astype(np.uint8), connectivity=8)
+        paint = np.isin(labels, np.unique(labels[strong])) & weak & (labels > 0)   # a faint region only counts if part of it clearly stands out
+        white = paint & (hsv[..., 1] < 80)
+        yellow = paint & warm_hue
+        if float((white | yellow).sum()) / on_road <= MAX_PAINT_SHARE:
+            break
+    loose = (tophat > np.maximum((PAINT_THRESHOLD - 5.0) * level, 0.045 * local * level)) & inside & (hsv[..., 1] < 90)
     o = np.ones((3, 3), np.uint8)
     return (cv2.morphologyEx(white.astype(np.uint8) * 255, cv2.MORPH_OPEN, o),
             cv2.morphologyEx(yellow.astype(np.uint8) * 255, cv2.MORPH_OPEN, o),
             cv2.morphologyEx(loose.astype(np.uint8) * 255, cv2.MORPH_OPEN, o),
-            ((((hsv[..., 0] <= 25) | (hsv[..., 0] >= 165)) & (hsv[..., 1] >= 55)).astype(np.float32)), tophat)
+            ((((hsv[..., 0] <= 25) | (hsv[..., 0] >= 165)) & (hsv[..., 1] >= 55)).astype(np.float32)), tophat, float(level))
 
 
 def _crosswalks(white: np.ndarray, road: np.ndarray, loose: np.ndarray, warm: np.ndarray) -> list[dict]:
@@ -551,6 +585,131 @@ def _to_video(matrix: np.ndarray, points: list[list[float]]) -> list[list[float]
     return [[round(float(x), 1), round(float(y), 1)] for x, y in out]
 
 
+
+# ───────────────────────────── the walkthrough: one picture per step ─────────────────────────────
+
+# What a step is called for the person watching (plain words), in the order analyse_clip reports them. The live monitor's
+# "Detect road" walkthrough shows them one at a time; "marks" is added by the live calibrator, which knows what will be used.
+WALKTHROUGH = [
+    ("steady", "Steadying the picture", "Matching the frames so a shaking camera does not look like traffic."),
+    ("empty", "Taking the traffic away", "The middle value of many frames: moving vehicles disappear and the empty road stays."),
+    ("motion", "Following the moving vehicles", "Tracking points on the vehicles to see which way they go."),
+    ("direction", "Finding the road direction", "All the lines of motion meet at one point on the horizon."),
+    ("road", "Marking where vehicles drive", "Paint is only looked for where traffic really moved."),
+    ("topview", "Straightening the road", "Redrawing the road as seen from above, so lane lines run straight."),
+    ("paint", "Picking out the paint", "Thin, bright marks on the road: white and yellow."),
+    ("people", "Finding the road and the sidewalk", "Where vehicles drive and where people walk tells the road from the sidewalk."),
+    ("marks", "Finding crosswalks and lines", "Rows of stripes become crosswalks; long thin lines become stop and lane lines."),
+]
+_CLAMP = 30000.0
+
+
+def _blank(size: tuple[int, int]) -> np.ndarray:
+    return np.zeros((size[1], size[0], 4), np.uint8)
+
+
+def _overlay_opaque(picture: np.ndarray) -> np.ndarray:
+    return cv2.cvtColor(picture, cv2.COLOR_BGR2BGRA)
+
+
+def _trace_motion(points: np.ndarray, directions: np.ndarray, grey_size: tuple[int, int], size: tuple[int, int]) -> np.ndarray:
+    """Little arrows on a sample of the tracked points, along the way each one moved (cyan)."""
+    out = _blank(size)
+    n = len(points)
+    if n == 0:
+        return out
+    sx, sy = size[0] / grey_size[0], size[1] / grey_size[1]
+    length = 0.012 * size[0]
+    for i in np.random.default_rng(3).choice(n, min(n, 450), replace=False):
+        x, y = points[i][0] * sx, points[i][1] * sy
+        dx, dy = float(directions[i][0]), float(directions[i][1])
+        cv2.arrowedLine(out, (int(x - dx * length), int(y - dy * length)), (int(x + dx * length), int(y + dy * length)),
+                        (255, 220, 40, 255), 2, cv2.LINE_AA, tipLength=0.5)
+    return out
+
+
+def _trace_direction(info: dict | None, points: np.ndarray, grey_size: tuple[int, int], size: tuple[int, int]) -> np.ndarray | None:
+    """The lines of motion running to the vanishing point (amber), with the point marked when it is inside the picture."""
+    if info is None or info.get("kind") is None:
+        return None
+    out = _blank(size)
+    w, h = size
+    sx, sy = w / grey_size[0], h / grey_size[1]
+    rect = (0, 0, w, h)
+    amber = (0, 170, 255, 235)
+    if info["kind"] == "finite" and len(points):
+        vx, vy = float(info["vp"][0]) * sx, float(info["vp"][1]) * sy
+        for i in np.random.default_rng(5).choice(len(points), min(len(points), 40), replace=False):
+            px, py = float(points[i][0]) * sx, float(points[i][1]) * sy
+            ex, ey = px + (vx - px) * 1.4, py + (vy - py) * 1.4          # a little past the point, so the lines are seen to cross
+            ex, ey = float(np.clip(ex, -_CLAMP, _CLAMP)), float(np.clip(ey, -_CLAMP, _CLAMP))
+            ok, a, b = cv2.clipLine(rect, (int(px), int(py)), (int(ex), int(ey)))
+            if ok:
+                cv2.line(out, a, b, amber, 2, cv2.LINE_AA)
+        if 0 <= vx < w and 0 <= vy < h:
+            cv2.circle(out, (int(vx), int(vy)), 14, (255, 255, 255, 255), 3, cv2.LINE_AA)
+            cv2.circle(out, (int(vx), int(vy)), 5, amber, -1, cv2.LINE_AA)
+    elif info["kind"] == "parallel":
+        theta = math.radians(float(info["angle"]))
+        dx, dy = math.cos(theta), math.sin(theta)
+        reach = math.hypot(w, h)
+        for k in range(14):
+            cx, cy = w * (0.05 + 0.9 * k / 13), h * (0.35 + 0.5 * ((k * 5) % 7) / 6)
+            ok, a, b = cv2.clipLine(rect, (int(cx - dx * reach), int(cy - dy * reach)), (int(cx + dx * reach), int(cy + dy * reach)))
+            if ok:
+                cv2.line(out, a, b, amber, 2, cv2.LINE_AA)
+    return out
+
+
+def _trace_road(road_small: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    """Where vehicles drove: a green tint with an outline."""
+    out = _blank(size)
+    mask = cv2.resize(road_small, size, interpolation=cv2.INTER_LINEAR) > 127
+    out[mask] = (90, 220, 90, 85)
+    contours, _h = cv2.findContours(mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(out, contours, -1, (120, 255, 120, 255), 3, cv2.LINE_AA)
+    return out
+
+
+def _trace_grid(homography: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    """The top view's grid laid back on the road in the picture: it bends with the perspective, and shows where the straightening looks."""
+    out = _blank(size)
+    inv = np.linalg.inv(homography)
+    lines = 14
+    for k in range(lines + 1):
+        for horizontal in (False, True):
+            t = np.linspace(0.0, 1.0, 60, dtype=np.float32)
+            if horizontal:
+                top_pts = np.stack([t * TOP_W, np.full_like(t, k * TOP_H / lines)], 1)
+            else:
+                top_pts = np.stack([np.full_like(t, k * TOP_W / lines), t * TOP_H], 1)
+            pts = cv2.perspectiveTransform(top_pts.reshape(-1, 1, 2), inv).reshape(-1, 2)
+            pts = np.clip(np.nan_to_num(pts, nan=0.0, posinf=_CLAMP, neginf=-_CLAMP), -_CLAMP, _CLAMP).astype(np.int32)
+            edge = k in (0, lines)
+            cv2.polylines(out, [pts.reshape(-1, 1, 2)], False, (0, 200, 255, 255) if edge else (255, 255, 255, 150), 3 if edge else 1, cv2.LINE_AA)
+    return out
+
+
+def _trace_paint(white: np.ndarray, yellow: np.ndarray, homography: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    """The paint the filter kept, laid back on the picture: white paint in cyan, yellow paint in orange."""
+    out = _blank(size)
+    inv = np.linalg.inv(homography)
+    for mask, colour in ((white, (255, 255, 0, 235)), (yellow, (0, 165, 255, 235))):
+        back = cv2.warpPerspective(mask, inv, size, flags=cv2.INTER_NEAREST) > 0
+        out[back] = colour
+    return out
+
+
+def _trace_people(moving: np.ndarray, parked: np.ndarray, people: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    """Dots where vehicles drove (blue), where vehicles stood (grey) and where people walked (green), on the colour frame."""
+    out = _blank(size)
+    radius = max(5, size[0] // 200)
+    for pts, colour in ((parked, (170, 170, 170, 230)), (moving, (255, 120, 0, 255)), (people, (0, 220, 0, 255))):
+        for x, y in pts:
+            cv2.circle(out, (int(x), int(y)), radius, colour, -1, cv2.LINE_AA)
+    return out
+
+
 def analyse_video(video_path: str | Path, max_seconds: float | None = None, keep_top: bool = False) -> tuple[dict, np.ndarray]:
     """(what was found, in the video's own pixels; the empty road at WORK_W wide).
     result["ok"] is False, with result["reason"] in plain words, when the road could not be read. With keep_top the top view with
@@ -558,25 +717,45 @@ def analyse_video(video_path: str | Path, max_seconds: float | None = None, keep
     return analyse_clip(_read_video(video_path, max_seconds), keep_top)
 
 
-def analyse_clip(clip: dict, keep_top: bool = False) -> tuple[dict, np.ndarray]:
-    """analyse_video on frames that were already read (_read_video)."""
+def analyse_clip(clip: dict, keep_top: bool = False, trace=None, detector=None) -> tuple[dict, np.ndarray]:
+    """analyse_video on frames that were already read (_read_video).
+    trace, when given, is called as trace(step, phase, overlay, info) around each stage: step is an id from WALKTHROUGH, phase is "start" or
+    "done", overlay is a BGRA picture the size of the colour frames (or None) to lay over the empty road, info a small dict. It changes nothing
+    in the result, and an error inside it is ignored."""
+    def say(step: str, phase: str, overlay=None, **info) -> None:
+        if trace is not None:
+            try:
+                trace(step, phase, overlay, info)
+            except Exception:
+                pass
     vw, vh = clip["video"]
     gw, gh = clip["grey_size"]
     cw, ch = clip["colour_size"]
     result: dict = {"ok": False, "reason": None, "video_size": [vw, vh], "seconds_used": round(clip["seconds"], 1),
-                    "frames_used": len(clip["greys"]), "stop_lines": [], "lane_lines": [], "crosswalks": [], "road_direction": None}
+                    "frames_used": len(clip["greys"]), "stop_lines": [], "lane_lines": [], "crosswalks": [], "road_direction": None,
+                    "regions": []}
+    say("steady", "start")
     mats, sway, failed = _stabilise(clip["greys"])
     result["camera_shake_px"] = round(sway * vw / gw, 1)
+    say("steady", "done", None, shake_px=result["camera_shake_px"])
     sx, sy = cw / gw, ch / gh
     scale = np.diag([sx, sy, 1.0])
+    say("empty", "start")
     aligned = [cv2.warpPerspective(f, scale @ mats[i] @ np.linalg.inv(scale), (cw, ch), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
                for f, i in zip(clip["colours"], clip["colour_at"])]
     background = np.median(np.stack(aligned), axis=0).astype(np.uint8)
+    say("empty", "done", _overlay_opaque(background) if trace is not None else None)
     if sway > 0.10 * gw or failed > 0.35:
         result["reason"] = "The camera moves too much (panning or heavy shake). This needs a fixed camera."
         return result, background
+    say("motion", "start")
     points, directions, road_small, grey_background = _motion(clip["greys"], mats)
+    say("motion", "done", _trace_motion(points, directions, (gw, gh), (cw, ch)) if trace is not None else None, moving_points=int(len(points)))
+    say("direction", "start")
     info = _road_direction(points, directions, (gw, gh), _straight_edges(grey_background))
+    say("direction", "done", _trace_direction(info, points, (gw, gh), (cw, ch)) if trace is not None else None)
+    say("road", "start")
+    say("road", "done", _trace_road(road_small, (cw, ch)) if trace is not None else None)
     if info is None or info["kind"] is None:
         seen = "" if info is None else f" ({info['lines']} moving points seen, only {info['inliers']} agree on one direction)"
         result["reason"] = ("Not enough traffic movement to find the road direction" + seen +
@@ -589,14 +768,32 @@ def analyse_clip(clip: dict, keep_top: bool = False) -> tuple[dict, np.ndarray]:
         info = {**info, "vp": vp_work}
     else:
         result["road_direction"] = {"kind": "parallel", "angle": round(info["angle"], 1), "inliers": info["inliers"], "moving_points": info["lines"]}
+    say("topview", "start")
     homography = _top_homography(info, (cw, ch))
     top = _warp(background, homography)
     valid = _warp(np.full((ch, cw), 255, np.uint8), homography, cv2.INTER_NEAREST)
     road = _warp(cv2.resize(road_small, (cw, ch), interpolation=cv2.INTER_NEAREST), homography, cv2.INTER_NEAREST)
     road = cv2.dilate(road, np.ones((int(TOP_W * 0.03) | 1,) * 2, np.uint8))
-    white, yellow, loose, warm, contrast = _paint(top, road, valid)
+    say("topview", "done", _trace_grid(homography, (cw, ch)) if trace is not None else None)
+    say("paint", "start")
+    white, yellow, loose, warm, contrast, level = _paint(top, road, valid)
+    result["paint_level"] = level
+    say("paint", "done", _trace_paint(white, yellow, homography, (cw, ch)) if trace is not None else None, level=level)
     to_video = np.diag([vw / cw, vh / ch, 1.0]) @ np.linalg.inv(homography)
     result["rectifier"] = {"top_to_video": to_video.tolist(), "top_size": [TOP_W, TOP_H]}
+    say("people", "start")
+    if detector is not None:
+        try:
+            moving_pts, parked_pts, people_pts = _foot_points(detector, clip, mats, scale)
+            to_top = lambda pts: (cv2.perspectiveTransform(pts.reshape(-1, 1, 2).astype(np.float32), homography).reshape(-1, 2) if len(pts) else pts)
+            result["regions"] = _regions(to_top(moving_pts), to_top(people_pts), valid, to_video, (vw, vh))
+            say("people", "done", _trace_people(moving_pts, parked_pts, people_pts, (cw, ch)) if trace is not None else None,
+                vehicles=int(len(moving_pts)), parked=int(len(parked_pts)), people=int(len(people_pts)))
+        except Exception as exc:                                       # the regions are a bonus: never lose the crosswalks over them
+            result["regions_error"] = str(exc)
+            say("people", "done", None, error=str(exc))
+    else:
+        say("people", "done", None, skipped=True)
     on_road = max(int(((road > 0) & (valid > 0)).sum()), 1)
     density = float(((white > 0) | (yellow > 0)).sum()) / on_road
     result["paint_share"] = round(density, 3)
@@ -622,6 +819,62 @@ def analyse_clip(clip: dict, keep_top: bool = False) -> tuple[dict, np.ndarray]:
     if keep_top:
         result["topdown"] = draw_topdown(top, white, yellow, crosswalks, stops, lanes)
     return result, background
+
+
+def _foot_points(detector, clip: dict, mats: list[np.ndarray], scale: np.ndarray, count: int = 12) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Where the feet of people and the wheels of MOVING vehicles were, in the aligned colour picture: (vehicles, parked, people), each (n, 2).
+    detector(frame) -> [(class name, [x, y, w, h]), ...]. A vehicle seen at the same spot in two samples is parked or queueing, not on the
+    road to drive on; it is kept apart so it does not stretch the road to the kerb."""
+    n = len(clip["colours"])
+    picks = np.unique(np.linspace(0, n - 1, min(count, n)).astype(int))
+    per_sample: list[tuple[np.ndarray, np.ndarray]] = []
+    for i in picks:
+        M = scale @ mats[clip["colour_at"][int(i)]] @ np.linalg.inv(scale)
+        veh, ped = [], []
+        for cls, (x, y, w, h) in detector(clip["colours"][int(i)]):
+            q = M @ np.array([x + w / 2.0, y + h, 1.0])
+            (ped if cls == "person" else veh).append(q[:2] / q[2])
+        per_sample.append((np.array(veh, np.float32).reshape(-1, 2), np.array(ped, np.float32).reshape(-1, 2)))
+    cw = clip["colour_size"][0]
+    still = 0.012 * cw
+    moving, parked = [], []
+    for j, (veh, _ped) in enumerate(per_sample):
+        others = np.vstack([per_sample[k][0] for k in range(len(per_sample)) if k != j] or [np.zeros((0, 2), np.float32)])
+        for q in veh:
+            same = len(others) and bool((np.hypot(*(others - q).T) < still).any())
+            (parked if same else moving).append(q)
+    ped_all = np.vstack([s[1] for s in per_sample]) if per_sample else np.zeros((0, 2), np.float32)
+    return (np.array(moving, np.float32).reshape(-1, 2), np.array(parked, np.float32).reshape(-1, 2), ped_all)
+
+
+def _regions(moving_top: np.ndarray, people_top: np.ndarray, valid: np.ndarray, to_video: np.ndarray, video_size: tuple[int, int]) -> list[dict]:
+    """The main road and the sidewalks beside it, as four-corner areas in the video's pixels. In the top view the road runs straight up, so the
+    road is the band the moving vehicles used (a little wider than their wheel tracks) and a sidewalk is the band beside it where people walked.
+    A starting point for the operator to correct, never a verdict."""
+    rows = np.where(valid.any(axis=1))[0]
+    cols = np.where(valid.any(axis=0))[0]
+    if len(moving_top) < 6 or len(rows) == 0:
+        return []
+    v0, v1 = float(rows.min()), float(rows.max())
+    u_lo, u_hi = float(cols.min()), float(cols.max())
+    pad = 0.04 * TOP_W
+    a, b = np.percentile(moving_top[:, 0], [3, 97])
+    road = (max(u_lo, float(a) - pad), min(u_hi, float(b) + pad))
+    vw, vh = video_size
+
+    def poly(u0: float, u1: float) -> list[list[float]]:
+        pts = _to_video(to_video, [[u0, v0], [u1, v0], [u1, v1], [u0, v1]])
+        return [[round(min(max(x, 0.0), vw - 1.0), 1), round(min(max(y, 0.0), vh - 1.0), 1)] for x, y in pts]
+    out = [{"kind": "road", "polygon": poly(*road), "seen": int(len(moving_top))}]
+    for side, mask in (("left", people_top[:, 0] < road[0]), ("right", people_top[:, 0] > road[1])):
+        walkers = people_top[mask] if len(people_top) else people_top
+        if len(walkers) < 4:
+            continue
+        edge = np.percentile(walkers[:, 0], 5 if side == "left" else 95)
+        u0, u1 = (max(u_lo, float(edge) - pad), road[0]) if side == "left" else (road[1], min(u_hi, float(edge) + pad))
+        if u1 - u0 >= 0.03 * TOP_W:
+            out.append({"kind": "sidewalk", "side": side, "polygon": poly(u0, u1), "seen": int(len(walkers))})
+    return out
 
 
 def _quad(top: dict, pad_u: float, pad_v: float) -> list[list[float]]:

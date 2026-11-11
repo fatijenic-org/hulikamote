@@ -118,3 +118,54 @@ def test_open_lab_can_still_open_the_full_screen_app(opened):
     asyncio.run(training.open_training_lab(model="helmet_specialist", ui="tui"))
     cmd = opened[0][0]
     assert cmd[1].endswith("lab_tui.py") and len(cmd) == 2           # the full-screen app takes no model argument
+
+
+# ─── The newest log of one model (the Models page shows it under "Training log") ─────────────────────────────────
+
+import os
+
+
+@pytest.fixture
+def logs(tmp_path, monkeypatch):
+    monkeypatch.setattr(training, "LOGS_DIR", tmp_path)
+    monkeypatch.setattr(training, "TRAINING_TASKS", {})
+    monkeypatch.setattr(training, "training_state", lambda model: {"training": model == "primary_anchor"})
+    return tmp_path
+
+
+def write_log(folder, name, text, age=0):
+    p = folder / name
+    p.write_text(text, encoding="utf-8")
+    t = time.time() - age
+    os.utime(p, (t, t))
+    return p
+
+
+def test_a_resume_run_the_backend_has_no_task_for_is_found_by_the_model_named_in_its_log(logs):
+    write_log(logs, "aaaaaaaa-0000-0000-0000-000000000001.log", "data=C:/lab/runs/plate_specialist/data.yaml\n", age=60)
+    write_log(logs, "bbbbbbbb-0000-0000-0000-000000000002.log",
+              "Resuming...\ndata=C:/lab/runs/primary_anchor/data_resolved.yaml\n  4/40  2.1G  1.2\r  5/40  2.1G  1.1", age=5)
+    res = training.model_log("primary_anchor")
+    assert res["file"] == "bbbbbbbb-0000-0000-0000-000000000002.log"
+    assert res["training"] is True
+    assert res["logs"].endswith("  5/40  2.1G  1.1")           # a redrawn progress line keeps its last state
+
+
+def test_the_studios_own_task_is_preferred_and_a_terminal_lab_log_is_found_by_its_name(logs):
+    write_log(logs, f"{TASK}.log", "--- [2/2] Training helmet_specialist", age=100)
+    training.TRAINING_TASKS[TASK] = {"status": "running", "model": "helmet_specialist", "started": 1}
+    write_log(logs, "lab_train_helmet_specialist_20261031_163731.log", "terminal", age=1)
+    assert training.model_log("helmet_specialist")["file"] == f"{TASK}.log"
+    training.TRAINING_TASKS.clear()
+    assert training.model_log("helmet_specialist")["file"] == "lab_train_helmet_specialist_20261031_163731.log"
+
+
+def test_no_log_is_an_empty_answer_and_a_bad_name_is_refused(logs):
+    res = training.model_log("cabin_specialist")
+    assert res["file"] is None and res["logs"] == "" and res["training"] is False
+    with pytest.raises(HTTPException):
+        training.model_log("../etc")
+
+
+def test_the_log_call_is_a_plain_def_so_it_never_runs_on_the_event_loop():
+    assert not inspect.iscoroutinefunction(training.model_log)

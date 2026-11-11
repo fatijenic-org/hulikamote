@@ -132,25 +132,49 @@ def turned_side(ledger, key) -> str | None:
     return "right" if entry[0] * current[1] - entry[1] * current[0] > 0 else "left"
 
 
+def line_side(line, x: float, y: float):
+    """
+    Which side of a line a point is on, and how far: the signed distance, or None when the point is
+    beside neither end of the line (so the line does not judge points far past its ends).
+
+    `line` is two or more points ([[x, y], ...]); with more than two it is a bent line (a curve, a
+    corner) and the nearest straight piece of it decides. The sign never flips while the point moves
+    along one side of the line, also around a bend, so "crossed" means really crossed.
+    """
+    pieces = []
+    for (x1, y1), (x2, y2) in zip(line, line[1:]):
+        lx, ly = x2 - x1, y2 - y1
+        length = math.hypot(lx, ly)
+        if length > 0:
+            pieces.append((x1, y1, lx, ly, length))
+    if not pieces:
+        return None
+    best = None
+    for index, (x1, y1, lx, ly, length) in enumerate(pieces):
+        along = ((x - x1) * lx + (y - y1) * ly) / (length * length)
+        near = min(max(along, 0.0), 1.0)
+        distance = math.hypot(x - (x1 + near * lx), y - (y1 + near * ly))
+        if best is None or distance < best[0] - 1e-9:
+            best = (distance, index, along, ((x - x1) * ly - (y - y1) * lx) / length)
+    _distance, index, along, side = best
+    if (index == 0 and along < -0.1) or (index == len(pieces) - 1 and along > 1.1):
+        return None
+    return side
+
+
 def crossed_line(ledger, key, line) -> bool:
     """
-    True only on the frame the vehicle's ground point crosses `line` ([[x1,y1],[x2,y2]]), coming
-    from the side it was first seen on. It must end up clearly past the line (30% of its box width,
-    at least 10 px), so a car stopped ON the line with its box wobbling back and forth is not a
-    crossing. Points beyond the line's ends are ignored.
+    True only on the frame the vehicle's ground point crosses `line` ([[x1,y1],[x2,y2]], or more points
+    for a bent line), coming from the side it was first seen on. It must end up clearly past the line
+    (30% of its box width, at least 10 px), so a car stopped ON the line with its box wobbling back and
+    forth is not a crossing. Points beyond the line's ends are ignored.
     """
-    if not line or len(line) != 2:
-        return False
-    (x1, y1), (x2, y2) = line
-    lx, ly = x2 - x1, y2 - y1
-    length = math.hypot(lx, ly)
-    if length == 0:
+    if not line or len(line) < 2:
         return False
     _t, cx, cy, w = ledger.path[-1]
-    along = ((cx - x1) * lx + (cy - y1) * ly) / (length * length)
-    if not -0.1 <= along <= 1.1:
+    side = line_side(line, cx, cy)       # signed distance from the line
+    if side is None:
         return False
-    side = ((cx - x1) * ly - (cy - y1) * lx) / length   # signed distance from the line
     margin = max(10.0, 0.3 * w)
     state = ledger.line_side.get(key)
     if state is None:

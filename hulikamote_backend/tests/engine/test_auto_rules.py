@@ -93,7 +93,7 @@ def test_without_settings_the_rules_use_their_own_defaults():
     assert zone_of("illegal_turn")["banned_turns"] == ["left"]
     assert zone_of("truck_ban")["banned_classes"] == ["truck"]
     assert zone_of("tricycle_on_highway")["banned_classes"] == ["tricycle"]
-    assert zone_of("illegal_loading")["classes"] == ["bus", "tricycle", "truck"]
+    assert zone_of("illegal_loading")["classes"] == ["bus", "jeepney", "tricycle", "truck"]
     assert zone_of("illegal_turn", {"banned_turns": ["up"]})["banned_turns"] == ["left"]     # nonsense is ignored
 
 

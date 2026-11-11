@@ -415,6 +415,60 @@ def training_log(task_id: str):
     return {"logs": _clean_log(task_id)}
 
 
+_LOG_SCAN_FILES = 12          # newest log files looked at when a model's log has to be found by what is written in it
+_LOG_SCAN_HEAD = 20_000       # bytes read from the top of each
+
+
+def _clean_text(raw: str) -> str:
+    """A log as it looks on screen: a progress bar redrawn with carriage returns keeps only its last state."""
+    out = []
+    for line in raw.split("\n"):
+        parts = line.split("\r")
+        out.append(parts[-1] if parts[-1] else (parts[-2] if len(parts) > 1 else line))
+    return "\n".join(out)
+
+
+def _latest_log(model: str) -> Path | None:
+    """The newest training log of one model, however the training was started: the Studio's own tasks first, then the
+    newest log files that name the model (a Continue / resume run and the terminal Training Lab write logs the backend has no
+    task for, and a backend restart forgets the tasks)."""
+    mine = [(t.get("started", 0), tid) for tid, t in TRAINING_TASKS.items() if t.get("model") == model]
+    for _started, tid in sorted(mine, reverse=True):
+        f = LOGS_DIR / f"{tid}.log"
+        if f.exists():
+            return f
+    files = sorted((p for p in LOGS_DIR.glob("*.log") if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
+    for f in files[:_LOG_SCAN_FILES]:
+        if model in f.name:
+            return f
+        try:
+            with open(f, "rb") as fh:
+                head = fh.read(_LOG_SCAN_HEAD)
+        except OSError:
+            continue
+        if model.encode() in head:
+            return f
+    return None
+
+
+@router.get("/log/model/{model}")
+def model_log(model: str):
+    """The tail of a model's newest training log, and whether it is training now. A plain `def` (worker thread), like the
+    status call: it reads a file."""
+    if not re.fullmatch(r"[a-z_0-9]{1,40}", model):
+        raise HTTPException(status_code=400, detail="Invalid model name")
+    f = _latest_log(model)
+    if f is None:
+        return {"model": model, "file": None, "logs": "", "truncated": False, "training": False, "updated": None}
+    text, truncated = _read_log_tail(f)
+    if model in YOLO_MODELS:
+        training = bool(training_state(model).get("training"))
+    else:
+        training = any(t.get("model") == model and t.get("status") in ("starting", "running") for t in TRAINING_TASKS.values())
+    return {"model": model, "file": f.name, "logs": _clean_text(text), "truncated": truncated, "training": training,
+            "updated": f.stat().st_mtime}
+
+
 # What Training Studio can train. `kind` decides the settings panel and the backend pipeline.
 STUDIO_MODELS = [
     {"key": "plate_specialist", "name": "License Plate Detector", "kind": "yolo",

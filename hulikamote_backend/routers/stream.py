@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import json
+import os
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -122,6 +124,23 @@ def reload_pipeline():
 # Pipes raw frames to ffmpeg → MediaMTX RTSP → HLS for Flutter's video_player.
 # Falls back to base64 JPEG WebSocket if ffmpeg is not installed.
 from engine.hls_broadcaster import get_broadcaster as _get_broadcaster
+
+# How the picture reaches the dashboard:
+#   synced (default)  the picture is a JPEG inside the SAME message as the boxes, so the boxes sit exactly on the vehicles.
+#                     No encoder and no video relay are needed.
+#   relay             the picture goes through ffmpeg and MediaMTX: smoother and lighter, but it arrives later than the boxes.
+PICTURE_MODE = os.environ.get("HK_PICTURE_MODE", "synced").strip().lower()
+PICTURE_MAX_WIDTH = 960
+PICTURE_JPEG_QUALITY = 72
+
+
+def _picture_b64(frame) -> str:
+    """The frame as a small JPEG (same shape, at most PICTURE_MAX_WIDTH wide) in base64, for the 'synced' mode."""
+    h, w = frame.shape[:2]
+    if w > PICTURE_MAX_WIDTH:
+        frame = cv2.resize(frame, (PICTURE_MAX_WIDTH, max(1, round(h * PICTURE_MAX_WIDTH / w))), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, PICTURE_JPEG_QUALITY])
+    return base64.b64encode(buf.tobytes()).decode("ascii") if ok else ""
 
 
 def _encode_stream_frame(annotated: cv2.Mat, width: int, quality: int) -> str:
@@ -355,18 +374,18 @@ async def _real_loop(websocket: WebSocket):
             ]
 
             broadcaster = _get_broadcaster()
-
-            # ── Phase B: HLS Transport (Forced) ────────────────────────────────
-            if not broadcaster._started:
-                h_fr, w_fr = annotated_high_res.shape[:2]
-                print(f"[Stream] Starting broadcaster with {w_fr}x{h_fr}")
-                broadcaster.start(width=w_fr, height=h_fr)
-            
             t2 = time.time()
-            # Push clean raw frame to ffmpeg pipe (non-blocking)
-            await asyncio.get_event_loop().run_in_executor(
-                None, broadcaster.push, annotated_high_res
-            )
+            picture = None
+            if PICTURE_MODE == "relay":
+                # ── video relay: ffmpeg -> MediaMTX (the picture arrives later than the boxes) ──
+                if not broadcaster._started:
+                    h_fr, w_fr = annotated_high_res.shape[:2]
+                    print(f"[Stream] Starting broadcaster with {w_fr}x{h_fr}")
+                    broadcaster.start(width=w_fr, height=h_fr)
+                await asyncio.get_event_loop().run_in_executor(None, broadcaster.push, annotated_high_res)
+            else:
+                # ── synced: the picture rides in the same message as the boxes ──
+                picture = await asyncio.get_event_loop().run_in_executor(None, _picture_b64, annotated_high_res)
             t3 = time.time()
             
             if frame_idx % 30 == 0:
@@ -374,16 +393,16 @@ async def _real_loop(websocket: WebSocket):
             
             await websocket.send_json({
                 "type": "frame",
-                "transport": "hls",
-                "hls_url": broadcaster.hls_url,
+                "transport": "hls" if PICTURE_MODE == "relay" else "jpeg",
+                "hls_url": broadcaster.hls_url if PICTURE_MODE == "relay" else None,
                 "frame_width": w,
                 "frame_height": h,
                 "mock": store.USE_MOCK,
-                "frame_base64": None,   # Stripped completely
+                "frame_base64": picture,   # synced mode: the picture itself; relay mode: None
                 "detections": display_results,
                 "camera": source.status(),
                 "road": road.status(),                              # learning progress / what was learned / why it could not
-                "road_zones": pipeline.learned_overlay(w, h) + road.hint_overlay(w, h),   # learned zones in use + line hints
+                "road_zones": pipeline.learned_overlay(w, h) + road.hint_overlay(w, h) + road.region_overlay(w, h),   # learned zones in use + line hints
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 

@@ -19,7 +19,7 @@ from engine.violations.base import Violation
 from engine.violations.geometry import STOP_SPEED, heading
 from engine.violations.onboard import claimed_by_motorcycles, moves_with, outside_position
 
-BODY_CLASSES = ("bus", "truck")
+BODY_CLASSES = ("bus", "jeepney", "truck")
 MIN_SPEED_PX_S = 2 * STOP_SPEED
 
 

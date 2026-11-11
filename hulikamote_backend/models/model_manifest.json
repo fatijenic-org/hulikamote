@@ -2,6 +2,7 @@
     "active_models": {
         "plate_specialist": "Plate Models/plate_specialist_train2_20260924.onnx",
         "helmet_specialist": "Helmet Detectors/helmet_specialist_train-2_20261005.onnx",
-        "cabin_specialist": "Cabin Models/cabin_specialist_train_20261013.onnx"
+        "cabin_specialist": "Cabin Models/cabin_specialist_train_20261013.onnx",
+        "primary_anchor": "Vehicle Detectors/primary_anchor_train-4_20261111.onnx"
     }
 }
