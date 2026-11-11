@@ -477,6 +477,37 @@
               "text": "Your own list of questions and answers. Add, edit and delete them; answers accept Markdown; saved to a JSON file on this computer."
             }
           ]
+        ],
+        [
+          [
+            {
+              "type": "link",
+              "href": "6-live-camera.html",
+              "children": [
+                {
+                  "type": "b",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "6 Live camera"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "How does a camera's picture get in, and how do we know it works?"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "From what a camera really sends, to the address, the reader code, the video relay and the checks on screen. Which setups we accept, with sources, and what we did and did not test."
+            }
+          ]
         ]
       ],
       "widths": [
@@ -485,6 +516,11 @@
         "52%"
       ],
       "cell_classes": [
+        [
+          "",
+          "",
+          ""
+        ],
         [
           "",
           "",

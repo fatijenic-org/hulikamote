@@ -1,0 +1,6142 @@
+{
+  "slug": "6-live-camera.html",
+  "number": "6",
+  "title": "Live camera: how the picture gets in",
+  "lede": [
+    {
+      "type": "text",
+      "text": "From the first idea (what a camera really sends) to the exact code that connects it to HULI-KAMOTE, and how we know it is working. Every code box is the real source file; Open in VS Code jumps to the line."
+    }
+  ],
+  "toc": [
+    {
+      "id": "idea",
+      "title": "Start here: what a camera really sends",
+      "level": 2
+    },
+    {
+      "id": "address",
+      "title": "Step 2: the address, and which setups we accept",
+      "level": 2
+    },
+    {
+      "id": "read",
+      "title": "Step 3: reading the picture without falling behind",
+      "level": 2
+    },
+    {
+      "id": "show",
+      "title": "Steps 4 and 5: from the AI to your screen",
+      "level": 2
+    },
+    {
+      "id": "dash",
+      "title": "How the Live Monitor makes sure it works",
+      "level": 2
+    },
+    {
+      "id": "try",
+      "title": "How to try it without a real CCTV",
+      "level": 2
+    },
+    {
+      "id": "limits",
+      "title": "What we claim, and what we do not",
+      "level": 2
+    }
+  ],
+  "blocks": [
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Start here: what a camera really sends",
+      "kicker": "First principles"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "A video is not a special thing. It is many still pictures, called "
+        },
+        {
+          "type": "term",
+          "key": "frame",
+          "shown": "frames"
+        },
+        {
+          "type": "text",
+          "text": ", shown one after the other, about 25 every second. A "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "network camera"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " takes those pictures and sends them over the network to anyone who asks. Sending them while they are being filmed, instead of saving a file, is called a "
+        },
+        {
+          "type": "term",
+          "key": "stream",
+          "shown": "stream"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "To ask for a stream you need only one thing: "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "where the camera is"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". That is its address, made of an "
+        },
+        {
+          "type": "term",
+          "key": "IP address",
+          "shown": "IP address"
+        },
+        {
+          "type": "text",
+          "text": ", a "
+        },
+        {
+          "type": "term",
+          "key": "port",
+          "shown": "port"
+        },
+        {
+          "type": "text",
+          "text": " and a path, for example "
+        },
+        {
+          "type": "code",
+          "text": "rtsp://192.168.1.20:554/stream1"
+        },
+        {
+          "type": "text",
+          "text": ". HULI-KAMOTE is the one asking. So from our side, a CCTV camera, a phone and a laptop playing a clip are the same thing: "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "an address that gives back pictures"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Idea"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What it means for the system"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "The camera only sends pictures"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "We never control the camera (no turning or zooming). We only read."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "It is addressed, like a website"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Only the address changes when a real CCTV replaces our stand-in. The rest of the system does not change."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "The network can fail"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Cameras get switched off and Wi-Fi drops. The system must notice, say so in words, and reconnect by itself."
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "The AI can be slower than the camera"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "If the AI needs more time than 40 ms per frame, old frames pile up and the picture falls behind. We keep only the newest."
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "34%",
+        "66%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ],
+        [
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "figure",
+      "kind": "scene",
+      "caption": [
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "The whole path in five steps."
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " Steps 1 and 2 are the outside world; steps 3 to 5 are our code, explained below."
+        }
+      ],
+      "scene": {
+        "w": 760,
+        "h": 240,
+        "aria": "Five steps from the camera to the dashboard",
+        "primitives": [
+          {
+            "type": "rect",
+            "x": 0.0,
+            "y": 20.0,
+            "w": 132.0,
+            "h": 84.0,
+            "rx": 9.0,
+            "role": "bx c1",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 66.0,
+            "y": 50.0,
+            "text": "1 The camera",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 66.0,
+            "y": 66.0,
+            "text": "CCTV, phone",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 66.0,
+            "y": 82.0,
+            "text": "or a clip",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 157.0,
+            "y": 20.0,
+            "w": 132.0,
+            "h": 84.0,
+            "rx": 9.0,
+            "role": "bx c2",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 223.0,
+            "y": 50.0,
+            "text": "2 The address",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 223.0,
+            "y": 66.0,
+            "text": "rtsp:// http://",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 223.0,
+            "y": 82.0,
+            "text": "or a file",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 314.0,
+            "y": 20.0,
+            "w": 132.0,
+            "h": 84.0,
+            "rx": 9.0,
+            "role": "bx c3",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 380.0,
+            "y": 50.0,
+            "text": "3 CameraSource",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 380.0,
+            "y": 66.0,
+            "text": "keeps only the",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 380.0,
+            "y": 82.0,
+            "text": "newest picture",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 471.0,
+            "y": 20.0,
+            "w": 132.0,
+            "h": 84.0,
+            "rx": 9.0,
+            "role": "bx c4",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 537.0,
+            "y": 50.0,
+            "text": "4 The AI",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 537.0,
+            "y": 66.0,
+            "text": "finds vehicles and",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 537.0,
+            "y": 82.0,
+            "text": "violations",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "rect",
+            "x": 628.0,
+            "y": 20.0,
+            "w": 132.0,
+            "h": 84.0,
+            "rx": 9.0,
+            "role": "bx c7",
+            "dash": false
+          },
+          {
+            "type": "text",
+            "x": 694.0,
+            "y": 50.0,
+            "text": "5 The dashboard",
+            "role": "bt",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 694.0,
+            "y": 66.0,
+            "text": "picture and",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "text",
+            "x": 694.0,
+            "y": 82.0,
+            "text": "tickets",
+            "role": "bs",
+            "anchor": "middle"
+          },
+          {
+            "type": "line",
+            "x1": 132.0,
+            "y1": 62.0,
+            "x2": 157.0,
+            "y2": 62.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 289.0,
+            "y1": 62.0,
+            "x2": 314.0,
+            "y2": 62.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 446.0,
+            "y1": 62.0,
+            "x2": 471.0,
+            "y2": 62.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          },
+          {
+            "type": "line",
+            "x1": 603.0,
+            "y1": 62.0,
+            "x2": 628.0,
+            "y2": 62.0,
+            "role": "ar",
+            "arrow": true,
+            "dash": false,
+            "width": 1.0
+          }
+        ]
+      }
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Step 2: the address, and which setups we accept",
+      "kicker": "How CCTV hands out its picture"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "CCTV systems from different makers all end up giving you one of a few kinds of address. We looked up the common ones and made the Live Monitor accept them. The right-hand column is honest about what we have and have not tried."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Setup"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Looks like"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What the sources say"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "In our system"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "term",
+                  "key": "RTSP",
+                  "shown": "RTSP"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ": the standard way cameras and recorders stream"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "rtsp://user:pass@192.168.1.20:554/path"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "An IETF standard, "
+            },
+            {
+              "type": "link",
+              "href": "https://www.rfc-editor.org/rfc/rfc7826.html",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "RFC 7826"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ". The viewer can choose UDP, multicast or TCP delivery."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "Accepted"
+            },
+            {
+              "type": "text",
+              "text": " TCP, 5 s timeouts, reconnects"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "term",
+                  "key": "ONVIF",
+                  "shown": "ONVIF"
+                },
+                {
+                  "type": "text",
+                  "text": " cameras"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ": the vendor-neutral standard"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The camera offers an RTSP address"
+            }
+          ],
+          [
+            {
+              "type": "link",
+              "href": "https://www.onvif.org/profiles/profile-s/",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Profile S"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " covers live video over RTSP; "
+            },
+            {
+              "type": "link",
+              "href": "https://ipvm.com/reports/1182",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "IPVM review"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "Accepted"
+            },
+            {
+              "type": "text",
+              "text": " by RTSP address; "
+            },
+            {
+              "type": "chip",
+              "kind": "warn",
+              "text": "No auto-discovery"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Hikvision"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " recorders and cameras"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "/Streaming/Channels/101"
+            },
+            {
+              "type": "text",
+              "text": " (channel 1 main), "
+            },
+            {
+              "type": "code",
+              "text": "102"
+            },
+            {
+              "type": "text",
+              "text": " (sub), "
+            },
+            {
+              "type": "code",
+              "text": "1701"
+            },
+            {
+              "type": "text",
+              "text": " (channel 17)"
+            }
+          ],
+          [
+            {
+              "type": "link",
+              "href": "https://supportusa.hikvision.com/support/solutions/articles/17000129024-do-you-have-an-example-showing-the-format-for-getting-a-rtsp-stream-from-a-nvr-dvr-",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Hikvision support page"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "; "
+            },
+            {
+              "type": "link",
+              "href": "https://www.smartrtsp.com/guides/rtsp-url-list",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "list of RTSP URLs"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "Accepted"
+            },
+            {
+              "type": "text",
+              "text": " paste the address"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Dahua"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " recorders and cameras"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "/cam/realmonitor?channel=1&subtype=0"
+            },
+            {
+              "type": "text",
+              "text": " (0 main, 1 sub)"
+            }
+          ],
+          [
+            {
+              "type": "link",
+              "href": "https://securitycamcenter.com/rtsp-url-address-format-dahua/",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Dahua RTSP format"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "Accepted"
+            },
+            {
+              "type": "text",
+              "text": " paste the address"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "term",
+                  "key": "MJPEG",
+                  "shown": "MJPEG"
+                },
+                {
+                  "type": "text",
+                  "text": " over HTTP"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ": older cameras, many phone apps"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "http://192.168.1.5:8080/video"
+            }
+          ],
+          [
+            {
+              "type": "link",
+              "href": "https://bensoftware.com/blog/comparison-of-streaming-formats",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Comparison of streaming formats"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Accepted, not tested"
+            },
+            {
+              "type": "text",
+              "text": " snapshot-only URLs are not supported"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "RTMP / UDP"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " streams"
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "rtmp://..."
+            },
+            {
+              "type": "text",
+              "text": ", "
+            },
+            {
+              "type": "code",
+              "text": "udp://..."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Streaming apps."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "info",
+              "text": "Accepted, not tested"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "Webcam or video file"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "code",
+              "text": "0"
+            },
+            {
+              "type": "text",
+              "text": ", "
+            },
+            {
+              "type": "code",
+              "text": "C:\\clips\\test.mp4"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Plain input."
+            }
+          ],
+          [
+            {
+              "type": "chip",
+              "kind": "ok",
+              "text": "Works"
+            },
+            {
+              "type": "text",
+              "text": " the main tested path"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "20%",
+        "22%",
+        "34%",
+        "24%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "About these sources",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "The Hikvision and Dahua paths agree across vendor and installer pages, but many are third-party, and ports and paths can differ by model and firmware, so the camera's own manual decides. The sources also disagree on which video format ONVIF Profile S makes mandatory, so read the ONVIF specification itself before quoting that detail."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 4,
+      "id": "",
+      "text": "Where the system decides what an address means",
+      "kicker": ""
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "One small function, "
+        },
+        {
+          "type": "link",
+          "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/hulikamote_backend/engine/camera_source.py:48",
+          "children": [
+            {
+              "type": "code",
+              "text": "camera_source.py › parse_source"
+            },
+            {
+              "type": "text",
+              "text": "hulikamote_backend/engine/camera_source.py:48"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ", looks at the text and decides: a webcam number, a stream address, or a file. It refuses anything else, so a typed address can never be used to make the system open something it should not."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/camera_source.py",
+      "first": 48,
+      "last": 64,
+      "title": "What an address means",
+      "lines": [
+        {
+          "n": 48,
+          "tokens": [
+            {
+              "cls": "kw",
+              "text": "def"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "fn",
+              "text": "parse_source"
+            },
+            {
+              "cls": "",
+              "text": "(source) -> SourceSpec:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 49,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "doc",
+              "text": "\"\"\"Work out what an address is. Raises ValueError for anything that is not a file, webcam or allowed stream.\"\"\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 50,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "isinstance"
+            },
+            {
+              "cls": "",
+              "text": "(source, "
+            },
+            {
+              "cls": "bi",
+              "text": "int"
+            },
+            {
+              "cls": "",
+              "text": ") "
+            },
+            {
+              "cls": "kw",
+              "text": "or"
+            },
+            {
+              "cls": "",
+              "text": " ("
+            },
+            {
+              "cls": "bi",
+              "text": "isinstance"
+            },
+            {
+              "cls": "",
+              "text": "(source, "
+            },
+            {
+              "cls": "bi",
+              "text": "str"
+            },
+            {
+              "cls": "",
+              "text": ") "
+            },
+            {
+              "cls": "kw",
+              "text": "and"
+            },
+            {
+              "cls": "",
+              "text": " source.strip().isdigit()):"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 51,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " SourceSpec("
+            },
+            {
+              "cls": "str",
+              "text": "\"webcam\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "bi",
+              "text": "int"
+            },
+            {
+              "cls": "",
+              "text": "(source), "
+            },
+            {
+              "cls": "str",
+              "text": "f\"webcam {int(source)}\""
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 52,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    text = "
+            },
+            {
+              "cls": "bi",
+              "text": "str"
+            },
+            {
+              "cls": "",
+              "text": "(source).strip()"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 53,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " text:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 54,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "raise"
+            },
+            {
+              "cls": "",
+              "text": " ValueError("
+            },
+            {
+              "cls": "str",
+              "text": "\"Empty video source\""
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 55,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    match = re.match("
+            },
+            {
+              "cls": "str",
+              "text": "r\"^([a-zA-Z][a-zA-Z0-9+.-]*)://\""
+            },
+            {
+              "cls": "",
+              "text": ", text)"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 56,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " match:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 57,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        scheme = match.group("
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            },
+            {
+              "cls": "",
+              "text": ").lower()"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 58,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " scheme "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "in"
+            },
+            {
+              "cls": "",
+              "text": " STREAM_SCHEMES:"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 59,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "raise"
+            },
+            {
+              "cls": "",
+              "text": " ValueError("
+            },
+            {
+              "cls": "str",
+              "text": "f\"Unsupported source type '{scheme}://' (use rtsp, http, rtmp or udp)\""
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 60,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        kind = "
+            },
+            {
+              "cls": "str",
+              "text": "\"rtsp\""
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " scheme.startswith("
+            },
+            {
+              "cls": "str",
+              "text": "\"rtsp\""
+            },
+            {
+              "cls": "",
+              "text": ") "
+            },
+            {
+              "cls": "kw",
+              "text": "else"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "str",
+              "text": "\"http\""
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " scheme.startswith("
+            },
+            {
+              "cls": "str",
+              "text": "\"http\""
+            },
+            {
+              "cls": "",
+              "text": ") "
+            },
+            {
+              "cls": "kw",
+              "text": "else"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "str",
+              "text": "\"stream\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 61,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " SourceSpec(kind, text, mask_url(text))"
+            }
+          ],
+          "mark": 4,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 62,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " re.match("
+            },
+            {
+              "cls": "str",
+              "text": "r\"^[a-zA-Z][a-zA-Z0-9+.-]*:(?![\\\\/])\""
+            },
+            {
+              "cls": "",
+              "text": ", text):      "
+            },
+            {
+              "cls": "com",
+              "text": "# concat:, pipe:, subfile: ... ffmpeg tricks"
+            }
+          ],
+          "mark": 5,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 63,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "raise"
+            },
+            {
+              "cls": "",
+              "text": " ValueError("
+            },
+            {
+              "cls": "str",
+              "text": "\"Unsupported video source\""
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 64,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " SourceSpec("
+            },
+            {
+              "cls": "str",
+              "text": "\"file\""
+            },
+            {
+              "cls": "",
+              "text": ", text, Path(text).name "
+            },
+            {
+              "cls": "kw",
+              "text": "or"
+            },
+            {
+              "cls": "",
+              "text": " text)"
+            }
+          ],
+          "mark": 6,
+          "is_gap": false,
+          "is_hot": true
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 50,
+          "text": "A plain number such as 0 means a webcam plugged into this computer."
+        },
+        {
+          "mark": 2,
+          "line": 55,
+          "text": "Something like rtsp:// or http:// means a stream. The part before the // is the kind."
+        },
+        {
+          "mark": 3,
+          "line": 58,
+          "text": "Only rtsp, rtsps, http, https, rtmp and udp are allowed. Any other kind is refused."
+        },
+        {
+          "mark": 4,
+          "line": 61,
+          "text": "The label shown on screen hides the password: user:***@address."
+        },
+        {
+          "mark": 5,
+          "line": 62,
+          "text": "A trick some video tools understand (joining or piping files) is refused on purpose."
+        },
+        {
+          "mark": 6,
+          "line": 64,
+          "text": "Anything left is a video file on this computer."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Step 3: reading the picture without falling behind",
+      "kicker": "CameraSource"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "link",
+          "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/hulikamote_backend/engine/camera_source.py:72",
+          "children": [
+            {
+              "type": "code",
+              "text": "CameraSource"
+            },
+            {
+              "type": "text",
+              "text": "hulikamote_backend/engine/camera_source.py:72"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " is the part that talks to the camera. It has three jobs, and each one answers a problem from the first section."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "steps",
+      "items": [
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Do not wait forever."
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " Connecting to a dead address must give up after a few seconds, and tell the user."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Ask for the safe, low-delay way."
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " Video over UDP can lose pieces on Wi-Fi and smear the picture, so we ask for TCP and for no buffering."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Keep only the newest picture."
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " A reader thread keeps taking pictures from the camera. When the AI is ready, it gets the latest one; older ones are dropped. Lag cannot pile up."
+          }
+        ],
+        [
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Reconnect by itself."
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": " If the stream drops, wait 1, 2, 4, 8 seconds and try again, and show OFFLINE meanwhile."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/camera_source.py",
+      "first": 21,
+      "last": 26,
+      "title": "The settings that make it safe",
+      "lines": [
+        {
+          "n": 21,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "OPEN_TIMEOUT_MS = "
+            },
+            {
+              "cls": "num",
+              "text": "5000"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 22,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "READ_TIMEOUT_MS = "
+            },
+            {
+              "cls": "num",
+              "text": "5000"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 23,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "RETRY_DELAYS_S = ("
+            },
+            {
+              "cls": "num",
+              "text": "1.0"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "num",
+              "text": "2.0"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "num",
+              "text": "4.0"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "num",
+              "text": "8.0"
+            },
+            {
+              "cls": "",
+              "text": ")       "
+            },
+            {
+              "cls": "com",
+              "text": "# the last one repeats"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 24,
+          "tokens": [
+            {
+              "cls": "com",
+              "text": "# TCP: UDP drops packets on Wi-Fi (smeared frames). No-buffer / low-delay: show frames as they arrive."
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 25,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "FFMPEG_OPTIONS = "
+            },
+            {
+              "cls": "str",
+              "text": "\"rtsp_transport;tcp|fflags;nobuffer|flags;low_delay\""
+            }
+          ],
+          "mark": 4,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 26,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "STREAM_SCHEMES = ("
+            },
+            {
+              "cls": "str",
+              "text": "\"rtsp\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"rtsps\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"http\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"https\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"rtmp\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"udp\""
+            },
+            {
+              "cls": "",
+              "text": ")     "
+            },
+            {
+              "cls": "com",
+              "text": "# nothing else is handed to ffmpeg"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 21,
+          "text": "Wait at most 5 seconds to connect."
+        },
+        {
+          "mark": 2,
+          "line": 22,
+          "text": "Wait at most 5 seconds for the next picture."
+        },
+        {
+          "mark": 3,
+          "line": 23,
+          "text": "After a drop, retry after 1, 2, 4, then every 8 seconds."
+        },
+        {
+          "mark": 4,
+          "line": 25,
+          "text": "Ask for TCP (no smeared pictures) and low delay (show pictures as they arrive)."
+        }
+      ]
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/camera_source.py",
+      "first": 137,
+      "last": 158,
+      "title": "The reader loop: connect, read, reconnect",
+      "lines": [
+        {
+          "n": 137,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "def"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "fn",
+              "text": "_run"
+            },
+            {
+              "cls": "",
+              "text": "("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ") -> "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 138,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        attempt = "
+            },
+            {
+              "cls": "num",
+              "text": "0"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 139,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "while"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._stop.is_set():"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 140,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            cap = "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._open()"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 141,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " cap "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 142,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".state = "
+            },
+            {
+              "cls": "str",
+              "text": "\"offline\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 143,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._stop.wait("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._retry_delays["
+            },
+            {
+              "cls": "bi",
+              "text": "min"
+            },
+            {
+              "cls": "",
+              "text": "(attempt, "
+            },
+            {
+              "cls": "bi",
+              "text": "len"
+            },
+            {
+              "cls": "",
+              "text": "("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._retry_delays) - "
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            },
+            {
+              "cls": "",
+              "text": ")])"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 144,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                attempt += "
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 145,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "continue"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 146,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            attempt = "
+            },
+            {
+              "cls": "num",
+              "text": "0"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 147,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".state = "
+            },
+            {
+              "cls": "str",
+              "text": "\"live\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 148,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._last_arrival = "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 149,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "while"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._stop.is_set():"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 150,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                ok, image = cap.read()"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 151,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " ok "
+            },
+            {
+              "cls": "kw",
+              "text": "or"
+            },
+            {
+              "cls": "",
+              "text": " image "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 152,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                    "
+            },
+            {
+              "cls": "kw",
+              "text": "break"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 153,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._publish(image)"
+            }
+          ],
+          "mark": 4,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 154,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            cap.release()"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 155,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._stop.is_set():"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 156,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".state = "
+            },
+            {
+              "cls": "str",
+              "text": "\"offline\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 157,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".reconnects += "
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            }
+          ],
+          "mark": 5,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 158,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._stop.wait("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._retry_delays["
+            },
+            {
+              "cls": "num",
+              "text": "0"
+            },
+            {
+              "cls": "",
+              "text": "])"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 140,
+          "text": "Try to connect to the camera."
+        },
+        {
+          "mark": 2,
+          "line": 143,
+          "text": "Could not connect: wait a little longer each time, then try again."
+        },
+        {
+          "mark": 3,
+          "line": 150,
+          "text": "Take the next picture from the camera."
+        },
+        {
+          "mark": 4,
+          "line": 153,
+          "text": "Hand it over as the newest picture."
+        },
+        {
+          "mark": 5,
+          "line": 157,
+          "text": "The stream dropped: count it, show OFFLINE, and go round again."
+        }
+      ]
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/camera_source.py",
+      "first": 160,
+      "last": 179,
+      "title": "Keeping only the newest picture",
+      "lines": [
+        {
+          "n": 160,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "def"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "fn",
+              "text": "_publish"
+            },
+            {
+              "cls": "",
+              "text": "("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ", image) -> "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 161,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        arrived = "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._now()"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 162,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "with"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._cond:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 163,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._latest "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "and"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._seq != "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._delivered:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 164,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".dropped += "
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            },
+            {
+              "cls": "",
+              "text": "              "
+            },
+            {
+              "cls": "com",
+              "text": "# nobody took the previous frame: it is stale now"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 165,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._latest = Frame(image, arrived)"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 166,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._seq += "
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 167,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._last_arrival "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "and"
+            },
+            {
+              "cls": "",
+              "text": " arrived > "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._last_arrival:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 168,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                instant = "
+            },
+            {
+              "cls": "num",
+              "text": "1.0"
+            },
+            {
+              "cls": "",
+              "text": " / (arrived - "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._last_arrival)"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 169,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".input_fps = instant "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".input_fps == "
+            },
+            {
+              "cls": "num",
+              "text": "0"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "else"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "num",
+              "text": "0.9"
+            },
+            {
+              "cls": "",
+              "text": " * "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".input_fps + "
+            },
+            {
+              "cls": "num",
+              "text": "0.1"
+            },
+            {
+              "cls": "",
+              "text": " * instant"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 170,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._last_arrival = arrived"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 171,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".width:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 172,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".height, "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".width = image.shape[:"
+            },
+            {
+              "cls": "num",
+              "text": "2"
+            },
+            {
+              "cls": "",
+              "text": "]"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 173,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._cond.notify_all()"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 174,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        tap = "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ".tap"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 175,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " tap "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 176,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 177,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                tap(image, arrived)"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 178,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " Exception:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 179,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "pass"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 164,
+          "text": "Nobody took the previous picture, so it is old now. Count it as dropped."
+        },
+        {
+          "mark": 2,
+          "line": 165,
+          "text": "Replace it with the new one, stamped with the time it arrived. That stamp gives the lag number on screen."
+        },
+        {
+          "mark": 3,
+          "line": 173,
+          "text": "Wake the AI if it was waiting for a picture."
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "ok",
+      "title": "How this is tested",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "31 automated tests cover this file, using a scripted fake camera (no network needed). They check what an address means, that the newest picture wins, that a silent camera gives up, that a dropped stream reconnects, and that stopping never releases a camera that is still being read."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "Steps 4 and 5: from the AI to your screen",
+      "kicker": "The relay"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "The AI loop is in "
+        },
+        {
+          "type": "link",
+          "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/hulikamote_backend/routers/stream.py:196",
+          "children": [
+            {
+              "type": "code",
+              "text": "stream.py › _real_loop"
+            },
+            {
+              "type": "text",
+              "text": "hulikamote_backend/routers/stream.py:196"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": ". For each picture it finds vehicles and runs the violation rules. The dashboard then needs two things: the data (boxes, tickets) and the picture. There are two ways to send the picture, chosen by "
+        },
+        {
+          "type": "code",
+          "text": "HK_PICTURE_MODE"
+        },
+        {
+          "type": "text",
+          "text": ":"
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Mode"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "How the picture travels"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Good for"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Watch out"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "synced"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " (default)"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A small JPEG inside the "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "same message"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " as the boxes"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Boxes that sit exactly on the vehicles. No encoder and no relay to go wrong."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A bit more network and CPU per picture (fine on one computer)"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "relay"
+                }
+              ]
+            }
+          ],
+          [
+            {
+              "type": "term",
+              "key": "FFmpeg",
+              "shown": "FFmpeg"
+            },
+            {
+              "type": "text",
+              "text": " compresses it ("
+            },
+            {
+              "type": "term",
+              "key": "H.264",
+              "shown": "H.264"
+            },
+            {
+              "type": "text",
+              "text": ") and sends it through "
+            },
+            {
+              "type": "term",
+              "key": "MediaMTX",
+              "shown": "MediaMTX"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Smooth video that also works for other viewers"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The picture arrives later than the boxes, so the dashboard has to delay the boxes by eye"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "16%",
+        "30%",
+        "30%",
+        "24%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "callout",
+      "kind": "info",
+      "title": "Why synced is the default",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "We first used only the relay. The picture took the longer way (encoder, relay, player) and showed up two seconds or more after the boxes, so the boxes ran ahead of the vehicles, and no fixed delay could cure it. Putting the picture in the same message makes it impossible for them to disagree."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "The rest of this section is about the "
+        },
+        {
+          "type": "b",
+          "children": [
+            {
+              "type": "text",
+              "text": "relay"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " mode."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "In relay mode, without the relay there is no picture, so the backend starts it by itself when it is installed in "
+        },
+        {
+          "type": "code",
+          "text": "hulikamote_backend/tools/mediamtx"
+        },
+        {
+          "type": "text",
+          "text": "."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/hls_broadcaster.py",
+      "first": 70,
+      "last": 91,
+      "title": "Making sure the relay is running",
+      "lines": [
+        {
+          "n": 70,
+          "tokens": [
+            {
+              "cls": "kw",
+              "text": "def"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "fn",
+              "text": "server_status"
+            },
+            {
+              "cls": "",
+              "text": "(wait_s: "
+            },
+            {
+              "cls": "bi",
+              "text": "float"
+            },
+            {
+              "cls": "",
+              "text": " = "
+            },
+            {
+              "cls": "num",
+              "text": "6.0"
+            },
+            {
+              "cls": "",
+              "text": ") -> "
+            },
+            {
+              "cls": "bi",
+              "text": "tuple"
+            },
+            {
+              "cls": "",
+              "text": "["
+            },
+            {
+              "cls": "bi",
+              "text": "bool"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "bi",
+              "text": "str"
+            },
+            {
+              "cls": "",
+              "text": "]:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 71,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "doc",
+              "text": "\"\"\"Is the video relay (MediaMTX) up? Starts it from tools/mediamtx when it is installed but not running."
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 72,
+          "tokens": [
+            {
+              "cls": "doc",
+              "text": "    Returns (ready, what to tell the user). Without the relay ffmpeg cannot send frames anywhere, and a backend that"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 73,
+          "tokens": [
+            {
+              "cls": "doc",
+              "text": "    keeps writing into it used to freeze completely.\"\"\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 74,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " _port_open():"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 75,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "True"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 76,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    exe = MEDIAMTX_DIR / "
+            },
+            {
+              "cls": "str",
+              "text": "\"mediamtx.exe\""
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 77,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " exe.exists():"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 78,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "False"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"The video relay (MediaMTX) is not running and is not installed in hulikamote_backend/tools/mediamtx.\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 79,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 80,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        subprocess.Popen("
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 81,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            ["
+            },
+            {
+              "cls": "bi",
+              "text": "str"
+            },
+            {
+              "cls": "",
+              "text": "(exe), "
+            },
+            {
+              "cls": "str",
+              "text": "\"mediamtx.yml\""
+            },
+            {
+              "cls": "",
+              "text": "], cwd="
+            },
+            {
+              "cls": "bi",
+              "text": "str"
+            },
+            {
+              "cls": "",
+              "text": "(MEDIAMTX_DIR), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 82,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            creationflags="
+            },
+            {
+              "cls": "bi",
+              "text": "getattr"
+            },
+            {
+              "cls": "",
+              "text": "(subprocess, "
+            },
+            {
+              "cls": "str",
+              "text": "\"CREATE_NO_WINDOW\""
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "num",
+              "text": "0"
+            },
+            {
+              "cls": "",
+              "text": "),"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 83,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        )"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 84,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " OSError "
+            },
+            {
+              "cls": "kw",
+              "text": "as"
+            },
+            {
+              "cls": "",
+              "text": " exc:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 85,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "False"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "f\"The video relay (MediaMTX) could not be started: {exc}\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 86,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    deadline = time.time() + wait_s"
+            }
+          ],
+          "mark": 4,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 87,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "while"
+            },
+            {
+              "cls": "",
+              "text": " time.time() < deadline:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 88,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " _port_open():"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 89,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "True"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 90,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        time.sleep("
+            },
+            {
+              "cls": "num",
+              "text": "0.25"
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 91,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "False"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "\"The video relay (MediaMTX) was started but is not answering. Check tools/mediamtx/mediamtx.yml.\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 74,
+          "text": "Is something already listening on the video port? Then there is nothing to do."
+        },
+        {
+          "mark": 2,
+          "line": 76,
+          "text": "Look for the program in our tools folder. If it is missing, say exactly where it belongs."
+        },
+        {
+          "mark": 3,
+          "line": 80,
+          "text": "Start it, hidden, with its own settings file."
+        },
+        {
+          "mark": 4,
+          "line": 86,
+          "text": "Wait up to a few seconds until it answers. If it never does, report that instead of pretending."
+        }
+      ]
+    },
+    {
+      "type": "callout",
+      "kind": "warn",
+      "title": "A real bug we found and fixed (worth telling the panel)",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "When the relay was "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "not"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " running, the encoder could not send anywhere and stopped reading. The backend kept writing pictures into it, the pipe filled up, and the "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "whole backend froze"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": ": uploads and Start hung for ever. The fix has two parts: pictures are handed to a separate writer thread through a small queue that "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "drops"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " pictures when it is full, and stopping "
+            },
+            {
+              "type": "b",
+              "children": [
+                {
+                  "type": "text",
+                  "text": "kills"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": " the encoder first instead of waiting on it. An automated test makes a deliberately stuck encoder and checks that nothing blocks."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/hls_broadcaster.py",
+      "first": 212,
+      "last": 222,
+      "title": "Only this thread can ever get stuck on the encoder",
+      "lines": [
+        {
+          "n": 212,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "def"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "fn",
+              "text": "_write_loop"
+            },
+            {
+              "cls": "",
+              "text": "("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ", proc: subprocess.Popen, frames: queue.Queue):"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 213,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "doc",
+              "text": "\"\"\"Feeds frames to ffmpeg. Only this thread can ever block on the pipe, so a stuck encoder cannot freeze the rest.\"\"\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 214,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "while"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "True"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 215,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            data = frames.get()"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 216,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " data "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 217,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 218,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 219,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                proc.stdin.write(data)"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 220,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " (OSError, ValueError):"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 221,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._started = "
+            },
+            {
+              "cls": "kw",
+              "text": "False"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 222,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 215,
+          "text": "Take the next waiting picture from the queue."
+        },
+        {
+          "mark": 2,
+          "line": 219,
+          "text": "Write it to the encoder. This is the call that can block, so it runs in its own thread."
+        },
+        {
+          "mark": 3,
+          "line": 221,
+          "text": "If the encoder is gone, mark it stopped and quit this thread."
+        }
+      ]
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_backend/engine/hls_broadcaster.py",
+      "first": 224,
+      "last": 257,
+      "title": "Stopping never waits on a stuck encoder",
+      "lines": [
+        {
+          "n": 224,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "def"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "fn",
+              "text": "stop"
+            },
+            {
+              "cls": "",
+              "text": "("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "):"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 225,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "doc",
+              "text": "\"\"\"Stop ffmpeg. Never waits on a stuck encoder: it is killed first, because closing a pipe that nobody reads"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 226,
+          "tokens": [
+            {
+              "cls": "doc",
+              "text": "        from would wait for ever (that froze the whole backend).\"\"\""
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 227,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        proc, writer, frames = "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._proc, "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._writer, "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._frames"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 228,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._proc = "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._writer = "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._frames = "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 229,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._started = "
+            },
+            {
+              "cls": "kw",
+              "text": "False"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 230,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " frames "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 231,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 232,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                frames.put_nowait("
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ")              "
+            },
+            {
+              "cls": "com",
+              "text": "# wakes the writer if it is idle"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 233,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " queue.Full:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 234,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "pass"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 235,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " proc "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 236,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 237,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                proc.kill()"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 238,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " OSError:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 239,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "pass"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 240,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 241,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                proc.wait(timeout="
+            },
+            {
+              "cls": "num",
+              "text": "2"
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 242,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " Exception:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 243,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "pass"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 244,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 245,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                proc.stdin.close()"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 246,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " Exception:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 247,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "pass"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 248,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " writer "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "not"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "None"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 249,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            writer.join(timeout="
+            },
+            {
+              "cls": "num",
+              "text": "1"
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 250,
+          "tokens": [
+            {
+              "cls": "",
+              "text": " "
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 251,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " hasattr("
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": ", "
+            },
+            {
+              "cls": "str",
+              "text": "'_ffmpeg_log'"
+            },
+            {
+              "cls": "",
+              "text": ") "
+            },
+            {
+              "cls": "kw",
+              "text": "and"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._ffmpeg_log:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 252,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": ":"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 253,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "bi",
+              "text": "self"
+            },
+            {
+              "cls": "",
+              "text": "._ffmpeg_log.close()"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 254,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "            "
+            },
+            {
+              "cls": "kw",
+              "text": "except"
+            },
+            {
+              "cls": "",
+              "text": " Exception:"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 255,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "                "
+            },
+            {
+              "cls": "kw",
+              "text": "pass"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 256,
+          "tokens": [
+            {
+              "cls": "",
+              "text": " "
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 257,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        log.info("
+            },
+            {
+              "cls": "str",
+              "text": "\"[HLS] ffmpeg RTSP ingest stopped.\""
+            },
+            {
+              "cls": "",
+              "text": ")"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 237,
+          "text": "Kill the encoder first. Closing a pipe that nobody reads from would wait for ever."
+        },
+        {
+          "mark": 2,
+          "line": 245,
+          "text": "Only now close the pipe; it cannot block any more."
+        },
+        {
+          "mark": 3,
+          "line": 249,
+          "text": "Give the writer thread one second to finish, then move on."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "How the Live Monitor makes sure it works",
+      "kicker": "The dashboard side"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "A frozen or missing part used to look like endless loading. Now the screen checks before it starts and says what is wrong, in words:"
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "What is wrong"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What the screen says"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "What to do"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "The backend is stopped or frozen"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The backend is not answering. Restart it, then press Try again."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Restart the backend"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "The video relay is missing"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "The video relay (MediaMTX) is not running... Then press Try again."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Install or start MediaMTX"
+            }
+          ]
+        ],
+        [
+          [
+            {
+              "type": "text",
+              "text": "Connected, but no picture in 12 seconds"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Connected, but no picture yet. Check the source with Change source."
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "Pick another source or check the camera"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "30%",
+        "46%",
+        "24%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ],
+        [
+          "",
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "code",
+      "path": "hulikamote_dashboard/lib/features/monitoring/presentation/screens/live_monitoring_screen.dart",
+      "first": 88,
+      "last": 109,
+      "title": "The check that runs when the screen opens and when you press Start",
+      "lines": [
+        {
+          "n": 88,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "  Future<"
+            },
+            {
+              "cls": "bi",
+              "text": "bool"
+            },
+            {
+              "cls": "",
+              "text": "> _loadSource() "
+            },
+            {
+              "cls": "kw",
+              "text": "async"
+            },
+            {
+              "cls": "",
+              "text": " {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 89,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    String? problem;"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 90,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "try"
+            },
+            {
+              "cls": "",
+              "text": " {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 91,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      final res = "
+            },
+            {
+              "cls": "kw",
+              "text": "await"
+            },
+            {
+              "cls": "",
+              "text": " _client.get(Uri.parse("
+            },
+            {
+              "cls": "str",
+              "text": "'${ApiConstants.baseUrl}/settings/camera-config'"
+            },
+            {
+              "cls": "",
+              "text": ")).timeout(const Duration(seconds: "
+            },
+            {
+              "cls": "num",
+              "text": "4"
+            },
+            {
+              "cls": "",
+              "text": "));"
+            }
+          ],
+          "mark": 1,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 92,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " (res.statusCode != "
+            },
+            {
+              "cls": "num",
+              "text": "200"
+            },
+            {
+              "cls": "",
+              "text": ") throw Exception("
+            },
+            {
+              "cls": "str",
+              "text": "'HTTP ${res.statusCode}'"
+            },
+            {
+              "cls": "",
+              "text": ");"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 93,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      final src = (jsonDecode(res.body) "
+            },
+            {
+              "cls": "kw",
+              "text": "as"
+            },
+            {
+              "cls": "",
+              "text": " Map)["
+            },
+            {
+              "cls": "str",
+              "text": "'source_url'"
+            },
+            {
+              "cls": "",
+              "text": "] "
+            },
+            {
+              "cls": "kw",
+              "text": "as"
+            },
+            {
+              "cls": "",
+              "text": " String?;"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 94,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " (mounted && src != null && src.isNotEmpty) setState(() => _sourceName = src.split(RegExp("
+            },
+            {
+              "cls": "str",
+              "text": "r'[\\\\/]'"
+            },
+            {
+              "cls": "",
+              "text": ")).last);"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 95,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      problem = "
+            },
+            {
+              "cls": "kw",
+              "text": "await"
+            },
+            {
+              "cls": "",
+              "text": " _relayProblem();"
+            }
+          ],
+          "mark": 2,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 96,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    } catch (_) {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 97,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      problem = _backendDown;"
+            }
+          ],
+          "mark": 3,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 98,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    }"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 99,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " (mounted) {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 100,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      setState(() {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 101,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " (problem != null) {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 102,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "          _problem = problem;"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 103,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        } "
+            },
+            {
+              "cls": "kw",
+              "text": "else"
+            },
+            {
+              "cls": "",
+              "text": " "
+            },
+            {
+              "cls": "kw",
+              "text": "if"
+            },
+            {
+              "cls": "",
+              "text": " (_problem != _noPictureYet) {"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 104,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "          _problem = null;                      // fixed; a "
+            },
+            {
+              "cls": "str",
+              "text": "\"no picture\""
+            },
+            {
+              "cls": "",
+              "text": " warning "
+            },
+            {
+              "cls": "kw",
+              "text": "is"
+            },
+            {
+              "cls": "",
+              "text": " only cleared by a picture arriving"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 105,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "        }"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 106,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "      });"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 107,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    }"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        },
+        {
+          "n": 108,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "    "
+            },
+            {
+              "cls": "kw",
+              "text": "return"
+            },
+            {
+              "cls": "",
+              "text": " problem == null;"
+            }
+          ],
+          "mark": 4,
+          "is_gap": false,
+          "is_hot": true
+        },
+        {
+          "n": 109,
+          "tokens": [
+            {
+              "cls": "",
+              "text": "  }"
+            }
+          ],
+          "mark": null,
+          "is_gap": false,
+          "is_hot": false
+        }
+      ],
+      "notes": [
+        {
+          "mark": 1,
+          "line": 91,
+          "text": "Ask the backend which source it uses. Give it 4 seconds."
+        },
+        {
+          "mark": 2,
+          "line": 95,
+          "text": "Then ask whether the video relay is ready."
+        },
+        {
+          "mark": 3,
+          "line": 97,
+          "text": "Any failure becomes one plain sentence."
+        },
+        {
+          "mark": 4,
+          "line": 108,
+          "text": "Start only continues when everything is ready."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "How to try it without a real CCTV",
+      "kicker": "Demonstration"
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "link",
+          "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/tools/sim_cctv/publish_clip.py:1",
+          "children": [
+            {
+              "type": "code",
+              "text": "publish_clip.py"
+            },
+            {
+              "type": "text",
+              "text": "tools/sim_cctv/publish_clip.py:1"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " plays a video clip as if it were a camera, with the same kind of address a real one gives. Run it on the same laptop, or on a second laptop on the same hotspot."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "cmd",
+      "text": "hulikamote_backend\\venv\\Scripts\\python.exe tools\\sim_cctv\\publish_clip.py C:\\path\\to\\clip.mp4 --mediamtx hulikamote_backend\\tools\\mediamtx\\mediamtx.exe"
+    },
+    {
+      "type": "steps",
+      "items": [
+        [
+          {
+            "type": "text",
+            "text": "Copy the address it prints (like "
+          },
+          {
+            "type": "code",
+            "text": "rtsp://192.168.1.20:8554/cam1"
+          },
+          {
+            "type": "text",
+            "text": ")."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "In the Live Monitor choose "
+          },
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Change source"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ", then "
+          },
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Camera or phone..."
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ", and paste it."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Press "
+          },
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Test"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ". It reports the picture size, speed and time to the first picture. The code is "
+          },
+          {
+            "type": "link",
+            "href": "vscode://file/C:/Users/nekol/Desktop/istqm_framework/k_dev/huli-kamote/hulikamote_backend/routers/settings.py:165",
+            "children": [
+              {
+                "type": "code",
+                "text": "settings.py › test_video_source"
+              },
+              {
+                "type": "text",
+                "text": "hulikamote_backend/routers/settings.py:165"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Press "
+          },
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Use this camera"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": ", then "
+          },
+          {
+            "type": "b",
+            "children": [
+              {
+                "type": "text",
+                "text": "Start monitoring"
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "."
+          }
+        ]
+      ]
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "A phone works the same way: install an Android RTSP camera app, start it, and paste the address it shows. Use your own phone hotspot or router, not venue Wi-Fi, which often stops devices from seeing each other."
+        }
+      ],
+      "is_note": false
+    },
+    {
+      "type": "heading",
+      "level": 2,
+      "id": "",
+      "text": "What we claim, and what we do not",
+      "kicker": "The honest version"
+    },
+    {
+      "type": "callout",
+      "kind": "ok",
+      "title": "The claim",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "inlines": [
+            {
+              "type": "text",
+              "text": "We do not claim that HULI-KAMOTE works on a real barangay CCTV. We surveyed how CCTV systems usually hand out their picture, built the Live Monitor to accept those inputs, and tested the same path with stand-in cameras. A real camera needs only its address."
+            }
+          ],
+          "is_note": false
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "headers": [
+        [
+          {
+            "type": "text",
+            "text": "Tested"
+          }
+        ],
+        [
+          {
+            "type": "text",
+            "text": "Not tested"
+          }
+        ]
+      ],
+      "rows": [
+        [
+          [
+            {
+              "type": "text",
+              "text": "Video files (the main path)"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "A stand-in camera from publish_clip.py"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "Failure handling: backend down, relay missing, no picture, dropped stream, reconnect"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "The freeze fix, with a deliberately stuck encoder"
+            }
+          ],
+          [
+            {
+              "type": "text",
+              "text": "A real CCTV or recorder"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "A real phone camera app"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "MJPEG and RTMP sources"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "H.265 video"
+            },
+            {
+              "type": "br"
+            },
+            {
+              "type": "text",
+              "text": "Night, rain and glare footage"
+            }
+          ]
+        ]
+      ],
+      "widths": [
+        "50%",
+        "50%"
+      ],
+      "cell_classes": [
+        [
+          "",
+          ""
+        ]
+      ],
+      "is_dense": true,
+      "is_heat": false
+    },
+    {
+      "type": "paragraph",
+      "inlines": [
+        {
+          "type": "text",
+          "text": "Two honest limits: accuracy depends on the camera's angle and quality (blur, glare, small plates), and opening a barangay's CCTV needs their permission, the recorder's address and its password. The system only reads the picture; it has no pan, tilt, zoom or audio."
+        }
+      ],
+      "is_note": false
+    }
+  ]
+}

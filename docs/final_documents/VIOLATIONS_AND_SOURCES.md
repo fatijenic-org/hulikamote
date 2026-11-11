@@ -1,6 +1,7 @@
-# Violations, legal sources and difficulty (2026-11-05)
+# Violations, legal sources and difficulty (updated 2026-11-09)
 
-35 violations: the 25 built in `hulikamote_backend/engine/violations/` plus 10 proposed ones (marked NEW). Grouped by how they would be implemented.
+37 violations: the 25 built in `hulikamote_backend/engine/violations/` plus 12 proposed ones (marked NEW). Grouped by how they would be implemented.
+Added 2026-11-09: `overtaking_on_right` and `kuliglig_with_passengers` (both proposed, not built; folders for test clips exist under `evaluation-testing-videos/`).
 
 **Grade** = how hard it is to build AND make reliable on Zamboanga-style CCTV: 1 easy, 2 moderate, 3 hard, 4 very hard, 5 close to unrealistic with today's data.
 
@@ -8,6 +9,7 @@
 - **Read** = I downloaded and read the actual law text on lawphil.net (Arellano Law Foundation). Section numbers below are from that text.
 - **Not opened** = the link came from a search result; the site blocked me (HTTP 403) or I could not confirm the content. All lto.gov.ph pages and the Manila Bulletin page were blocked. Open them yourself before quoting.
 - Fine amounts are left out on purpose: none was confirmed from a primary source.
+- Added 2026-11-09: RA 4136 §39 to §41 were re-read on lawphil.net for `overtaking_on_right` (note: the title "Overtaking a vehicle" is §39; §40 is "Driver to give way to overtaking vehicle"; §41 is the restrictions). A search for a national kuliglig rule found nothing current; only local permits and older news (2010), so that row has no confirmed legal basis.
 
 ## 1. Stopped inside a drawn zone
 
@@ -28,6 +30,7 @@
 | illegal_u_turn | No U-turn provision in RA 4136 (read). Only by sign, or under §48 or §54. | 3 | Nothing exact to test against; reversing and wide turns look similar. |
 | swerving | [RA 4136 §48](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (reckless driving) | 3 | "Reckless" has no number, so the thresholds are ours. Tracker jitter can fake a swerve. |
 | illegal_overtaking (NEW) | [RA 4136 §41](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (a to d: centre line, crest or curve, railway or intersection, road works) | 3 | Needs "A passes B" (order change in a lane) plus a centre-line crossing or a drawn no-passing zone. Reuses path logic; no test footage. |
+| overtaking_on_right (NEW, added 2026-11-09) | [RA 4136 §39](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (read: the overtaking driver passes at a safe distance to the left). The law allows passing on the right on a highway in a business or residential district with two or more lanes in one direction, and when the other vehicle is making or about to make a left turn; §41(b), (c) repeat these exceptions. | 3 | Needs "A passes B" with the side: A ends up on B's right. Legal only on multi-lane one-way sections and beside a left-turning vehicle, so the rule must be drawn only on single-lane-per-direction roads. A lane change by a slower vehicle can look the same. No test footage; film it (`evaluation-testing-videos/overtaking_on_right`). |
 
 ## 3. Crossing a line or entering a banned zone
 
@@ -38,7 +41,7 @@
 | crossing_solid_line | [RA 4136 §41(a)](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (centre line when overtaking) | 3 | The line is drawn by hand; "clearly past the line" is a threshold of ours. |
 | restricted_lane | No national source found; local ordinance, to confirm | 2 | Easy rule (class not allowed in the lane). The open part is the legal basis. |
 | truck_ban | No source found; local ordinance, to confirm | 3 | Pickups usually come out as "truck". |
-| tricycle_on_highway | [DILG MC 2023-195](https://batasnatin.com/laws/mc-2023-195) (copy on a legal-text site, not the DILG page); [news](https://philstar.com/cebu-news/2023/12/10/2317820/lgus-told-ban-tricycles-national-highways) | 4 | The stock detector has no tricycle class; the 6-class model is trained but not active. |
+| tricycle_on_highway | DILG MC 2020-036, 17 Feb 2020 ([news](https://mb.com.ph/2020/02/19/dilg-to-strictly-enforce-ban-on-tricycles-plying-highways-major-roads/), circular text not opened); [DILG MC 2023-195](https://batasnatin.com/laws/mc-2023-195) (copy on a legal-text site, not the DILG page); [news](https://philstar.com/cebu-news/2023/12/10/2317820/lgus-told-ban-tricycles-national-highways); Zamboanga City's own position in 2020 ([news](https://www.sunstar.com.ph/article/1847679/Zamboanga/Local-News/Zamboanga-City-Government-to-allow-trikes-on-national-highways), not opened) | 4 | The stock detector has no tricycle class; the 6-class model is trained but not active. The ban is on national highways, but each LGU lists its national highways and the portions tricycles may use where there is no alternative route (Tricycle Route Plan), and may allow them by ordinance; Zamboanga City said in 2020 it could allow them. The video cannot tell a national highway from another road, so the operator states for each camera that the ban applies there (no zone drawn = the whole view; a zone limits it). The DPWH national road list (route numbers N1-N99 primary, N100-N999 secondary; tertiary roads have no number) and the city's current route plan decide it. Confirm with the City Council or DILG Region IX. |
 | sidewalk_driving | [RA 4136 §52](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (drive or park on a sidewalk) | 3 | The sidewalk zone is drawn; pedestrians share the zone. |
 | failure_to_yield_pedestrian (NEW) | [RA 4136 §42(c)](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (yield to a pedestrian in a crosswalk) | 3 | Needs person tracks, a crosswalk zone, and a car that does not slow down. The law excludes junctions run by a signal or enforcer. |
 
@@ -49,6 +52,7 @@
 | overloading | [RA 4136 §32](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (registered capacity); motorcycle back-rider rule: [LTO AO AHS-2008-015](https://dev.lawyerly.ph/laws/55941) (copy on a legal-text site, not read) | 3 | Counts person boxes; riders overlap and blur. |
 | pickup_passengers | [RA 4136 §32(b)](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (passengers on top or cover), §51 (hanging on or riding the outside or rear). The 2019 LTO memo was not found. | 4 | Pickups are detected as "truck"; people in the bed are hidden behind the sides. |
 | riding_outside_vehicle | [RA 4136 §32(b), (c)](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (top, running board), §51 | 4 | Roof riders versus people hanging on; someone on a rear step is hidden from behind. |
+| kuliglig_with_passengers (NEW, added 2026-11-09) | No national rule found that names the kuliglig (an open-cab motor cart); regulated locally, ordinance to confirm. Related: [RA 4136 §32(b)](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (passengers on top or cover) and §51 (riding outside or at the rear) may apply, not confirmed for this vehicle. | 4 | Rule as stated by the team: an open kuliglig must carry no person (assumption: the driver is excepted; confirm). The rule is easy once the vehicle is found (a person box inside the kuliglig box), but no detector has a kuliglig class and no public footage exists: train the class from your own clips. Tricycle and truck labels will leak into it. |
 | child_on_motorcycle (NEW) | [RA 10666 §4](https://lawphil.net/statutes/repacts/ra2015/ra_10666_2015.html) (child must reach the foot pegs, hold the rider's waist, wear a helmet) | 4 | Must tell a child from a small adult and see the feet. The law only applies on busy roads or where the limit is above 60 km/h. |
 
 ## 5. Specialist model on the vehicle crop

@@ -59,3 +59,30 @@ above in a background thread (the stream never waits), and uses what it found fo
 
 Never from a guess: a refused, failed or unclear read installs nothing, and no ticket can come from a zone that was not learned. A tiled pavement strip beside the
 road can still pass for a crosswalk (see the finder's limits above); a crosswalk cropped by the picture's edge is refused rather than guessed.
+
+## "Detect road" in the Live Monitor: watch the finder work, then Apply (`begin_detect` in `engine/live_calibrator.py`)
+
+While the video plays, the operator presses **Detect road** (next to Change source). The live video shrinks into the top-right corner (it keeps playing), the
+frame from that moment is shown large, and every step the finder takes is swept over it from left to right, one at a time, until the crosswalk and lines
+it found are drawn. Then **Apply** or **Discard**.
+
+| What | Behaviour |
+|---|---|
+| Frozen frame | The newest picture when the button is pressed (`GET /settings/video/road/detect/frame`). It is only the canvas the steps are drawn on. |
+| Footage | The finder needs movement, not one still: it reads the last ~40 s of the camera from a rolling buffer (about 125 MB) that the calibrator keeps while a camera is connected. If the buffer is not full yet the screen says "Watching the traffic 12/40 s" and starts by itself; after 90 s without enough footage it says why. |
+| Steps | `steady`, `empty`, `motion`, `direction`, `road`, `topview`, `paint` come from the finder itself (`analyse_clip(clip, trace=...)`, real pictures, not mock-ups); `marks` is what the live monitor would do with the result: rule / hint only / ignored, with the reason. Each finished step is a PNG with see-through parts (`GET .../detect/step/{id}`); "Taking the traffic away" replaces the frame as the base picture. |
+| Apply | Saves the road for the camera (same as automatic learning) and switches the matching violation on (a crosswalk -> Pedestrian lane) in `camera_config.json` `active_violations`; when it had to switch one on, the live view restarts once. Disabled when no crosswalk passed the rules (lines are only hints). |
+| Discard / Back to live | Drops the detection; nothing is saved. Automatic learning on connect is unchanged. |
+| Endpoints | `POST /settings/video/road/detect`, `GET` (state + steps), `GET .../frame`, `GET .../step/{id}`, `POST .../discard`, `POST .../apply`. |
+
+Limits: one detection at a time; analysis takes 10-60 s depending on the laptop's load (the live detector runs meanwhile); a crosswalk cut by the picture's edge gets no zone.
+
+## Detect road, second round (2026-11-10): faster, road + sidewalk, corrections, saved per camera
+
+- **Faster first step.** A steady camera is recognised from a small sample of frames; the rest are not matched one by one. First step 4 s -> about 1 s on the test clips.
+- **Several filters, self-tightening.** The paint step runs the plain white top-hat plus a CLAHE-equalised one and keeps what both agree on. If more than 30 % of the road would be "paint" (old concrete, joints), it steps up the strictness (`PAINT_LEVELS` 0.7 .. 3.0) instead of giving up with "too much paint". On clean asphalt it stays at the sensitive end, so faint lines survive.
+- **Road and sidewalk (model-free draft).** A new step "people" runs the vehicle detector on the same footage (`track=False`, so the live trackers are untouched) and maps each vehicle's and person's foot point into the top view. Moving vehicles (not parked ones) give the road corridor; people outside it, on a side with enough footfall, give a sidewalk. Result: `regions` (road / sidewalk polygons in video pixels).
+- **Corrections.** After the sweep, **Correct** opens the frozen picture with crosswalk / road / sidewalk polygons: tap to select, drag corners, change kind, delete, add, "Back to the scan". Apply sends the corrections (`POST /settings/video/road/detect/zones`, checked by `clean_zones`) and then applies.
+- **Saved per camera.** `camera_config.json learned_road[camera]` now also holds `regions` and `edited`. They come back on the next connect and are drawn on the live picture (blue road, green sidewalk).
+- **Limits (be honest):** road and sidewalk are a draft from where vehicles and people were seen, not a trained segmentation. A quiet street gives no road, a sidewalk with a parked-car row can be missed or wrong (seen on one test clip). The areas are drawn and saved but no violation rule uses them yet. A trained segmentation model (Cityscapes-type) would be the real fix; it needs a download and a licence check, so it was not added.
+- Tests: `tests/engine/test_road_corrections.py` (16), dashboard `test/features/monitoring/road_detect_test.dart` (+4).
