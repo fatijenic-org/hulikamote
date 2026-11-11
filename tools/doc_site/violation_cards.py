@@ -40,15 +40,18 @@ def cards() -> list[dict]:
                     "Automatic learning was scored against hand-drawn zones only on the short local clips; <code>FlowField.compare_with_zones</code> does that check."],
             state=("warn", "Rule + tests; not scored on real footage"),
             code=[lambda: code(V + "counterflow.py", "Counterflow.evaluate", title="Zone mode: the rule", walk=[
-                ("zone = next((z for z in zones", "Is the vehicle's ground point inside one of the zones? If not, nothing to judge."),
+                ("found = next(((i, z) for i, z in enumerate(zones)", "Is the vehicle's ground point inside one of the zones? If not, nothing to judge."),
                 ("if zone.get(\"auto\")", "An automatic zone (the whole frame) is judged by the learned flow instead of an arrow."),
-                ("legal = zone.get(\"vector\"", "The arrow the operator drew."),
-                ("moved = ledger.get_movement_vector()", "Where the vehicle actually went."),
-                ("< 0.0:", "The cosine of the angle between the two arrows is negative when they point opposite ways: counterflow."),
+                ("legal = unit(*zone.get(\"vector\"", "The arrow the operator drew."),
+                ("current = heading(ledger)", "Where the vehicle actually went (nothing while it barely moves)."),
+                ("dot(current, legal) < AGAINST_COS", "The two arrows point in opposite ways (the cosine is below the limit): counterflow."),
             ]),
                   lambda: code(V + "counterflow.py", "Counterflow._evaluate_auto", title="Automatic mode: the rule", walk=[
                       ("head = heading(ledger)", "Current direction of travel (nothing while barely moving)."),
                       ("zone[\"field\"].verdict(", "Ask the learned flow whether this heading is with, against, or unknown for this part of the picture."),
+                      ("return self._sustained(ledger", "Hand the verdict to the shared timer below."),
+                  ]),
+                  lambda: code(V + "counterflow.py", "Counterflow._sustained", title="The timer: one bad frame never counts", walk=[
                       ("ledger.stop_timers.setdefault(key, t)", "Start a timer the first moment it is heading against the flow; any break resets it."),
                       ("t - start >= WRONG_WAY_S", "Only after 1.5 seconds in a row is it counterflow."),
                   ]),
@@ -97,7 +100,7 @@ def cards() -> list[dict]:
             code=[lambda: code(V + "restricted_lane.py", "RestrictedLane.evaluate", walk=[
                 ("point_in_polygon(cx, cy, zone[\"polygon\"])", "Is the ground point inside the lane?"),
                 ("ledger.vclass != \"unknown\"", "A class that is not settled yet is never judged."),
-                ("not in zone.get(\"allowed_classes\"", "The class is not on the allowed list: flag."),
+                ("ledger.vclass not in allowed", "The class is not on the allowed list: flag."),
             ])]),
         dict(
             key="pedestrian_lane", name="Pedestrian lane obstruction", family="zone", group="Movement and position", status="thesis", sketch="timer",
@@ -139,7 +142,7 @@ def cards() -> list[dict]:
             state=("warn", "Rule + tests; not scored on real footage"),
             code=[lambda: code(V + "illegal_turn.py", "IllegalTurn.evaluate", walk=[
                 ("point_in_polygon(cx, cy, zone[\"polygon\"])", "Only while the vehicle is inside the zone."),
-                ("turned_into(ledger, (self.key, i)", "Has it turned into the forbidden direction? (shared test below)"),
+                ("hit = turned_into(ledger, key", "Has it turned into the forbidden direction? (shared test below)"),
             ]),
                   lambda: code(V + "geometry.py", "turned_into", title="The shared 'did it turn into this direction' test", walk=[
                       ("turn_headings(ledger, key)", "The heading just after entering, and the heading now."),
@@ -212,7 +215,7 @@ def cards() -> list[dict]:
                 ("crossed_line(ledger, (self.key, i)", "Did the ground point cross the line this frame? (shared test below)"),
             ]),
                   lambda: code(V + "geometry.py", "crossed_line", title="The shared 'crossed the line' test (also used by red light and the stop sign)", walk=[
-                      ("side = ((cx - x1) * ly", "Signed distance from the line: positive on one side, negative on the other."),
+                      ("side = line_side(line, cx, cy)", "Signed distance from the line: positive on one side, negative on the other."),
                       ("margin = max(10.0, 0.3 * w)", "It must be clearly on a side: 30% of the box width, at least 10 pixels."),
                       ("ledger.line_side[key] = 1.0 if side > 0", "First clear side is remembered."),
                       ("ledger.line_side[key] = \"crossed\"", "On the other clear side: crossed. It can only cross once."),
@@ -486,7 +489,7 @@ def cards() -> list[dict]:
             state=("warn", "Rule + fake-model tests; not scored on real footage"),
             code=[lambda: code(V + "distracted_driving.py", "DistractedDriving.judge", walk=[
                 ("cabin.judgeable(look)", "The same safety gate as the seatbelt check."),
-                ("any(d[\"class_id\"] == IDX_DRIVER_PHONE", "Is a phone in the driver's hand in this look?"),
+                ("phones = [d for d in look.dets", "Is a phone in the driver's hand in this look?"),
             ])]),
         dict(
             key="missing_side_mirror", name="Missing side mirror", family="model", group="Vehicle and riders", status="thesis", sketch="mirror",
@@ -505,7 +508,7 @@ def cards() -> list[dict]:
             state=("bad", "Cannot work until the cabin model is retrained on mirror data"),
             code=[lambda: code(V + "missing_side_mirror.py", "MissingSideMirror.judge", walk=[
                 ("front_or_rear_view(ledger)", "Only when the camera sees the motorcycle's front or rear."),
-                ("mirrors = sum(1 for d in look.dets", "Count the mirrors the model found."),
+                ("found = [d for d in look.dets", "Count the mirrors the model found."),
                 ("mirrors < 2", "Fewer than two is a bad look."),
             ]),
                   lambda: code(V + "geometry.py", "front_or_rear_view", walk=[

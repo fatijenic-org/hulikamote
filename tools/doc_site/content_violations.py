@@ -43,6 +43,87 @@ def _cascade() -> str:
     return svg(760, 235, "".join(parts), "How a frame becomes a ticket: detector, tracker, ledger, then three kinds of violation checks, then evidence")
 
 
+# ── Scope of the study (the table for the panel). Edit here when the scope changes; see docs/final_documents/. ──────────────
+LAW = ("ok", "Law text read")
+ORDER = ("info", "Order read (copy)")
+UNSURE = ("warn", "Not opened")
+NONE = ("warn", "None found")
+BUILT = ("ok", "Built")
+NOT_BUILT = ("bad", "Not built yet")
+EXPERIMENTAL = ("warn", "Built, experimental")
+# (key, name, applies to, kind, state, legal basis, source strength)
+MANDATORY = [
+    ("counterflow", "Counterflow", "All vehicles", "Zone rule", BUILT, "RA 4136 &sect;37", LAW),
+    ("illegal_parking", "Illegal parking", "All vehicles", "Zone rule", BUILT, "RA 4136 &sect;46", LAW),
+    ("illegal_turn", "Illegal turn", "All vehicles", "Zone rule", BUILT, "RA 4136 &sect;45", LAW),
+    ("disregarding_signs", "Disregarding traffic signs (stop sign)", "All vehicles", "Zone rule", BUILT, "JAO 2014-01 (RA 4136 has no stop-sign rule)", UNSURE),
+    ("no_plate", "No visible plate number", "All vehicles", "Model check", BUILT, "RA 4136 &sect;18; motorcycles: RA 11235 &sect;5 as amended by RA 12209", LAW),
+    ("no_helmet", "No helmet", "Motorcycle only", "Model check", BUILT, "RA 10054 &sect;3; LTO AO AHS-2008-015 &sect;VII", LAW),
+    ("missing_side_mirror", "Missing side mirror", "Motorcycle only", "Model check", BUILT, "LTO AO AHS-2008-015 &sect;VIII", ORDER),
+    ("overloading", "Overloading", "Motorcycle only", "Frame check", BUILT, "RA 4136 &sect;32; LTO AO AHS-2008-015 &sect;VI", LAW),
+    ("no_seatbelt", "No seatbelt", "Car only", "Model check", BUILT, "RA 8750 &sect;4", LAW),
+    ("kuliglig_passenger", "Passenger in a kuliglig", "Kuliglig only", "Frame check", NOT_BUILT, "No national rule found; nearest: RA 4136 &sect;32(b), &sect;51", NONE),
+    ("pickup_passengers", "Passengers in a pickup bed", "Pickup, truck", "Frame check", BUILT, "RA 4136 &sect;32(b), &sect;51", LAW),
+    ("riding_outside_vehicle", "Riding outside the vehicle", "All except motorcycle", "Frame check", BUILT, "RA 4136 &sect;32(b), (c), &sect;51", LAW),
+    ("signal_light", "Signal light", "All vehicles", "Zone rule", EXPERIMENTAL, "RA 4136 &sect;44", LAW),
+    ("red_light", "Red light running", "All vehicles", "Zone rule", BUILT, "JAO 2014-01 (RA 4136 has no signal rule)", UNSURE),
+    ("swerving", "Swerving", "All vehicles", "Zone rule", BUILT, "RA 4136 &sect;48", LAW),
+    ("pedestrian_lane", "Pedestrian lane obstruction", "All vehicles", "Zone rule", BUILT, "RA 4136 &sect;46(b)", LAW),
+    ("illegal_u_turn", "Illegal U-turn", "All vehicles", "Zone rule", BUILT, "No U-turn section in RA 4136; charged by sign", NONE),
+    ("crossing_solid_line", "Crossing a solid line", "All vehicles", "Zone rule", BUILT, "RA 4136 &sect;41(a)", LAW),
+    ("restricted_lane", "Restricted lane", "All vehicles", "Zone rule", BUILT, "No national source; local ordinance", NONE),
+    ("overtaking_on_right", "Overtaking on the right", "All vehicles", "Zone rule", NOT_BUILT, "RA 4136 &sect;39 (pass on the left; right allowed on multi-lane one-way roads)", LAW),
+]
+EXTRAS = [
+    ("blocking_intersection", "Blocking the intersection", "All vehicles", "Zone rule", "RA 4136 &sect;54, &sect;46(a)"),
+    ("sidewalk_driving", "Driving on the sidewalk", "All vehicles", "Zone rule", "RA 4136 &sect;52"),
+    ("illegal_loading", "Illegal loading / unloading", "Bus, jeepney, tricycle, truck", "Zone rule", "RA 4136 &sect;54"),
+    ("truck_ban", "Truck ban", "Truck", "Zone rule", "No national source; local ordinance"),
+    ("tricycle_on_highway", "Tricycle on a national highway", "Tricycle", "Zone rule", "DILG MC 2020-036 and 2023-195"),
+    ("double_parking", "Double parking", "All vehicles", "Zone rule", "RA 4136 &sect;46(g)"),
+    ("distracted_driving", "Phone use while driving", "Car", "Model check", "RA 10913 &sect;4"),
+]
+CARD_KEYS = {"counterflow", "illegal_parking", "restricted_lane", "pedestrian_lane", "illegal_turn", "illegal_u_turn", "swerving", "crossing_solid_line",
+             "blocking_intersection", "red_light", "disregarding_signs", "signal_light", "overloading", "pickup_passengers", "riding_outside_vehicle",
+             "no_plate", "no_helmet", "no_seatbelt", "distracted_driving", "missing_side_mirror"}
+
+
+def _name(key: str, name: str) -> str:
+    return f"<a href='#v-{key}'><b>{name}</b></a>" if key in CARD_KEYS else f"<b>{name}</b>"
+
+
+def _scope(p: Page) -> None:
+    built = sum(1 for m in MANDATORY if m[4] is not NOT_BUILT)
+    p.h2("scope", "Scope of the study", kicker="Start here", newpage=False)
+    p.add(f"<p><b>{len(MANDATORY)} mandatory violations</b> ({built} built, {len(MANDATORY) - built} not built yet) and <b>{len(EXTRAS)} optional extras</b> (built, not promised). "
+          "The vehicles covered are those common in Zamboanga City: motorcycle, car, tricycle, jeepney, bus, truck, pickup and kuliglig.</p>")
+    rows = []
+    for i, (key, name, who, kind, state, law, strength) in enumerate(MANDATORY, 1):
+        rows.append([str(i), _name(key, name), who, kind, chip(*state), law, chip(*strength)])
+    p.h3("scope-mandatory", "The 20 mandatory violations")
+    p.add(table(["#", "Violation", "Applies to", "Kind", "In the system", "Legal basis", "Source check"], rows, "dense", ["3%", "20%", "12%", "9%", "11%", "32%", "13%"]))
+    p.add("<p class='note'><b>Source check:</b> 'Law text read' = the section was read on lawphil.net. 'Order read (copy)' = read on a legal-text site, not on the LTO site. "
+          "'Not opened' = the LTO page blocks the request, so the item number is still to be added. 'None found' = no national law names it; the nearest law and the local ordinance apply. "
+          "The study tests detection, not the legal case.</p>")
+    rows = [[_name(k, n), who, kind, chip(*BUILT), law, "Card below" if k in CARD_KEYS else "No card yet"] for k, n, who, kind, law in EXTRAS]
+    p.h3("scope-extras", "The 7 optional extras")
+    p.add(table(["Violation", "Applies to", "Kind", "In the system", "Legal basis", "Card"], rows, "dense", ["22%", "17%", "9%", "11%", "28%", "13%"]))
+    p.h3("scope-camera", "Camera, light and data")
+    p.add(table(["Topic", "In scope", "Out of scope"], [
+        ["<b>Camera</b>", "Fixed camera, 3 to 8 m above the road, looking down 15 to 45 degrees; vehicles move toward or away from the camera", "Moving or hand-held camera; straight top-down view"],
+        ["<b>Light and weather</b>", "Daylight; no strong backlight; no heavy rain; clean lens", "Night; heavy rain; strong backlight"],
+        ["<b>Video</b>", "720p or higher; 15 fps or higher; vehicle at least 120 px wide (plate: 60 px); each vehicle visible 3 s or more (swerving: 6 s)", "Lower quality footage"],
+        ["<b>Training and test data</b>", "Barangay CCTV first; if it is low quality or outside the camera limits: public datasets and our own recordings", "Game footage, simulator footage, MMDA footage"],
+    ], "dense", ["16%", "56%", "28%"]))
+    p.add(callout("warn", "Limits to say plainly",
+                  "<ol><li><b>Two mandatory violations are not built yet:</b> kuliglig passenger and overtaking on the right.</li>"
+                  "<li><b>Missing side mirror</b> is judged from the front or rear only: mirrors are small, arms hide them, and from the side one mirror is always hidden.</li>"
+                  "<li><b>Disregarding signs</b> covers the stop sign only. The sign and the traffic light are drawn on the picture by the operator; the system never reads a sign from the image.</li>"
+                  "<li><b>Vehicle classes:</b> the active detector has no tricycle or kuliglig class. It calls pickups 'truck' and jeepneys 'bus'.</li>"
+                  "<li><b>No violation is scored on real footage yet.</b> Results will be reported on barangay or own footage.</li></ol>"))
+    p.end()
+
+
 def render_card(c: dict) -> str:
     info = tests_info(c["module"])
     fam_name, fam_desc = FAMILY[c["family"]]
@@ -78,12 +159,14 @@ def render_card(c: dict) -> str:
 
 def build() -> Page:
     p = Page("4-violations.html", "4", "Violations",
-             "All 20 violations the system looks for: where each comes from in law, how it is decided step by step, which models help, how to set it up in the dashboard, "
-             "and the exact code, with the code that feeds each model.")
+             "The scope of the study (20 mandatory violations and 7 optional extras, in one table), then for the built violations: where each comes from in law, how it is decided step by step, "
+             "which models help, how to set it up in the dashboard, and the exact code.")
     allc = cards()
 
+    _scope(p)
+
     # ── overview ──────────────────────────────────────────────────────────────
-    p.h2("overview", "How a violation is decided", kicker="Start here", newpage=False)
+    p.h2("overview", "How a violation is decided", kicker="How it works")
     p.add("<p>The system does not use one big model to say 'violation'. A violation is a <b>decision</b> built from three layers: <b>models</b> that find what is in the picture, "
           "<b>tracking</b> that follows each vehicle over time, and a small <b>rule</b> (a [[heuristic]]) that turns the picture and the path into a yes or no. "
           "Each of the 20 violations is its own small file in <code>hulikamote_backend/engine/violations/</code> with the same shape, so any one of them can be read, tested, switched off or replaced alone.</p>")
@@ -174,7 +257,7 @@ def build() -> Page:
         ("self.flow.observe_frame(", "In automatic flow mode: let the traffic teach the flow field."),
         ("self._run_specialists(frame", "Helmet, plate and cabin models look at the vehicles they apply to."),
         ("self._judge(frame", "Zone rules and frame checks run."),
-        ("self._capture_evidence_frame(frame, det, tid)", "Anything flagged gets an evidence photo with the 'why' boxes."),
+        ("self._capture_evidence_frame(frame, det, tid, detections)", "Anything flagged gets an evidence photo with the 'why' boxes."),
     ]))
     p.add(code(ENG + "pipeline.py", "DecoupledPipeline._run_specialists", walk=[
         ("(frame_count + i) % SPECIALIST_INTERVAL", "A specialist runs on every 5th look, spread across vehicles so there is never one big pause."),

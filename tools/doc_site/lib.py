@@ -31,6 +31,7 @@ PAGES = [
     ("3-training-pipeline.html", "3", "Training pipeline"),
     ("4-violations.html", "4", "Violations"),
     ("5-qa.html", "5", "Q&A"),
+    ("6-live-camera.html", "6", "Live camera"),
 ]
 
 
@@ -229,7 +230,9 @@ _TI = None
 def tests_info(path: str) -> dict | None:
     global _TI
     if _TI is None:
-        _TI = json.loads((ROOT / "docs" / "project_map" / "tests_index.json").read_text(encoding="utf-8"))
+        index = next((p for p in (ROOT / "docs" / "agentic_workflows" / "project_map" / "tests_index.json",
+                                  ROOT / "docs" / "project_map" / "tests_index.json") if p.exists()), None)
+        _TI = json.loads(index.read_text(encoding="utf-8")) if index else {"files": {}, "tests": [], "runs": {}}
     f = _TI["files"].get(path)
     if not f:
         return None
