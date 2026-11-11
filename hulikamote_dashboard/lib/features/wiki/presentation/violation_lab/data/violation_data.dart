@@ -1,8 +1,8 @@
-import '../domain/models/violation_visualizer_model.dart';
+import '../models/violation_model.dart';
 
-const List<ViolationVisualizerModel> kViolationVisualizerList = [
+final List<ViolationModel> violationsData = [
   // MOTORCYCLE
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'm1',
     title: 'Counterflow',
     category: 'Motorcycle / Cars',
@@ -19,7 +19,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8', 'ByteTrack', 'Vector Math'],
     visualizerType: VisualizerType.counterflow,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'm2',
     title: 'Illegal Parking',
     category: 'Motorcycle / Cars',
@@ -36,7 +36,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8', 'ByteTrack', 'PNPoly Ray-Casting'],
     visualizerType: VisualizerType.zoneOverlap,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'm3',
     title: 'Illegal Turn',
     category: 'Motorcycle / Cars',
@@ -52,7 +52,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8', 'ByteTrack', 'Trigonometry'],
     visualizerType: VisualizerType.illegalTurn,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'm4',
     title: 'No Helmet',
     category: 'Motorcycle',
@@ -67,7 +67,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8 (Composite Classes)', 'Geometric IoU', 'Temporal Buffer'],
     visualizerType: VisualizerType.noHelmet,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'm5',
     title: 'Missing Side Mirror',
     category: 'Motorcycle',
@@ -82,7 +82,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8', 'Sub-Cropping', 'Counting Logic'],
     visualizerType: VisualizerType.missingSideMirror,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'm6',
     title: 'Overloading',
     category: 'Motorcycle',
@@ -98,7 +98,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     visualizerType: VisualizerType.overloading,
   ),
   // CAR
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'c1',
     title: 'No Plate Number',
     category: 'Cars / Motorcycle',
@@ -113,7 +113,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8 (Plate)', 'Sub-Cropping', 'EasyOCR'],
     visualizerType: VisualizerType.staticCrop,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'c2',
     title: 'Red Light Running',
     category: 'Cars / Motorcycle',
@@ -128,7 +128,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['Dual-ROI Vision', 'ByteTrack', 'Boolean Gating'],
     visualizerType: VisualizerType.redLightRunning,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'c3',
     title: 'No Seatbelt',
     category: 'Cars',
@@ -143,7 +143,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8', 'Safety Override Gates', 'Cabin Specialist'],
     visualizerType: VisualizerType.noSeatbelt,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'c4',
     title: 'Crosswalk Obstruction',
     category: 'Cars / Motorcycle',
@@ -158,7 +158,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['YOLOv8', 'Velocity Filter', 'Conjunction Logic'],
     visualizerType: VisualizerType.pedestrianObstruction,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'c5',
     title: 'Distracted Driving (Mobile Phone)',
     category: 'Cars',
@@ -174,7 +174,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     visualizerType: VisualizerType.distractedDriving,
   ),
   // EXTENDED
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'e1',
     title: 'Swerving',
     category: 'Extended',
@@ -189,7 +189,7 @@ const List<ViolationVisualizerModel> kViolationVisualizerList = [
     tools: ['ByteTrack', 'Kinematics', 'Jerk Calculation'],
     visualizerType: VisualizerType.swerving,
   ),
-  ViolationVisualizerModel(
+  ViolationModel(
     id: 'e2',
     title: 'Over-speeding',
     category: 'Extended',

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
@@ -10,6 +11,7 @@ import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
 import '../widgets/camera_input_dialog.dart';
 import '../widgets/camera_status_chip.dart';
+import '../widgets/road_detect_view.dart';
 import '../widgets/road_learning_chip.dart';
 import '../widgets/video_feed_widget.dart';
 import '../widgets/alert_list_widget.dart';
@@ -29,6 +31,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   Stream<dynamic>? _broadcastStream;
   bool _isMocking = false;
   bool _isPlaying = false;
+  bool _showPanel = true;    // the detections list on the right can be folded away to give the picture the whole width
+  bool _roadDetecting = false;   // "Detect road": the live video is a small window and the frozen frame is shown large
+  int _roadDetectRun = 0;        // a new walkthrough starts from a clean view
   String _sourceName = 'Intersection_01';
 
   int _reconnectTries = 0;
@@ -37,6 +42,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   String? _problem;          // what is wrong, in words, shown above the picture until it is fixed
   Timer? _noPicture;         // fires when the feed connected but no picture arrived
   bool _gotFrame = false;
+
+  /// Boxes are shown this long after they arrive, because the picture reaches the screen later (see VideoFeedWidget).
+  /// Adjust by eye in the More menu; the choice is kept.
+  static const _delayKey = 'live_box_delay_ms';
+  int _boxDelayMs = 400;
 
   final CameraApi _cameraApi = CameraApi();
   Map<String, dynamic>? _camera; // the backend's view of the camera: state, fps, lag (shown while monitoring)
@@ -55,6 +65,21 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     // Do NOT connect automatically. Let the user explicitly start it
     // so it doesn't run in the background and spam the database.
     _loadSource();
+    _loadBoxDelay();
+  }
+
+  Future<void> _loadBoxDelay() async {
+    try {
+      final saved = (await SharedPreferences.getInstance()).getInt(_delayKey);
+      if (saved != null && mounted) setState(() => _boxDelayMs = saved);
+    } catch (_) {}
+  }
+
+  Future<void> _nudgeBoxDelay(int by) async {
+    setState(() => _boxDelayMs = (_boxDelayMs + by).clamp(0, 2000));
+    try {
+      await (await SharedPreferences.getInstance()).setInt(_delayKey, _boxDelayMs);
+    } catch (_) {}
   }
 
   static const _backendDown = 'The backend is not answering. Restart it, then press Try again.';
@@ -184,6 +209,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     _noPicture?.cancel();
     setState(() {
       _isPlaying = false;
+      _roadDetecting = false;
       _camera = null;
       _channel?.sink.close();
       _channel = null;
@@ -252,7 +278,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         FxBanner(message: _problem!, action: TextButton(onPressed: _retry, child: const Text('Try again'))),
         const SizedBox(height: Fx.s12),
       ],
-      Expanded(child: _playing ? VideoFeedWidget(stream: _broadcastStream!) : _pausedStage()),
+      Expanded(child: _playing ? _videoArea() : _pausedStage()),
     ]);
     final detections = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Live detections', style: Fx.heading(context).copyWith(fontSize: 18)),
@@ -266,14 +292,25 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         child: LayoutBuilder(
           builder: (context, box) => box.maxWidth >= 1000
               ? Row(children: [
-                  Expanded(flex: 7, child: stage),
-                  const SizedBox(width: Fx.s24),
-                  Expanded(flex: 3, child: detections),
+                  Expanded(child: stage),
+                  // Offstage keeps the list (and what it already caught) alive while it is folded away
+                  Offstage(
+                    offstage: !_showPanel,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: Fx.s24),
+                      child: SizedBox(width: (box.maxWidth - Fx.s24) * 0.3, child: detections),
+                    ),
+                  ),
                 ])
               : Column(children: [
-                  Expanded(flex: 3, child: stage),
-                  const SizedBox(height: Fx.s16),
-                  Expanded(flex: 2, child: detections),
+                  Expanded(child: stage),
+                  Offstage(
+                    offstage: !_showPanel,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: Fx.s16),
+                      child: SizedBox(height: box.maxHeight * 0.4, child: detections),
+                    ),
+                  ),
                 ]),
         ),
       ),
@@ -301,6 +338,22 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ]),
       ),
       const SizedBox(width: Fx.s12),
+      if (_playing) ...[
+        _roadDetecting
+            ? FilledButton.tonalIcon(
+                key: const ValueKey('road-detect-toggle'),
+                onPressed: _toggleRoadDetect,
+                icon: const Icon(Icons.close),
+                label: const Text('Back to live'),
+              )
+            : OutlinedButton.icon(
+                key: const ValueKey('road-detect-toggle'),
+                onPressed: _toggleRoadDetect,
+                icon: const Icon(Icons.route),
+                label: const Text('Detect road'),
+              ),
+        const SizedBox(width: Fx.s8),
+      ],
       _sourceMenu(),
       if (_playing) ...[
         const SizedBox(width: Fx.s8),
@@ -311,8 +364,89 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           style: FilledButton.styleFrom(backgroundColor: Fx.danger, foregroundColor: Colors.black),
         ),
       ],
+      IconButton(
+        tooltip: _showPanel ? 'Hide detections' : 'Show detections',
+        icon: Icon(_showPanel ? Icons.keyboard_double_arrow_right : Icons.keyboard_double_arrow_left),
+        onPressed: () => setState(() => _showPanel = !_showPanel),
+      ),
       _moreMenu(),
     ]);
+  }
+
+  // ─── "Detect road" ─────────────────────────────────────────────────────────
+  // The operator presses Detect road while the video plays: the backend freezes that frame and reads the road, the live video
+  // shrinks into the top-right corner (still playing) and the frozen frame is shown large with every step swept over it.
+
+  static const _pipSize = Size(300, 169);
+
+  /// Press (or press again to go back to the live picture).
+  Future<void> _toggleRoadDetect() async {
+    if (_roadDetecting) {
+      try {
+        await _cameraApi.discardRoadDetect();
+      } catch (_) {}
+      if (mounted) setState(() => _roadDetecting = false);
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await _cameraApi.startRoadDetect();
+      if (mounted) {
+        setState(() {
+          _roadDetecting = true;
+          _roadDetectRun++;
+        });
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('${e is Exception ? e.toString().replaceFirst('Exception: ', '') : e}')));
+    }
+  }
+
+  void _closeRoadDetect({required bool applied}) {
+    if (!mounted) return;
+    setState(() => _roadDetecting = false);
+    if (applied) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Road applied: the live monitor now uses the crosswalk.')));
+    }
+    _pollCamera();
+  }
+
+  /// The live video, full size, or - while the road is being detected - a small window in the top-right corner over the walkthrough.
+  Widget _videoArea() {
+    return LayoutBuilder(builder: (context, box) {
+      final detecting = _roadDetecting;
+      return Stack(children: [
+        Positioned.fill(
+          child: detecting
+              ? RoadDetectView(
+                  key: ValueKey('road-detect-$_roadDetectRun'),
+                  api: _cameraApi,
+                  onClose: _closeRoadDetect,
+                  reserveTopRight: _pipSize,
+                )
+              : const SizedBox.shrink(),
+        ),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeInOutCubic,
+          left: detecting ? box.maxWidth - _pipSize.width - Fx.s16 : 0,
+          top: detecting ? Fx.s16 : 0,
+          width: detecting ? _pipSize.width : box.maxWidth,
+          height: detecting ? _pipSize.height : box.maxHeight,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Fx.radiusSm),
+              border: detecting ? Border.all(color: Colors.white70, width: 1.5) : null,
+              boxShadow: detecting ? const [BoxShadow(color: Colors.black54, blurRadius: 12)] : null,
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(detecting ? Fx.radiusSm : 0),
+              child: VideoFeedWidget(stream: _broadcastStream!, boxDelayMs: _boxDelayMs),
+            ),
+          ),
+        ),
+      ]);
+    });
   }
 
   /// "Change source": a phone, CCTV or another laptop (by address), or a video file.
@@ -335,6 +469,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     return MenuAnchor(
       menuChildren: [
         CheckboxMenuButton(value: _isMocking, onChanged: (v) => _toggleMock(v ?? false), child: const Text('Simulate violations (demo)')),
+        const Divider(height: 1),
+        MenuItemButton(leadingIcon: const Icon(Icons.timer_outlined), onPressed: null, child: Text('Box delay (relay video only): $_boxDelayMs ms')),
+        MenuItemButton(
+            closeOnActivate: false, leadingIcon: const Icon(Icons.add), onPressed: () => _nudgeBoxDelay(100), child: const Text('Boxes ahead of the vehicles? Delay more')),
+        MenuItemButton(
+            closeOnActivate: false, leadingIcon: const Icon(Icons.remove), onPressed: () => _nudgeBoxDelay(-100), child: const Text('Boxes behind the vehicles? Delay less')),
       ],
       builder: (context, controller, _) => IconButton(
         tooltip: 'More',

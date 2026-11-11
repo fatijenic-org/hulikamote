@@ -1,91 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hulikamote_dashboard/features/wiki/domain/models/archived_resource.dart';
 import 'package:hulikamote_dashboard/features/wiki/presentation/screens/wiki_screen.dart';
 import 'package:hulikamote_dashboard/features/wiki/presentation/widgets/model_dissection_visualizer_view.dart';
 import 'package:hulikamote_dashboard/features/wiki/presentation/widgets/training_pipeline_visualizer_view.dart';
-import 'package:hulikamote_dashboard/features/wiki/presentation/widgets/wiki_clean_canvas.dart';
-import 'package:hulikamote_dashboard/features/wiki/presentation/widgets/wiki_header.dart';
 
 void main() {
   group('WikiScreen & Training Pipeline Visualizer Tests', () {
-    testWidgets('WikiHeader renders Archive dropdown button and offline badge', (tester) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-
-      ArchivedResource? selectedArchive;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: StatefulBuilder(
-              builder: (context, setState) {
-                return WikiHeader(
-                  searchQuery: '',
-                  onSearchChanged: (_) {},
-                  onClearSearch: () {},
-                  selectedArchive: selectedArchive,
-                  onSelectArchive: (res) => setState(() => selectedArchive = res),
-                );
-              },
-            ),
-          ),
-        ),
-      );
-
-      expect(find.text('Huli-Kamote System Wiki'), findsOneWidget);
-      expect(find.text('Archive Dropdown'), findsOneWidget);
-      expect(find.text('Offline Ready'), findsOneWidget);
-
-      await tester.tap(find.text('Archive Dropdown'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Technical Documentation'), findsOneWidget);
-      expect(find.text('Violation Logic & Physics Visualizer'), findsOneWidget);
-      expect(find.text('System Architecture Blueprint'), findsOneWidget);
-      expect(find.text('Progress Decks & Technical Audits'), findsOneWidget);
-      expect(find.text('Defense Q&A Knowledge Base'), findsOneWidget);
-      expect(find.text('Project Map & Risk Matrices'), findsOneWidget);
-
-      await tester.tap(find.text('Technical Documentation'));
-      await tester.pumpAndSettle();
-
-      expect(selectedArchive, ArchivedResource.docs);
-    });
-
-    testWidgets('WikiCleanCanvas displays clean ready state and quick-access archive cards', (tester) async {
-      tester.view.physicalSize = const Size(1280, 800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-
-      ArchivedResource? selected;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: WikiCleanCanvas(
-              onSelectArchive: (res) => selected = res,
-            ),
-          ),
-        ),
-      );
-
-      expect(find.text('Wiki Workspace Ready for Restructuring'), findsOneWidget);
-      expect(find.text('Preserved Archive Resources'), findsOneWidget);
-      expect(find.text('6 Modules Preserved'), findsOneWidget);
-
-      await tester.tap(find.text('Violation Logic & Physics Visualizer'));
-      await tester.pumpAndSettle();
-
-      expect(selected, ArchivedResource.visualizer);
-    });
-
-    testWidgets('WikiScreen renders Visualization tab and switches to Model Dissection tab', (tester) async {
+    testWidgets('WikiScreen shows every page as one row of tabs and switches between them', (tester) async {
       tester.view.physicalSize = const Size(1280, 800);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -101,22 +22,39 @@ void main() {
         ),
       );
 
-      expect(find.text('Visualization'), findsOneWidget);
-      expect(find.text('1. Training Pipeline'), findsOneWidget);
-      expect(find.text('4. Model Dissection'), findsOneWidget);
+      for (final page in WikiPage.values) {
+        expect(find.text(page.label), findsWidgets, reason: page.label);
+      }
 
-      // Switch to 4. Model Dissection
-      await tester.tap(find.text('4. Model Dissection'));
+      await tester.tap(find.text('Model Dissection').first);
       await tester.pump(const Duration(milliseconds: 500));
-
       expect(find.text('Model Anatomy Dissector'), findsOneWidget);
       expect(find.text('1. Input & Letterbox'), findsOneWidget);
 
-      // Switch to 2. Violation Physics
-      await tester.tap(find.text('2. Violation Physics'));
+      await tester.tap(find.text('Violation Physics').first);
       await tester.pumpAndSettle();
+      expect(find.text('Counterflow'), findsWidgets);
+      expect(find.text('2. Naive Simulation'), findsOneWidget);
+      await tester.tap(find.text('2. Naive Simulation'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
 
-      expect(find.text('VIOLATIONS'), findsOneWidget);
+    testWidgets('WikiScreen tabs use only the theme colors', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final theme = ThemeData(useMaterial3: true, brightness: Brightness.dark, colorSchemeSeed: const Color(0xFF3B82F6));
+      await tester.pumpWidget(MaterialApp(theme: theme, home: const Scaffold(body: WikiScreen())));
+
+      final selected = tester.widget<Text>(find.text('Detection Pipeline').first);
+      final other = tester.widget<Text>(find.text('Docs').first);
+      expect(selected.style?.color, theme.colorScheme.onSurface);
+      expect(other.style?.color, theme.colorScheme.onSurfaceVariant);
     });
 
     testWidgets('TrainingPipelineVisualizerView switches across all 4 training pipelines and 7 models', (tester) async {

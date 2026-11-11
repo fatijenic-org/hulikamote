@@ -29,6 +29,45 @@ class ZoneGeometry {
     'y_dir': (to.dy - from.dy) * refHeight,
   };
 
+  /// The piece of a drawn line (points in 0..1) that is within [radius] pixels of [at] (canvas pixels): which piece
+  /// (`segment` 0 is the one between point 0 and point 1) and the spot on it nearest to [at], in 0..1 again.
+  /// Null when no piece is that close. Grabbing the middle of a line to bend it uses this.
+  static ({int segment, Offset point})? nearSegment(
+    List<Offset> normalized,
+    Offset at,
+    Size canvas, {
+    double radius = 12,
+  }) {
+    ({int segment, Offset point})? best;
+    var bestDistance = radius;
+    for (var i = 0; i + 1 < normalized.length; i++) {
+      final a = Offset(normalized[i].dx * canvas.width, normalized[i].dy * canvas.height);
+      final b = Offset(normalized[i + 1].dx * canvas.width, normalized[i + 1].dy * canvas.height);
+      final ab = b - a;
+      final lengthSquared = ab.dx * ab.dx + ab.dy * ab.dy;
+      if (lengthSquared == 0) continue;
+      final along = (((at - a).dx * ab.dx + (at - a).dy * ab.dy) / lengthSquared).clamp(0.0, 1.0);
+      final nearest = a + ab * along;
+      final distance = (at - nearest).distance;
+      if (distance <= bestDistance) {
+        bestDistance = distance;
+        best = (segment: i, point: Offset(nearest.dx / canvas.width, nearest.dy / canvas.height));
+      }
+    }
+    return best;
+  }
+
+  /// Whether [p] is inside the polygon (points in 0..1; the edge itself counts as either).
+  static bool inside(List<Offset> polygon, Offset p) {
+    if (polygon.length < 3) return false;
+    var odd = false;
+    for (var i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      final a = polygon[i], b = polygon[j];
+      if ((a.dy > p.dy) != (b.dy > p.dy) && p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) odd = !odd;
+    }
+    return odd;
+  }
+
   /// Index of the point within [radius] pixels of [at] (canvas pixels), or null.
   static int? hit(
     List<Offset> normalized,

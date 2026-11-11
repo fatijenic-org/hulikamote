@@ -352,7 +352,7 @@ void main() {
     test('the five Philippine road rules start with the same defaults as the backend', () {
       expect(AnalysisDraft.defaultConfig('illegal_loading')['time_limit'], 8.0);
       expect(AnalysisDraft.defaultConfig('double_parking')['time_limit'], 8.0);
-      expect(AnalysisDraft.defaultConfig('illegal_loading')['banned_classes'], ['bus', 'tricycle', 'truck']);
+      expect(AnalysisDraft.defaultConfig('illegal_loading')['banned_classes'], ['bus', 'jeepney', 'tricycle', 'truck']);
       expect(AnalysisDraft.defaultConfig('truck_ban')['banned_classes'], ['truck']);
       expect(AnalysisDraft.defaultConfig('tricycle_on_highway')['banned_classes'], ['tricycle']);
       expect(AnalysisDraft.defaultConfig('sidewalk_driving')['banned_classes'],
@@ -361,14 +361,21 @@ void main() {
       expect(AnalysisDraft.defaultConfig('counterflow')['time_limit'], 180.0);
     });
 
-    test('violations with no zone start straight away, a solid line needs its zone and line', () {
+    test('violations with no zone start straight away, and a solid line needs no drawing either', () {
       final d = AnalysisDraft();
       d.setVideo(path: 'a.mp4', name: 'a.mp4', frame: '/f.jpg');
       d.toggle('pickup_passengers');
       d.toggle('riding_outside_vehicle');
       expect(d.canStart, isTrue);
       d.toggle('crossing_solid_line');
-      expect(d.missingZones, ['crossing_solid_line']);
+      expect(d.missingZones, isEmpty); // the painted solid lines are found when the analysis starts
+      expect(d.canStart, isTrue);
+      d.config('crossing_solid_line')['auto_lines'] = false;
+      expect(d.missingZones, ['crossing_solid_line']); // with the search turned off a line has to be drawn
+      d.zones('crossing_solid_line').add({
+        'line': [[0.0, 0.0], [1.0, 1.0]],
+      });
+      expect(d.missingZones, isEmpty);
     });
 
     test('defaults differ per violation like before', () {
@@ -408,7 +415,8 @@ void main() {
       for (final k in AnalysisDraft.autoFlowKeys) {
         d.toggle(k);
       }
-      expect(d.missingZones.toSet(), AnalysisDraft.autoFlowKeys); // without the switch every one needs a zone
+      // without the switch every one needs a zone, except the rules whose zone is optional
+      expect(d.missingZones.toSet(), AnalysisDraft.autoFlowKeys.difference(AnalysisDraft.zoneOptionalKeys));
       d.settings.autoFlow = true;
       expect(d.missingZones, isEmpty);
       expect(d.canStart, isTrue);

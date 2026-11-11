@@ -71,7 +71,8 @@ class ViolationCatalog {
       icon: Icons.directions_bus,
       needsZone: true,
       zoneHint:
-          'Cover the reserved lane, then tick which vehicle types ARE allowed in it.',
+          'A zone is optional: with none drawn the whole picture is the lane. To limit the rule to one lane, cover it. '
+          'Tick which vehicle types ARE allowed, or place a sign on the road (Bus lane, No trucks, ...) to say it.',
     ),
     ViolationInfo(
       key: 'illegal_parking',
@@ -140,7 +141,8 @@ class ViolationCatalog {
       icon: Icons.horizontal_rule,
       needsZone: true,
       zoneHint:
-          'Cover the road section, then mark the solid line with two points along it. A vehicle that drives over it is flagged.',
+          'Nothing has to be drawn: the painted solid lines are found in the video. To choose a line yourself, click along it '
+          '(a point at every bend, so a curve works). A vehicle that drives over it is flagged.',
     ),
     ViolationInfo(
       key: 'illegal_loading',
@@ -170,7 +172,9 @@ class ViolationCatalog {
       icon: Icons.electric_rickshaw,
       needsZone: true,
       zoneHint:
-          'Draw over the highway section where tricycles are banned. Needs the Philippine vehicle model that knows "tricycle".',
+          'A zone is optional: with none drawn, the whole picture counts as a road where tricycles are banned, so tick this rule only for '
+          'a camera that watches such a road (a national highway with no exemption in the city\'s route plan). If the view also shows a side '
+          'street or an exempted section, draw only the banned part. Needs the Philippine vehicle model that knows "tricycle".',
     ),
     ViolationInfo(
       key: 'sidewalk_driving',

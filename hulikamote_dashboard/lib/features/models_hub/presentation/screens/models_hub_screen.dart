@@ -15,6 +15,7 @@ import '../hub_format.dart';
 import '../widgets/import_dialog.dart';
 import '../widgets/job_rail.dart';
 import '../widgets/live_card.dart';
+import '../widgets/training_log_card.dart';
 import '../widgets/version_row.dart';
 
 /// Every model in one place: the jobs on the left, and for the one you pick, what is live and every version trained
@@ -45,6 +46,7 @@ class _ModelsHubScreenState extends State<ModelsHubScreen> {
   String? _confirming; // version id asking "Switch?"
   String? _busy; // version id being switched
   bool _trainOpen = false, _trainMounted = false;
+  int _logSignal = 0; // raised after Continue: opens the training log
 
   // A per-type check runs in the background on the backend: follow it while one is running, only while this page is shown.
   late final VisiblePoller _poller = VisiblePoller(interval: const Duration(seconds: 4), onTick: () => _load(quiet: true), initiallyActive: false);
@@ -195,7 +197,9 @@ class _ModelsHubScreenState extends State<ModelsHubScreen> {
               ]),
               const SizedBox(height: Fx.s16),
               // Pause / Continue shows only while a detector is training or paused
-              if (job.isDetector) TrainingStateBar(key: ValueKey('state-${job.key}'), modelKey: job.key, onResumed: (_) => _openTrain()),
+              if (job.isDetector) TrainingStateBar(key: ValueKey('state-${job.key}'), modelKey: job.key, onResumed: (_) => setState(() => _logSignal++)),
+              // The log of the newest training of this job, however it was started
+              TrainingLogCard(key: ValueKey('log-${job.key}'), modelKey: job.key, openSignal: _logSignal),
               LiveCard(job: job),
               const SizedBox(height: Fx.s24),
               SectionLabel(

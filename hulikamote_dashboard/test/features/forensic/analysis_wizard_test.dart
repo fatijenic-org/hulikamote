@@ -241,11 +241,60 @@ void main() {
     // a rule that only the law can place has no such switch
     h.draft
       ..clearSelection()
-      ..toggle('restricted_lane', on: true);
+      ..toggle('pedestrian_lane', on: true);
     await tester.tap(find.text('Rules & zones').first);
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Detect traffic flow automatically'), findsNothing);
     expect(tester.widget<FilledButton>(_continue()).onPressed, isNull);
+  });
+
+  testWidgets('the learned flow can be hidden or shown right under "Detect traffic flow automatically", and in Settings', (tester) async {
+    final h = await _pump(tester);
+    await tester.tap(find.text('Choose video…'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await _next(tester);
+    await tester.tap(find.text('Counterflow').first);
+    await tester.pump();
+    await _next(tester);
+
+    final flowSwitch = find.byKey(const ValueKey('show-flow-switch'));
+    expect(find.text('Show the learned flow'), findsNothing); // nothing to show while the flow is not learned
+    h.draft.settings.autoFlow = true;
+    h.draft.touch();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('Show the learned flow'), findsOneWidget);
+    expect(tester.takeException(), isNull); // the extra row fits
+    expect(tester.widget<Switch>(flowSwitch).value, isTrue); // on by default, as before
+    await tester.tap(flowSwitch);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(tester.widget<Switch>(flowSwitch).value, isFalse);
+    expect(h.draft.config('counterflow')['show_flow'], isFalse); // the very value Counterflow's own switch uses
+    final sent = h.draft.buildConfig()['per_violation_configs'] as Map;
+    expect(sent['counterflow']['show_flow'], isFalse);
+
+    await _next(tester); // Settings: the same switch, the same value
+    expect(find.text('Fine-tune the pipeline'), findsOneWidget);
+    await tester.scrollUntilVisible(flowSwitch, 200, scrollable: find.byType(Scrollable).first);
+    expect(tester.takeException(), isNull);
+    expect(tester.widget<Switch>(flowSwitch).value, isFalse);
+    await tester.tap(flowSwitch);
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(h.draft.config('counterflow')['show_flow'], isTrue);
+  });
+
+  testWidgets('the show-the-flow switch is not offered when Counterflow (the rule that draws it) is not chosen', (tester) async {
+    final h = await _pump(tester);
+    await tester.tap(find.text('Choose video…'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await _next(tester);
+    await tester.tap(find.text('Illegal turn').first);
+    await tester.pump();
+    await _next(tester);
+    h.draft.settings.autoFlow = true;
+    h.draft.touch();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('Detect traffic flow automatically'), findsOneWidget);
+    expect(find.text('Show the learned flow'), findsNothing);
   });
 
   testWidgets('the last step can send the same rules to the Live Monitor without an analysis', (tester) async {

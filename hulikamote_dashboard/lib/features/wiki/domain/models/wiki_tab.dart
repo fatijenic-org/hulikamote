@@ -18,7 +18,7 @@ enum WikiTab {
     subtitle: 'Generated technical documentation, datasets, models, pipeline & violations',
     icon: Icons.menu_book_outlined,
     selectedIcon: Icons.menu_book_rounded,
-    badge: '6 Pages',
+    badge: '7 Pages',
     accentColor: Color(0xFF10B981), // Emerald
   ),
   visualizer(

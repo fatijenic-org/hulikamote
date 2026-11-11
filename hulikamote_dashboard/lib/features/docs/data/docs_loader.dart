@@ -27,6 +27,7 @@ class DocsLoader {
     DocTabSpec(id: 'pipeline', label: 'Training pipeline', fileName: '3-training-pipeline.json'),
     DocTabSpec(id: 'violations', label: 'Violations', fileName: '4-violations.json'),
     DocTabSpec(id: 'qa', label: 'Q&A', fileName: '5-qa.json'),
+    DocTabSpec(id: 'live', label: 'Live camera', fileName: '6-live-camera.json'),
   ];
 
   static Directory? resolveDataDir([Directory? root]) {

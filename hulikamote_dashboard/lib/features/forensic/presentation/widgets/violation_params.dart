@@ -48,7 +48,7 @@ class ViolationParams extends StatelessWidget {
         _chips(context, 'Vehicle types banned (for “Vehicle type banned” zones)', 'banned_classes'),
       ],
       if (violationKey == 'restricted_lane')
-        _chips(context, 'Vehicle types that ARE allowed in this lane', 'allowed_classes'),
+        _chips(context, 'Vehicle types that ARE allowed in this lane (where no sign says otherwise)', 'allowed_classes'),
       if (violationKey == 'overloading')
         _slider(context, 'Most people allowed on one motorcycle', 'max_riders', 1, 4, suffix: 'people', integer: true),
       if (violationKey == 'red_light') _redLight(context),

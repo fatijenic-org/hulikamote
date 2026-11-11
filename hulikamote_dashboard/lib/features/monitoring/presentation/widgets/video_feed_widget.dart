@@ -12,7 +12,11 @@ class VideoFeedWidget extends StatefulWidget {
   final Stream<dynamic>? stream;
   final Function(VideoFrame frame)? onFrame;
 
-  const VideoFeedWidget({super.key, this.stream, this.onFrame});
+  /// The boxes arrive over the socket at once, but the picture takes the longer way through the encoder and the video
+  /// relay, so without this the boxes run ahead of the vehicles. Boxes are shown this long after they arrive.
+  final int boxDelayMs;
+
+  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.boxDelayMs = 0});
 
   @override
   State<VideoFeedWidget> createState() => _VideoFeedWidgetState();
@@ -31,6 +35,8 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
   bool _isWaiting = true;
   String? _error;
   
+  final Set<Timer> _waiting = {};          // boxes waiting for the picture to catch up
+
   String? _currentHlsUrl;
   Player? _player;
   VideoController? _videoController;
@@ -98,8 +104,24 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
             setState(() {
               _currentFps = _frameTimestamps.length.toDouble();
               if (nextFrame != null) _frameBytes = nextFrame;
-              _detections = frame.detections;
-              _roadZones = frame.roadZones;
+              if (widget.boxDelayMs <= 0 || frame.transport != 'hls') {   // a picture sent with the boxes needs no delay
+                _detections = frame.detections;
+                _roadZones = frame.roadZones;
+              } else {
+                final boxes = frame.detections;
+                final zones = frame.roadZones;
+                late final Timer timer;
+                timer = Timer(Duration(milliseconds: widget.boxDelayMs), () {
+                  _waiting.remove(timer);
+                  if (mounted) {
+                    setState(() {
+                      _detections = boxes;
+                      _roadZones = zones;
+                    });
+                  }
+                });
+                _waiting.add(timer);
+              }
               if (frame.frameWidth != null) _frameWidth = frame.frameWidth;
               if (frame.frameHeight != null) _frameHeight = frame.frameHeight;
               _isMock = frame.mock;
@@ -135,6 +157,12 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
     
     try {
       final newPlayer = Player();
+      final platform = newPlayer.platform;
+      if (platform is NativePlayer) {
+        // Show pictures as they arrive instead of buffering seconds ahead: the less the picture lags, the closer the boxes.
+        await platform.setProperty('profile', 'low-latency');
+        await platform.setProperty('cache', 'no');
+      }
       final newController = VideoController(newPlayer);
       
       await newPlayer.open(Media(url));
@@ -162,6 +190,9 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
 
   @override
   void dispose() {
+    for (final t in _waiting) {
+      t.cancel();
+    }
     _sub?.cancel();
     _player?.dispose();
     super.dispose();
@@ -169,7 +200,9 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
 
   @override
   Widget build(BuildContext context) {
-
+    // The picture keeps its own shape. The box is centred (so the parent cannot stretch it) and the boxes are drawn on
+    // exactly the same rectangle, so they stay on the vehicles.
+    final ratio = (_frameWidth != null && _frameHeight != null && _frameHeight! > 0) ? _frameWidth! / _frameHeight! : 16.0 / 9.0;
     return Container(
       decoration: BoxDecoration(
         color: Colors.black87,
@@ -182,23 +215,24 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
           ? _errorBox(_error!)
-          : ClipRRect(
+          : Center(
+            child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: AspectRatio(
-                aspectRatio: 16.0 / 9.0,
+                aspectRatio: ratio,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
                     if (isVideoReady)
                       Video(
                         controller: _videoController!,
-                        fit: BoxFit.fill,
+                        fit: BoxFit.contain,
                       )
                     else if (_frameBytes != null)
                     Image.memory(
                       _frameBytes!,
-                      fit: BoxFit.fill,
-                      filterQuality: FilterQuality.none,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.low,
                       gaplessPlayback: true,
                       isAntiAlias: false,
                     )
@@ -249,6 +283,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                 ],
               ),
             ),
+            ),
           ),
     );
   }
@@ -277,7 +312,11 @@ class BoundingBoxPainter extends CustomPainter {
     for (final zone in roadZones) {
       if (zone.polygon.length < 3) continue;
       final pts = [for (final p in zone.polygon) Offset(p[0] * scaleX, p[1] * scaleY)];
-      final colour = zone.hint ? Colors.white70 : (zone.bestEffort ? Colors.amberAccent : Colors.cyanAccent);
+      final colour = switch (zone.violation) {
+        'road' => Colors.lightBlueAccent,
+        'sidewalk' => Colors.lightGreenAccent,
+        _ => zone.hint ? Colors.white70 : (zone.bestEffort ? Colors.amberAccent : Colors.cyanAccent),
+      };
       final path = Path()..addPolygon(pts, true);
       canvas.drawPath(path, Paint()..color = colour.withValues(alpha: zone.hint ? 0.07 : 0.16)..style = PaintingStyle.fill);
       final edge = Paint()

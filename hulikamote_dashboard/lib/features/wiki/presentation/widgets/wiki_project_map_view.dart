@@ -53,7 +53,7 @@ class WikiProjectMapView extends StatelessWidget {
         path: 'docs/project_map/graph.html',
         tag: 'D3 Graph',
         icon: Icons.hub_rounded,
-        color: const Color(0xFF6366F1),
+        color: const Color(0xFF3B82F6),
       ),
       (
         title: 'Project Map & Module Coupling Explorer',
@@ -69,7 +69,7 @@ class WikiProjectMapView extends StatelessWidget {
         path: 'docs/project_map/coverage_html/index.html',
         tag: 'Coverage',
         icon: Icons.fact_check_rounded,
-        color: const Color(0xFF10B981),
+        color: const Color(0xFF3B82F6),
       ),
       (
         title: 'Codebase Risk Mitigation Table',
@@ -77,7 +77,7 @@ class WikiProjectMapView extends StatelessWidget {
         path: 'docs/project_map/RISK_TABLE.md',
         tag: 'Risk Analysis',
         icon: Icons.security_rounded,
-        color: const Color(0xFFF59E0B),
+        color: const Color(0xFF3B82F6),
       ),
     ];
 
@@ -91,10 +91,10 @@ class WikiProjectMapView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF6366F1).withOpacity(0.12),
+                  color: const Color(0xFF3B82F6).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.hub_rounded, size: 20, color: Color(0xFF6366F1)),
+                child: const Icon(Icons.hub_rounded, size: 20, color: Color(0xFF3B82F6)),
               ),
               const SizedBox(width: 12),
               Expanded(

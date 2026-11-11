@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 enum VisualizerType {
   counterflow,
   zoneOverlap,
@@ -15,7 +17,7 @@ enum VisualizerType {
   none,
 }
 
-class ViolationVisualizerModel {
+class ViolationModel {
   final String id;
   final String title;
   final String category;
@@ -26,7 +28,7 @@ class ViolationVisualizerModel {
   final List<String> tools;
   final VisualizerType visualizerType;
 
-  const ViolationVisualizerModel({
+  ViolationModel({
     required this.id,
     required this.title,
     required this.category,
