@@ -331,10 +331,12 @@ class YoloInference:
         """Simple IoU-based NMS (shared with the specialist models, see engine/specialists.py)."""
         return specialists.nms(boxes, scores, iou_thresh)
 
-    def infer(self, frame: np.ndarray) -> list[YoloDetection]:
+    def infer(self, frame: np.ndarray, track: bool = True) -> list[YoloDetection]:
         """
         Run inference on one BGR frame.
         Returns a list of YoloDetection objects (only violation classes).
+        track=False returns the boxes only and leaves the trackers alone: for a second caller (the road scan) that must not
+        disturb the live tracking.
         """
         orig_h, orig_w = frame.shape[:2]
         blob, sx, sy, pad_x, pad_y = self.preprocess(frame)
@@ -416,6 +418,8 @@ class YoloInference:
         # ── Tracking ─────────────────────────────────────────────────────────
         # Riders / pedestrians and vehicles are tracked apart (see PERSON_ID_BASE): the trackers know nothing
         # about classes, so in one pool a rider box takes over the motorcycle's id whenever the bike is missed.
+        if not track:
+            return detections
         people = [d for d in detections if d.cls == "person"]
         vehicles = [d for d in detections if d.cls != "person"]
         self._track(self.tracker, vehicles, frame, 0)

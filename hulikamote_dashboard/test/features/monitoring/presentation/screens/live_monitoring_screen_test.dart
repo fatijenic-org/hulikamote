@@ -27,6 +27,12 @@ void main() {
     expect(find.text('No detections yet'), findsOneWidget);
   });
 
+  testWidgets('"Detect road" is offered only while the video plays (there is no frame to freeze while paused)', (tester) async {
+    await pumpAt(tester, const Size(1400, 800));
+    expect(find.byKey(const ValueKey('road-detect-toggle')), findsNothing);
+    expect(find.text('Detect road'), findsNothing);
+  });
+
   testWidgets('"Change source" offers a camera or phone and a video file in one place', (tester) async {
     await pumpAt(tester, const Size(1400, 800));
     expect(find.text('Camera or phone…'), findsNothing);
@@ -50,6 +56,20 @@ void main() {
     final stage = tester.getTopLeft(find.text('Monitoring is off')).dy;
     final side = tester.getTopLeft(find.text('Live detections')).dy;
     expect(side, greaterThan(stage));                               // below, not beside
+  });
+
+  testWidgets('the detections panel can be folded away and brought back', (tester) async {
+    await pumpAt(tester, const Size(1400, 800));
+    final stageWide = tester.getSize(find.text('Monitoring is off')).width;
+    expect(find.text('Live detections'), findsOneWidget);
+    await tester.tap(find.byTooltip('Hide detections'));
+    await tester.pump();
+    expect(find.text('Live detections'), findsNothing);
+    expect(find.byTooltip('Show detections'), findsOneWidget);
+    await tester.tap(find.byTooltip('Show detections'));
+    await tester.pump();
+    expect(find.text('Live detections'), findsOneWidget);
+    expect(tester.getSize(find.text('Monitoring is off')).width, stageWide);
   });
 
   group('knowing whether it works', () {

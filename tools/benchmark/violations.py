@@ -105,10 +105,11 @@ NEEDS: list[Need] = [
     Need("tricycle_on_highway", "Tricycle on a national highway", "zone rule",
          "A tricycle stays inside the highway zone for 1 s or more.",
          "Motorcycles, cars and buses on the same highway; a tricycle on a street outside the zone.",
-         "Fixed view of the highway section where tricycles are banned.",
-         "Draw the highway section; the banned type defaults to tricycle.",
-         "Needs a detector that knows \"tricycle\" (the stock COCO model does not). Based on DILG MC 2020-036 / 2023-195; "
-         "LGUs may allow some sections, so confirm the local rule."),
+         "Fixed view of a road where tricycles are banned (a national highway the city has not exempted).",
+         "Nothing has to be drawn: ticking the rule says the whole view is a road where tricycles are banned. Draw a zone only to limit the rule to the banned part (for example when the view also shows a side street or an exempted section). The banned type defaults to tricycle.",
+         "Needs a detector that knows \"tricycle\" (the stock COCO model does not). Based on DILG MC 2020-036 / 2023-195. "
+         "The video cannot show that a road is a national highway, or that the city exempts a section of it, so the operator states it for each camera "
+         "(DPWH national road list, the city's Tricycle Route Plan and ordinance). Confirm the local rule for Zamboanga City."),
     Need("sidewalk_driving", "Driving on the sidewalk", "zone rule",
          "A moving vehicle stays inside the sidewalk or bike-lane zone for 1.5 s or more.",
          "A parked vehicle in the zone (that is illegal parking); a vehicle crossing to a driveway in under 1.5 s.",

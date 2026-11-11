@@ -27,7 +27,7 @@ Box = tuple[int, int, int, int]            # x, y, width, height
 
 HEAD_SHARE = 0.30                          # the top 30% of a person's box is the head and neck
 HEAD_PAD, PLATE_PAD = 0.15, 0.20
-VEHICLES = ("car", "motorcycle", "bus", "truck", "tricycle")
+VEHICLES = ("car", "motorcycle", "bus", "jeepney", "truck", "tricycle")
 TWO_WHEELERS = ("motorcycle", "tricycle")
 
 

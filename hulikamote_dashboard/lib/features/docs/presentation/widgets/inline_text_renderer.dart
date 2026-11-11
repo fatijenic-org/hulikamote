@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/doc_acronyms.dart';
 import '../../domain/models/doc_inline.dart';
 import '../../domain/palette/doc_palette.dart';
+import 'acronym_text.dart';
 import 'chips_widget.dart';
 
 class InlineTextRenderer {
@@ -36,7 +38,8 @@ class InlineTextRenderer {
   }) {
     switch (inline) {
       case TextInline():
-        return TextSpan(text: inline.text, style: baseStyle);
+        final parts = AcronymText.spans(inline.text, baseStyle, palette, glossary: glossary);
+        return parts.length == 1 ? parts.first : TextSpan(children: parts);
       case BoldInline():
         return TextSpan(
           children: buildSpans(
@@ -113,6 +116,8 @@ class InlineTextRenderer {
         final def = glossary[inline.key] ??
             glossary[inline.key.toLowerCase()] ??
             glossary[inline.shown] ??
+            acronymMeaning(inline.key) ??
+            acronymMeaning(inline.shown) ??
             '';
         if (def.isEmpty) {
           return TextSpan(text: inline.shown, style: baseStyle);
@@ -120,28 +125,7 @@ class InlineTextRenderer {
         return WidgetSpan(
           alignment: PlaceholderAlignment.baseline,
           baseline: TextBaseline.alphabetic,
-          child: Tooltip(
-            message: def,
-            waitDuration: const Duration(milliseconds: 150),
-            showDuration: const Duration(seconds: 5),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            textStyle: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
-            decoration: BoxDecoration(
-              color: palette.isDark ? const Color(0xFF252525) : const Color(0xFF1E1E1E),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: const [
-                BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 4))
-              ],
-            ),
-            child: Text(
-              inline.shown,
-              style: baseStyle.copyWith(
-                decoration: TextDecoration.underline,
-                decorationStyle: TextDecorationStyle.dotted,
-                decorationColor: palette.accent,
-              ),
-            ),
-          ),
+          child: AcronymTooltip(shown: inline.shown, meaning: def, style: baseStyle, palette: palette),
         );
       case ChipInline():
         return WidgetSpan(

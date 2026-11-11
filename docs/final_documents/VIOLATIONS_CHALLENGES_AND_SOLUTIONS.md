@@ -24,7 +24,7 @@ This document catalogs the critical edge cases, software conflicts, and real-wor
 - *Fallback Architecture:* If rectangular boxes cause too much cross-contamination, the Primary Anchor model is upgraded to YOLO-Segmentation to use pixel-perfect shrink-wrapped masks instead of squares.
 
 ## 4. The "Window Tint" Problem (Visibility Blocking)
-**Challenge:** Most vehicles in the Philippines have heavily tinted windows. The AI cannot see through 5% VLT tint, causing it to blindly guess if a seatbelt is worn or a phone is used, generating massive false positives.
+**Challenge:** Most vehicles in Zamboanga have heavily tinted windows. The AI cannot see through 5% VLT tint, causing it to blindly guess if a seatbelt is worn or a phone is used, generating massive false positives.
 **Solution:** 
 - *The Safety Override Gate:* The secondary cabin model is trained to classify the windshield itself (`clear_window`, `open_window`, `tinted_window`). If it detects `tinted_window`, the Python ledger instantly aborts the seatbelt/phone checks to protect system integrity.
 

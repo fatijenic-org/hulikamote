@@ -156,8 +156,10 @@ async def set_video_source(path: str):
 def video_server():
     """Is the video relay (MediaMTX) up? Starts it when it is installed but not running (a plain `def`, so FastAPI
     runs it in a worker thread: starting it can take a few seconds)."""
+    if stream.PICTURE_MODE != "relay":                  # synced pictures need no relay
+        return {"ready": True, "message": "", "mode": stream.PICTURE_MODE}
     ready, message = server_status()
-    return {"ready": ready, "message": message}
+    return {"ready": ready, "message": message, "mode": "relay"}
 
 
 @router.post("/video/test")
@@ -190,6 +192,69 @@ async def relearn_road():
 async def forget_road():
     """Remove the learned road of the connected camera (also from camera_config.json) and stop using it."""
     return {"ok": stream.road.forget(), "road": stream.road_status()}
+
+
+# ─── "Detect road": freeze a frame, read the road, show every step, then Apply or Discard ────────
+
+@router.post("/video/road/detect")
+async def detect_road():
+    """The Live Monitor's Detect road button: freezes the newest picture and reads the road from the last ~40 s of the camera.
+    Poll GET /video/road/detect for the steps; the frame and each step's picture have their own addresses."""
+    return stream.road.begin_detect()
+
+
+@router.get("/video/road/detect")
+async def detect_road_status():
+    """State (collecting / analysing / done / failed / none), progress, and every step with its state."""
+    return stream.road.detect_status()
+
+
+@router.get("/video/road/detect/frame")
+async def detect_road_frame():
+    """The frozen picture the walkthrough is drawn on (JPEG)."""
+    data = stream.road.detect_frame()
+    if not data:
+        raise HTTPException(status_code=404, detail="There is no detection in progress")
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@router.get("/video/road/detect/step/{step}")
+async def detect_road_step(step: str):
+    """One step's picture (PNG with see-through parts) to lay over the frozen picture, once that step has finished."""
+    data = stream.road.detect_overlay(step)
+    if not data:
+        raise HTTPException(status_code=404, detail="That step has no picture (yet)")
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@router.post("/video/road/detect/zones")
+async def correct_detected_road(body: dict):
+    """The operator's corrections to the draft: {"zones": [{"id", "kind": crosswalk|road|sidewalk, "polygon": [[x, y], ...]}]} in the pixels
+    of the frozen picture. Apply then saves these instead of what the scan found."""
+    return stream.road.set_detect_zones(body.get("zones"))
+
+
+@router.post("/video/road/detect/discard")
+async def discard_detected_road():
+    return {"ok": stream.road.discard_detect()}
+
+
+@router.post("/video/road/detect/apply")
+def apply_detected_road():
+    """Use what the detection found: the camera's road is saved and the matching violations (Pedestrian lane for a crosswalk) are switched
+    on in the live configuration. When one had to be switched on, the live view restarts once with it."""
+    result = stream.road.apply_detect()
+    if not result.get("ok"):
+        return result
+    config = _read_config()
+    active = list(config.get("active_violations", []))
+    added = [key for key in result["zones"] if key not in active]
+    if added:
+        config["active_violations"] = active + added
+        CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+        stream.reload_pipeline()
+        stream._stream_generation += 1
+    return {**result, "switched_on": added, "road": stream.road_status()}
 
 
 # ─── Camera profiles: named addresses (CCTV / DVR, phone camera, another laptop, a file) ────────

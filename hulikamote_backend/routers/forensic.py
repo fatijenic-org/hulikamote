@@ -498,6 +498,12 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         forensic_tasks[task_id]["video_done"] = False
         save_violation = _skip_db if config.get("benchmark") else add_violation
 
+        # "Crossing a solid line" with no drawn line: find the painted solid lines of the video first (engine/auto_lines.py)
+        if "crossing_solid_line" in (config.get("active_violations") or []):
+            from engine.auto_lines import fill_solid_lines
+            forensic_tasks[task_id]["message"] = "Finding the painted solid lines..."
+            forensic_tasks[task_id]["message"] = fill_solid_lines(config, video_path) or ""
+
         prepare_pipeline_config(config)
 
         # Write the transformed config to a temporary file for the pipeline to read

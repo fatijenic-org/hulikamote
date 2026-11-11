@@ -73,7 +73,7 @@ def test_loading_follows_the_wizard_time_limit_and_vehicle_types():
 
 def test_loading_defaults_when_the_wizard_sends_no_types():
     zone = zones(LOADING)[0]
-    assert zone["time_limit"] == 8.0 and zone["classes"] == ["bus", "tricycle", "truck"]
+    assert zone["time_limit"] == 8.0 and zone["classes"] == ["bus", "jeepney", "tricycle", "truck"]
 
 
 # ─── Truck ban, tricycle on a highway, sidewalk (banned types in a zone) ────

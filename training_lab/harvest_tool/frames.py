@@ -32,7 +32,7 @@ MAX_PER_FRAME_FOR = {"helmet_specialist": 8}
 MARGIN = 0.08                           # around a vehicle, like cut_plates and the app
 FRAME_CONF = 0.3
 MIN_SIDE = {"plate_specialist": 80, "helmet_specialist": 80, "cabin_specialist": 100}
-VEHICLES = ("motorcycle", "car", "bus", "truck", "tricycle")
+VEHICLES = ("motorcycle", "car", "bus", "jeepney", "truck", "tricycle")
 CROPS_FOR = {
     "plate_specialist": VEHICLES,
     "helmet_specialist": ("motorcycle", "tricycle"),
@@ -46,7 +46,7 @@ REASON = {
 }
 FRAME_REASON = "A picture from the clip. Box every vehicle and rider that should be found."
 COCO_NAMES = {0: "person", 2: "car", 3: "motorcycle", 5: "bus", 7: "truck"}
-DEFAULT_ANCHOR = ["motorcycle", "car", "bus", "truck", "person", "tricycle"]
+DEFAULT_ANCHOR = ["motorcycle", "car", "bus", "truck", "person", "tricycle", "jeepney"]
 PRIORITY = 6
 
 

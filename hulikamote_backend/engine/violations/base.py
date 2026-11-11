@@ -19,7 +19,7 @@ from engine.violations.geometry import point_in_polygon  # noqa: F401  (re-expor
 
 # Classes treated as vehicles by the plate / cabin / indicator checks ("tricycle" comes from a
 # PH fine-tuned detector; the stock COCO model never outputs it)
-VEHICLE_CLASSES = ("car", "motorcycle", "bus", "truck", "tricycle")
+VEHICLE_CLASSES = ("car", "motorcycle", "bus", "jeepney", "truck", "tricycle")
 
 
 class Violation:

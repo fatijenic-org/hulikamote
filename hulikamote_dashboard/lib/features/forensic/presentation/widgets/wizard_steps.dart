@@ -7,8 +7,10 @@ import '../../domain/analysis_runner.dart';
 import '../../domain/violation_catalog.dart';
 import '../../../trimmer/presentation/widgets/trim_player.dart';
 import 'fx.dart';
+import 'solid_line_editor.dart';
 import 'video_trim_panel.dart';
 import 'violation_params.dart';
+import 'crosswalk_editor.dart';
 import 'zone_editor.dart';
 
 /// Step 1: choose the video, then watch it and pick the part to analyze.
@@ -40,7 +42,13 @@ class VideoStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final shown = player;
     if (draft.hasVideoPath && shown != null) {
-      return VideoTrimPanel(draft: draft, player: shown, preparing: preparing, onPick: onPick, filmstripUrl: filmstripUrl);
+      return VideoTrimPanel(
+        draft: draft,
+        player: shown,
+        preparing: preparing,
+        onPick: onPick,
+        filmstripUrl: filmstripUrl,
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -90,9 +98,7 @@ class VideoStep extends StatelessWidget {
                   onPressed: onPick,
                   icon: const Icon(Icons.folder_open, size: 18),
                   label: const Text('Choose video…'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                  ),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 ),
               ],
             ),
@@ -220,7 +226,9 @@ class _PickCard extends StatelessWidget {
               children: [
                 if (info.needsZone)
                   StatusPill(
-                    label: 'Draw a zone',
+                    label: info.key == 'crossing_solid_line'
+                        ? 'Nothing to draw'
+                        : (AnalysisDraft.zoneOptionalKeys.contains(info.key) ? 'Zone optional' : 'Draw a zone'),
                     color: Fx.muted(context),
                     icon: Icons.crop_free,
                     dense: true,
@@ -283,6 +291,22 @@ class RulesStep extends StatelessWidget {
         final editor =
             current == 'overloading' || !ViolationCatalog.of(current).needsZone
             ? _parametersOnly(context)
+            : current == 'crossing_solid_line'
+            ? SolidLineEditor(
+                key: ValueKey('editor-$current'),
+                draft: draft,
+                violationKey: current,
+                frame: media.frame(draft.frameUrl!),
+                api: api,
+              )
+            : current == 'pedestrian_lane'
+            ? PedestrianLaneEditor(
+                key: ValueKey('editor-$current'),
+                draft: draft,
+                violationKey: current,
+                frame: media.frame(draft.frameUrl!),
+                api: api,
+              )
             : ZoneEditor(
                 key: ValueKey('editor-$current'),
                 draft: draft,
@@ -345,11 +369,16 @@ class RulesStep extends StatelessWidget {
     final selected = key == current;
     final zones = draft.zones(key).length;
     final ready = draft.zonesReady(key);
-    final automatic = zones == 0 && ready && info.needsZone;
+    final overlays = draft.crosswalkCount(key); // painted test crosswalks count as zones
+    final automatic = zones == 0 && overlays == 0 && ready && info.needsZone;
     final subtitle = !info.needsZone
         ? 'No zone needed'
+        : zones == 0 && overlays > 0
+        ? '$overlays crosswalk overlay${overlays == 1 ? '' : 's'}'
         : automatic
-        ? 'Automatic: learns the flow'
+        ? (key == 'crossing_solid_line'
+              ? 'Automatic: finds the painted line'
+              : (AnalysisDraft.zoneOptionalKeys.contains(key) ? 'Whole picture (zone optional)' : 'Automatic: learns the flow'))
         : (zones == 0
               ? 'Needs a zone'
               : '$zones zone${zones == 1 ? '' : 's'} saved');
@@ -448,37 +477,94 @@ class _AutoFlowCard extends StatelessWidget {
     final s = draft.settings;
     return FxCard(
       padding: const EdgeInsets.symmetric(horizontal: Fx.s16, vertical: Fx.s8),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.alt_route, size: 18, color: Fx.accent),
-          const SizedBox(width: Fx.s12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Detect traffic flow automatically',
-                  style: Fx.body(context).copyWith(fontWeight: FontWeight.w600),
+          Row(
+            children: [
+              const Icon(Icons.alt_route, size: 18, color: Fx.accent),
+              const SizedBox(width: Fx.s12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Detect traffic flow automatically',
+                      style: Fx.body(
+                        context,
+                      ).copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Skip the drawing: the system learns which way traffic goes from the first minute of the video '
+                      '(fixed camera and some traffic needed). A zone you do draw still takes priority.',
+                      style: Fx.caption(context),
+                    ),
+                  ],
                 ),
-                Text(
-                  'Skip the drawing: the system learns which way traffic goes from the first minute of the video '
-                  '(fixed camera and some traffic needed). A zone you do draw still takes priority.',
-                  style: Fx.caption(context),
+              ),
+              Switch(
+                value: s.autoFlow,
+                onChanged: (v) {
+                  s.autoFlow = v;
+                  draft.touch();
+                },
+              ),
+            ],
+          ),
+          if (_flowSwitchApplies(draft)) ...[
+            const Divider(height: Fx.s16),
+            Row(
+              children: [
+                const Icon(
+                  Icons.visibility_outlined,
+                  size: 18,
+                  color: Fx.accent,
+                ),
+                const SizedBox(width: Fx.s12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _flowTitle,
+                        style: Fx.body(
+                          context,
+                        ).copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      Text(_flowHelp, style: Fx.caption(context)),
+                    ],
+                  ),
+                ),
+                Switch(
+                  key: const ValueKey('show-flow-switch'),
+                  value: _flowShown(draft),
+                  onChanged: (v) => _showFlow(draft, v),
                 ),
               ],
             ),
-          ),
-          Switch(
-            value: s.autoFlow,
-            onChanged: (v) {
-              s.autoFlow = v;
-              draft.touch();
-            },
-          ),
+          ],
         ],
       ),
     );
   }
+}
+
+// The "show the learned flow" switch. It only means something when the flow is learned automatically and Counterflow, the
+// rule that draws it, is among the selected ones, so it is only offered then. One value: the same as the switch in
+// Counterflow's own editor (violation_params.dart), so the two never disagree.
+const _flowTitle = 'Show the learned flow';
+const _flowHelp =
+    'Draws the flow the system learned (the arrows) on the saved photos and the result video. Turn it off for a clean picture.';
+
+bool _flowSwitchApplies(AnalysisDraft d) =>
+    d.settings.autoFlow && d.selection.contains('counterflow');
+
+bool _flowShown(AnalysisDraft d) =>
+    (d.config('counterflow')['show_flow'] as bool?) ?? true;
+
+void _showFlow(AnalysisDraft d, bool on) {
+  d.config('counterflow')['show_flow'] = on;
+  d.touch();
 }
 
 /// Step 4: pipeline options, grouped, with plain explanations and recommended defaults.
@@ -610,6 +696,17 @@ class SettingsStep extends StatelessWidget {
                 },
               ),
             ),
+            if (_flowSwitchApplies(draft))
+              _row(
+                context,
+                _flowTitle,
+                _flowHelp,
+                Switch(
+                  key: const ValueKey('show-flow-switch'),
+                  value: _flowShown(draft),
+                  onChanged: (v) => _showFlow(draft, v),
+                ),
+              ),
             _row(
               context,
               'Keep the uploaded video',
@@ -846,7 +943,13 @@ class RunStep extends StatelessWidget {
               children: [
                 Icon(Icons.info_outline, size: 18, color: Fx.muted(context)),
                 const SizedBox(width: Fx.s12),
-                Expanded(child: Text(runner.notice!, key: const Key('run-notice'), style: Fx.body(context))),
+                Expanded(
+                  child: Text(
+                    runner.notice!,
+                    key: const Key('run-notice'),
+                    style: Fx.body(context),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1008,11 +1111,17 @@ class RunStep extends StatelessWidget {
                 'Elapsed ${mmss(runner.elapsed)}${rem == null ? '' : '  ·  about ${mmss(rem)} left'}',
                 style: Fx.caption(context),
               ),
-              if (runner.phase == RunPhase.running && runner.ticketsReady > 0 && onOpenLive != null) ...[
+              if (runner.phase == RunPhase.running &&
+                  runner.ticketsReady > 0 &&
+                  onOpenLive != null) ...[
                 const SizedBox(height: Fx.s16),
                 Row(
                   children: [
-                    const Icon(Icons.fact_check_outlined, size: 20, color: Fx.accent),
+                    const Icon(
+                      Icons.fact_check_outlined,
+                      size: 20,
+                      color: Fx.accent,
+                    ),
                     const SizedBox(width: Fx.s12),
                     Expanded(
                       child: Text(
@@ -1051,7 +1160,8 @@ class RunStep extends StatelessWidget {
                 Row(
                   children: [
                     Tooltip(
-                      message: 'End the analysis now and keep everything found so far',
+                      message:
+                          'End the analysis now and keep everything found so far',
                       child: OutlinedButton.icon(
                         key: const Key('stop-here'),
                         onPressed: runner.asking ? null : runner.stopHere,
@@ -1062,9 +1172,14 @@ class RunStep extends StatelessWidget {
                     const SizedBox(width: Fx.s12),
                     TextButton.icon(
                       key: const Key('cancel-analysis'),
-                      onPressed: runner.asking ? null : () => _confirmCancel(context),
+                      onPressed: runner.asking
+                          ? null
+                          : () => _confirmCancel(context),
                       icon: const Icon(Icons.close, size: 18, color: Fx.danger),
-                      label: const Text('Cancel analysis', style: TextStyle(color: Fx.danger)),
+                      label: const Text(
+                        'Cancel analysis',
+                        style: TextStyle(color: Fx.danger),
+                      ),
                     ),
                   ],
                 ),

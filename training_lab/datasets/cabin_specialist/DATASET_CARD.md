@@ -1,6 +1,6 @@
 # cabin_specialist - dataset card
 
-Generated 2026-10-25 by `python data.py report`. Do not edit by hand.
+Generated 2026-11-09 by `python data.py report`. Do not edit by hand.
 
 ```
 Cabin Specialist Dataset
@@ -24,23 +24,23 @@ If a mirror is missing from a motorcycle, Count(side_mirror) < 2 triggers the vi
 
 | split | pictures | clear_window | tinted_window | seatbelt | driver_phone | side_mirror |
 |---|---|---|---|---|---|---|
-| train | 15,689 | 9,860 | 11,142 | 6,685 | 3,430 | 3,138 |
+| train | 15,685 | 9,860 | 11,142 | 6,685 | 3,430 | 3,133 |
 | val | 300 | 306 | 0 | 215 | 69 | 0 |
 | test | 402 | 407 | 0 | 255 | 104 | 0 |
 
-Longest side of a picture: min 33 / median 640 / max 1280 px. A box covers (10th pct / median / 90th pct of the picture): 0.0016 / 0.0138 / 0.1854.
+Longest side of a picture: min 33 / median 640 / max 1280 px. A box covers (10th pct / median / 90th pct of the picture): 0.0016 / 0.0137 / 0.1854.
 
 ## Where the pictures come from
 
 | source | train | val | test | licence | country | Philippine | trust | link |
 |---|---|---|---|---|---|---|---|---|
 | govviolation_cabin | 1,251 | 112 | 69 | CC BY 4.0 | Egypt | no | B (community, open licence, named author) | https://universe.roboflow.com/firstproject-7iwwi/governmentviolation |
-| mc_helmet_overload | 3,072 | 0 | 0 | CC BY 4.0 | Philippines | yes | B (community, open licence, named author) | https://universe.roboflow.com/peds-workspace-1618a/mc-side-mirror-violation |
+| mc_helmet_overload | 3,068 | 0 | 0 | CC BY 4.0 | Philippines | yes | B (community, open licence, named author) | https://universe.roboflow.com/peds-workspace-1618a/mc-side-mirror-violation |
 | menna_cabin | 7,967 | 188 | 333 | CC BY 4.0 | Egypt | no | B (community, open licence, named author) | https://universe.roboflow.com/mennaworkspace/ds-5cu4e |
 | tint_windows | 2,994 | 0 | 0 | CC BY 4.0 | ? | no | B (community, open licence, named author) | https://universe.roboflow.com/workspace-4fyp5/window-tint-tint-insq3 |
 | tpnew_seatbelt | 405 | 0 | 0 | CC BY 4.0 | ? | no | B (community, open licence, named author) | https://universe.roboflow.com/skripsinew/tpnew |
 
-Philippine pictures: **3,072 of 16,391 (19%)**. Everything else is foreign imagery: fine for learning what the object looks like, not proof of field accuracy.
+Philippine pictures: **3,068 of 16,387 (19%)**. Everything else is foreign imagery: fine for learning what the object looks like, not proof of field accuracy.
 
 ## Known limits
 
@@ -56,7 +56,7 @@ Philippine pictures: **3,072 of 16,391 (19%)**. Everything else is foreign image
 
 ## Cleaning log
 
-Checked 16,391 pictures, kept 16,391. Moved to `datasets/_quarantine/cabin_specialist/` (not deleted): nothing. Label files fixed: 28. Pictures re-saved as upright RGB JPEG: 0.
+Checked 16,391 pictures, kept 16,387. Moved to `datasets/_quarantine/cabin_specialist/` (not deleted): duplicate 4. Label files fixed: 0. Pictures re-saved as upright RGB JPEG: 0.
 A picture that sits in both train and val/test keeps its val/test copy; the train copy is the one quarantined.
 **Before the first cleaning, 196 val and 283 test pictures had a near-identical twin in train (same scene or video frame), so scores measured on this data earlier were optimistic.**
 

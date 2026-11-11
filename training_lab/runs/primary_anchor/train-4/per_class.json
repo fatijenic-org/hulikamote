@@ -1,0 +1,41 @@
+{
+ "split": "test",
+ "map50": 0.751,
+ "classes": [
+  {
+   "name": "jeepney",
+   "score": 0.949,
+   "boxes": 92
+  },
+  {
+   "name": "tricycle",
+   "score": 0.915,
+   "boxes": 124
+  },
+  {
+   "name": "bus",
+   "score": 0.832,
+   "boxes": 242
+  },
+  {
+   "name": "truck",
+   "score": 0.714,
+   "boxes": 301
+  },
+  {
+   "name": "car",
+   "score": 0.705,
+   "boxes": 834
+  },
+  {
+   "name": "motorcycle",
+   "score": 0.661,
+   "boxes": 493
+  },
+  {
+   "name": "person",
+   "score": 0.481,
+   "boxes": 1115
+  }
+ ]
+}

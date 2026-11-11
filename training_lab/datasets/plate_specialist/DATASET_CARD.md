@@ -1,6 +1,6 @@
 # plate_specialist - dataset card
 
-Generated 2026-10-25 by `python data.py report`. Do not edit by hand.
+Generated 2026-11-09 by `python data.py report`. Do not edit by hand.
 
 ```
 Plate Specialist Dataset

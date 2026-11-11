@@ -7,12 +7,13 @@ path: datasets/primary_anchor
 train: images/train
 val: images/val
 
-nc: 6
+nc: 7
 names:
   0: motorcycle
   1: car
   2: bus
   3: truck
   4: person     # REQUIRED: riders are counted for overloading and helmet checks
-  5: tricycle   # PH tricycle (motorcycle + sidecar); jeepneys are labelled bus
+  5: tricycle   # PH tricycle (motorcycle + sidecar)
+  6: jeepney    # PH jeepney (before 2026-11-09 jeepneys were labelled bus)
 test: images/test

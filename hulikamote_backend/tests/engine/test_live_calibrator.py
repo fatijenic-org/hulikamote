@@ -41,7 +41,7 @@ def canned(stripes=6, score=0.9, ok=True, stops=None, lanes=None):
                 "crosswalks": [], "stop_lines": [], "lane_lines": []}
     return {"ok": True, "reason": None, "video_size": [W, H],
             "rectifier": {"top_to_video": np.eye(3).tolist(), "top_size": [400, 600]},
-            "crosswalks": [{"polygon": [], "stripes": stripes, "score": score,
+            "crosswalks": [{"polygon": [[50, 100], [350, 100], [350, 160], [50, 160]], "stripes": stripes, "score": score,
                             "top": {"u0": 50.0, "u1": 350.0, "v0": 100.0, "v1": 160.0}}],
             "stop_lines": stops or [], "lane_lines": lanes or []}
 

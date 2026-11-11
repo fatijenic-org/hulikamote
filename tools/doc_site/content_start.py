@@ -33,6 +33,7 @@ def build() -> Page:
         ["<a href='3-training-pipeline.html'><b>3 Training pipeline</b></a>", "How is a model made, and is that enough?", "The loop from download to deploy to harvest, each step with its command and code, the benchmark, and an honest defense with its gaps."],
         ["<a href='4-violations.html'><b>4 Violations</b></a>", "How is each violation decided?", "All 20 violations: law, steps, models used, dashboard setup, the numbers, limits, tests and the real code, with the model-feeding code."],
         ["<a href='5-qa.html'><b>5 Q&amp;A</b></a>", "What will the panel ask, and what do we answer?", "Your own list of questions and answers. Add, edit and delete them; answers accept Markdown; saved to a JSON file on this computer."],
+        ["<a href='6-live-camera.html'><b>6 Live camera</b></a>", "How does a camera's picture get in, and how do we know it works?", "From what a camera really sends, to the address, the reader code, the video relay and the checks on screen. Which setups we accept, with sources, and what we did and did not test."],
     ], "dense", ["20%", "28%", "52%"]))
     p.end()
 

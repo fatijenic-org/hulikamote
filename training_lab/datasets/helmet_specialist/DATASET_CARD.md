@@ -1,6 +1,6 @@
 # helmet_specialist - dataset card
 
-Generated 2026-10-25 by `python data.py report`. Do not edit by hand.
+Generated 2026-11-09 by `python data.py report`. Do not edit by hand.
 
 ```
 Helmet Specialist Dataset
@@ -22,7 +22,7 @@ The rider's bounding box should span their full torso + head.
 
 | split | pictures | rider_with_helmet | rider_without_helmet |
 |---|---|---|---|
-| train | 10,590 | 9,463 | 8,908 |
+| train | 10,589 | 9,462 | 8,908 |
 | val | 923 | 873 | 984 |
 | test | 697 | 800 | 790 |
 
@@ -34,10 +34,10 @@ Longest side of a picture: min 36 / median 640 / max 1280 px. A box covers (10th
 |---|---|---|---|---|---|---|---|---|
 | edgevision_helmet | 1,885 | 265 | 230 | CC BY 4.0 | India | no | A (official / peer-reviewed host) | https://data.mendeley.com/datasets/j82bnw7gsr/1 |
 | flashys_helmet | 4,837 | 303 | 101 | CC BY 4.0 (labels only: the pictures are stock photos) | ? | no | C (origin unclear or weak) | https://universe.roboflow.com/flashys-workspace/helmet-detection-fsrgu |
-| martinez_helmet | 845 | 0 | 0 | CC BY 4.0 | Philippines | yes | B (community, open licence, named author) | https://universe.roboflow.com/css1823martinezmina-xyhl4/motorcycle-helmet-72c9g |
+| martinez_helmet | 844 | 0 | 0 | CC BY 4.0 | Philippines | yes | B (community, open licence, named author) | https://universe.roboflow.com/css1823martinezmina-xyhl4/motorcycle-helmet-72c9g |
 | naratip_helmet | 3,023 | 355 | 366 | MIT | Thailand | no | B (community, open licence, named author) | https://universe.roboflow.com/naratipws/motorcycle-helmet-w75eo |
 
-Philippine pictures: **845 of 12,210 (7%)**. Everything else is foreign imagery: fine for learning what the object looks like, not proof of field accuracy.
+Philippine pictures: **844 of 12,209 (7%)**. Everything else is foreign imagery: fine for learning what the object looks like, not proof of field accuracy.
 
 ## Known limits
 
@@ -49,7 +49,7 @@ Philippine pictures: **845 of 12,210 (7%)**. Everything else is foreign imagery:
 
 ## Cleaning log
 
-Checked 12,210 pictures, kept 12,210. Moved to `datasets/_quarantine/helmet_specialist/` (not deleted): nothing. Label files fixed: 0. Pictures re-saved as upright RGB JPEG: 0.
+Checked 12,210 pictures, kept 12,209. Moved to `datasets/_quarantine/helmet_specialist/` (not deleted): duplicate 1. Label files fixed: 0. Pictures re-saved as upright RGB JPEG: 0.
 A picture that sits in both train and val/test keeps its val/test copy; the train copy is the one quarantined.
 **Before the first cleaning, about 15 val and about 8 test pictures had a near-identical twin in train (same scene or video frame), so scores measured on this data earlier were optimistic.**
 

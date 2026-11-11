@@ -80,8 +80,11 @@ class RoadZone {
       'pedestrian_lane' => 'Crosswalk',
       'red_light' => 'Stop line',
       'crossing_solid_line' => 'Solid line',
+      'road' => 'Road',
+      'sidewalk' => 'Sidewalk',
       _ => violation,
     };
+    if (violation == 'road' || violation == 'sidewalk') return name;
     return hint ? '$name (hint only)' : (bestEffort ? '$name (learned, best effort)' : '$name (learned)');
   }
 }

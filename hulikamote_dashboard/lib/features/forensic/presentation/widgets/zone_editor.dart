@@ -1,16 +1,21 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart' show DragStartBehavior;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/forensic_api.dart';
 import '../../domain/analysis_draft.dart';
+import '../../domain/lane_signs.dart';
 import '../../domain/violation_catalog.dart';
 import '../../domain/zone_geometry.dart';
 import 'fx.dart';
 import 'violation_params.dart';
 
-enum ZoneTool { zone, arrow, light }
+enum ZoneTool { zone, arrow, light, sign }
+
+/// What a drag in the sign tool is doing to the selected sign.
+enum _SignGrab { none, move, resize, rotate }
 
 /// Draws the zones of one violation on the first frame of the video.
 ///
@@ -43,6 +48,9 @@ class _ZoneEditorState extends State<ZoneEditor> {
   final List<Offset> _light = [];
   ZoneTool _tool = ZoneTool.zone;
   String _sign = 'no_entry';
+  String _laneSign = 'bus_only'; // the overlay sign that a click places (Restricted lane)
+  int? _selSign; // the placed sign whose size and angle are being set
+  _SignGrab _grab = _SignGrab.none;
   int? _drag;
   double _aspect = 16 / 9;
   String? _notice;
@@ -52,6 +60,15 @@ class _ZoneEditorState extends State<ZoneEditor> {
   String get key => widget.violationKey;
   ViolationInfo get info => ViolationCatalog.of(key);
   bool get _isSigns => key == 'disregarding_signs';
+
+  /// "Restricted lane": the zone is optional and overlay signs can be placed on the roads.
+  bool get _isLane => key == 'restricted_lane';
+
+  /// The zone is optional for this rule (nothing drawn = the whole picture), see AnalysisDraft.zoneOptionalKeys.
+  bool get _zoneOptional => AnalysisDraft.zoneOptionalKeys.contains(key);
+
+  /// What the whole picture counts as when no zone is drawn.
+  String get _wholePictureIs => _isLane ? 'the lane' : 'a road where the ban applies';
   Map<String, dynamic> get _cfg => widget.draft.config(key);
 
   /// The zone also needs an arrow (or stop line).
@@ -160,7 +177,128 @@ class _ZoneEditorState extends State<ZoneEditor> {
     ZoneTool.zone => _poly,
     ZoneTool.arrow => _arrow,
     ZoneTool.light => _light,
+    ZoneTool.sign => _signPoints, // a copy: signs are changed through the draft, see _moveSign / _removeSign
   };
+
+  // ── overlay signs (Restricted lane) ──
+  List<Map<String, dynamic>> get _signs => widget.draft.signs(key);
+
+  List<Offset> get _signPoints => [
+    for (final s in _signs) Offset((s['x'] as num).toDouble() / ZoneGeometry.refWidth, (s['y'] as num).toDouble() / ZoneGeometry.refHeight),
+  ];
+
+  double _num(int i, String field, double fallback) => (_signs[i][field] as num?)?.toDouble() ?? fallback;
+  double _scaleOf(int i) => SignGeometry.clampScale(_num(i, 'scale', 1.0));
+  double _angleOf(int i) => SignGeometry.clampAngle(_num(i, 'angle', 0.0));
+  double _tiltOf(int i) => SignGeometry.clampTilt(_num(i, 'tilt', 0.0));
+
+  Offset _centerPx(int i, Size size) {
+    final p = _signPoints[i];
+    return Offset(p.dx * size.width, p.dy * size.height);
+  }
+
+  void _placeSign(Offset local, Size size) {
+    final n = _norm(local, size);
+    _signs.add({
+      'type': _laneSign,
+      'x': n.dx * ZoneGeometry.refWidth,
+      'y': n.dy * ZoneGeometry.refHeight,
+      'scale': 1.0, // size: 1.0 = 8.5% of the picture's width
+      'angle': 0.0, // turned in the picture, degrees clockwise
+      'tilt': 0.0, // turned away from the camera, degrees
+    });
+    widget.draft.touch();
+    setState(() {
+      _notice = null;
+      _selSign = _signs.length - 1; // the sign just placed is the one to size and turn
+    });
+  }
+
+  void _moveSign(int i, Offset n) {
+    _signs[i]['x'] = n.dx * ZoneGeometry.refWidth;
+    _signs[i]['y'] = n.dy * ZoneGeometry.refHeight;
+    setState(() {});
+  }
+
+  void _removeSign(int i) {
+    _signs.removeAt(i);
+    widget.draft.touch();
+    setState(() {
+      _notice = null;
+      final s = _selSign;
+      if (s != null) _selSign = s == i ? null : (s > i ? s - 1 : s);
+    });
+  }
+
+  /// The sign under the pointer (the one placed last wins where they overlap), or null.
+  int? _signAt(Offset local, Size size) {
+    for (var i = _signs.length - 1; i >= 0; i--) {
+      final scale = _scaleOf(i);
+      if (SignGeometry.onBoard(_centerPx(i, size), SignGeometry.width(size, scale), SignGeometry.height(size, scale), _angleOf(i), local)) return i;
+    }
+    return null;
+  }
+
+  /// What the pointer is on of the selected sign: its resize corner, its turn knob, or nothing.
+  _SignGrab _handleAt(Offset local, Size size) {
+    final i = _selSign;
+    if (i == null || i >= _signs.length) return _SignGrab.none;
+    final c = _centerPx(i, size);
+    final w = SignGeometry.width(size, _scaleOf(i)), h = SignGeometry.height(size, _scaleOf(i));
+    if ((SignGeometry.rotateKnob(c, w, h, _angleOf(i)) - local).distance <= 16) return _SignGrab.rotate;
+    if ((SignGeometry.resizeHandle(c, w, h, _angleOf(i)) - local).distance <= 16) return _SignGrab.resize;
+    return _SignGrab.none;
+  }
+
+  /// The start of a drag in the sign tool: a handle of the selected sign, or a sign (which becomes the selected one).
+  int? _grabSign(Offset local, Size size) {
+    final handle = _handleAt(local, size);
+    if (handle != _SignGrab.none) {
+      _grab = handle;
+      return _selSign;
+    }
+    final i = _signAt(local, size);
+    if (i == null) return null;
+    _grab = _SignGrab.move;
+    setState(() => _selSign = i);
+    return i;
+  }
+
+  void _dragSign(int i, Offset local, Size size) {
+    switch (_grab) {
+      case _SignGrab.move:
+        _moveSign(i, _norm(local, size));
+      case _SignGrab.resize:
+        _signs[i]['scale'] = SignGeometry.scaleFor(size, _centerPx(i, size), local);
+        setState(() {});
+      case _SignGrab.rotate:
+        _signs[i]['angle'] = SignGeometry.angleFor(_centerPx(i, size), local);
+        setState(() {});
+      case _SignGrab.none:
+        break;
+    }
+  }
+
+  /// Sets one number of the selected sign (size, angle, tilt) from a slider.
+  void _setLook(String field, double value) {
+    final i = _selSign;
+    if (i == null || i >= _signs.length) return;
+    _signs[i][field] = value;
+    widget.draft.touch();
+    setState(() {});
+  }
+
+  bool get _realistic => (widget.draft.config(key)['signs_realistic'] as bool?) ?? true;
+
+  /// Which saved zone a sign stands in (0-based), or -1.
+  int _zoneOfSign(int i) {
+    final at = _signPoints[i];
+    final zones = widget.draft.zones(key).cast<Map<String, dynamic>>();
+    for (var z = 0; z < zones.length; z++) {
+      if (ZoneGeometry.inside(ZoneGeometry.fromReference(zones[z]['polygon'] as List), at)) return z;
+    }
+    return -1;
+  }
 
   bool get _complete =>
       _poly.length >= 3 &&
@@ -174,6 +312,16 @@ class _ZoneEditorState extends State<ZoneEditor> {
   );
 
   void _tap(Offset local, Size size) {
+    if (_tool == ZoneTool.sign) {
+      if (_handleAt(local, size) != _SignGrab.none) return; // a tap on a handle is not a new sign
+      final hit = _signAt(local, size);
+      if (hit != null) {
+        setState(() => _selSign = hit); // a tap on a sign selects it
+      } else {
+        _placeSign(local, size);
+      }
+      return;
+    }
     final pts = _pointsOf(_tool);
     if (ZoneGeometry.hit(pts, local, size) != null) {
       return; // a tap on a handle is not a new point
@@ -194,6 +342,11 @@ class _ZoneEditorState extends State<ZoneEditor> {
   }
 
   void _removeAt(Offset local, Size size) {
+    if (_tool == ZoneTool.sign) {
+      final i = _signAt(local, size);
+      if (i != null) _removeSign(i);
+      return;
+    }
     final pts = _pointsOf(_tool);
     final i =
         ZoneGeometry.hit(pts, local, size) ??
@@ -201,16 +354,37 @@ class _ZoneEditorState extends State<ZoneEditor> {
     if (i != null) setState(() => pts.removeAt(i));
   }
 
+  void _endDrag() {
+    if (_tool == ZoneTool.sign && _drag != null) widget.draft.touch(); // a moved, sized or turned sign is saved
+    _drag = null;
+    _grab = _SignGrab.none;
+  }
+
   // ── actions ──
   void _undoPoint() {
+    if (_tool == ZoneTool.sign) {
+      if (_signs.isNotEmpty) _removeSign(_signs.length - 1);
+      return;
+    }
     final pts = _pointsOf(_tool);
     if (pts.isNotEmpty) setState(pts.removeLast);
   }
 
-  void _clearActive() => setState(() {
-    _pointsOf(_tool).clear();
-    _notice = null;
-  });
+  void _clearActive() {
+    if (_tool == ZoneTool.sign) {
+      _signs.clear();
+      widget.draft.touch();
+      setState(() {
+        _notice = null;
+        _selSign = null;
+      });
+      return;
+    }
+    setState(() {
+      _pointsOf(_tool).clear();
+      _notice = null;
+    });
+  }
 
   void _save() {
     if (!_complete) return;
@@ -274,6 +448,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
       ZoneTool.zone => Fx.danger,
       ZoneTool.arrow => Fx.accent,
       ZoneTool.light => Fx.warning,
+      ZoneTool.sign => Fx.accent,
     };
     return Focus(
       onKeyEvent: (node, e) {
@@ -309,18 +484,22 @@ class _ZoneEditorState extends State<ZoneEditor> {
                       return MouseRegion(
                         cursor: SystemMouseCursors.precise,
                         child: GestureDetector(
+                          key: const ValueKey('zone-canvas'),
                           behavior: HitTestBehavior.opaque,
+                          dragStartBehavior: DragStartBehavior.down, // grab the point under the finger / cursor, not where the slop ended
                           onTapUp: (d) => _tap(d.localPosition, size),
                           onSecondaryTapUp: (d) =>
                               _removeAt(d.localPosition, size),
-                          onPanStart: (d) => _drag = ZoneGeometry.hit(
-                            _pointsOf(_tool),
-                            d.localPosition,
-                            size,
-                          ),
+                          onPanStart: (d) => _drag = _tool == ZoneTool.sign
+                              ? _grabSign(d.localPosition, size)
+                              : ZoneGeometry.hit(_pointsOf(_tool), d.localPosition, size),
                           onPanUpdate: (d) {
                             final i = _drag;
                             if (i == null) return;
+                            if (_tool == ZoneTool.sign) {
+                              _dragSign(i, d.localPosition, size);
+                              return;
+                            }
                             setState(
                               () => _pointsOf(_tool)[i] = _norm(
                                 d.localPosition,
@@ -328,8 +507,8 @@ class _ZoneEditorState extends State<ZoneEditor> {
                               ),
                             );
                           },
-                          onPanEnd: (_) => _drag = null,
-                          onPanCancel: () => _drag = null,
+                          onPanEnd: (_) => _endDrag(),
+                          onPanCancel: _endDrag,
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -346,9 +525,16 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                   light: List.of(_light),
                                   tool: _tool,
                                   stopLine: _drawsLine,
+                                  signs: _isLane
+                                      ? [
+                                          for (var i = 0; i < _signs.length; i++)
+                                            (at: _signPoints[i], type: _signs[i]['type'] as String, scale: _scaleOf(i), angle: _angleOf(i), tilt: _tiltOf(i)),
+                                        ]
+                                      : const [],
+                                  selectedSign: _tool == ZoneTool.sign ? _selSign : null,
                                 ),
                               ),
-                              if (_poly.isEmpty && saved.isEmpty)
+                              if (_poly.isEmpty && saved.isEmpty && (!_isLane || _signs.isEmpty))
                                 Center(
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
@@ -361,9 +547,12 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                         Fx.radiusSm,
                                       ),
                                     ),
-                                    child: const Text(
-                                      'Click the corners of the area to draw the zone',
-                                      style: TextStyle(
+                                    child: Text(
+                                      _zoneOptional
+                                          ? 'Optional: click the corners of one road area to limit the rule to it.\nNothing drawn = the whole picture is $_wholePictureIs.'
+                                          : 'Click the corners of the area to draw the zone',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 13,
                                       ),
@@ -469,7 +658,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                 context,
                 ZoneTool.zone,
                 '1',
-                'Zone',
+                _zoneOptional ? 'Zone (optional)' : 'Zone',
                 _poly.length >= 3,
                 '${_poly.length} point${_poly.length == 1 ? '' : 's'}, at least 3',
               ),
@@ -509,6 +698,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
               ),
               const SizedBox(height: Fx.s8),
               FilledButton.icon(
+                key: const ValueKey('zone-save'),
                 onPressed: _complete ? _save : null,
                 icon: const Icon(Icons.add_location_alt_outlined, size: 18),
                 label: const Text('Save this zone'),
@@ -548,6 +738,10 @@ class _ZoneEditorState extends State<ZoneEditor> {
           ),
         ),
         const SizedBox(height: Fx.s12),
+        if (_isLane) ...[
+          _signsCard(context),
+          const SizedBox(height: Fx.s12),
+        ],
         FxCard(
           padding: const EdgeInsets.all(Fx.s12),
           child: Column(
@@ -558,15 +752,18 @@ class _ZoneEditorState extends State<ZoneEditor> {
               if (saved.isEmpty)
                 Row(
                   children: [
-                    const Icon(
-                      Icons.error_outline,
+                    Icon(
+                      _zoneOptional ? Icons.crop_free : Icons.error_outline,
                       size: 16,
-                      color: Fx.warning,
+                      color: _zoneOptional ? Fx.success : Fx.warning,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        'Save at least one zone to continue.',
+                        _zoneOptional
+                            ? 'No zone drawn: the whole picture is $_wholePictureIs. Draw a zone to limit the rule to one area.'
+                            : 'Save at least one zone to continue.',
+                        key: const ValueKey('lane-no-zone'),
                         style: Fx.caption(context),
                       ),
                     ),
@@ -609,6 +806,174 @@ class _ZoneEditorState extends State<ZoneEditor> {
           onChanged: () => setState(() {}),
         ),
       ],
+    );
+  }
+
+  Widget _lookSlider(String sliderKey, String label, double value, double min, double max, String shown, String field) {
+    return Row(
+      children: [
+        SizedBox(width: 74, child: Text(label, style: Fx.caption(context))),
+        Expanded(
+          child: Slider(key: ValueKey(sliderKey), value: value.clamp(min, max).toDouble(), min: min, max: max, onChanged: (v) => _setLook(field, v)),
+        ),
+        SizedBox(width: 46, child: Text(shown, key: ValueKey('$sliderKey-value'), textAlign: TextAlign.end, style: Fx.caption(context))),
+      ],
+    );
+  }
+
+  /// How the rule will work with what is drawn and placed now, in one sentence.
+  String _laneSummary() {
+    final zones = widget.draft.zones(key).length;
+    if (zones > 0) {
+      return 'Only the $zones zone${zones == 1 ? '' : 's'} are checked. A sign inside a zone sets who may use that zone; '
+          'a zone without a sign uses the tick boxes below.';
+    }
+    if (_signs.isEmpty) return 'No zone and no sign: the whole picture is the lane, and only the types ticked below may use it.';
+    if (_signs.length == 1) return 'No zone: the whole picture is the lane, and the sign says who may use it.';
+    return 'No zone: each vehicle follows the sign nearest to it, so two roads can have different signs.';
+  }
+
+  Widget _signsCard(BuildContext context) {
+    final placing = _tool == ZoneTool.sign;
+    final zoneCount = widget.draft.zones(key).length;
+    return FxCard(
+      key: const ValueKey('lane-signs'),
+      padding: const EdgeInsets.all(Fx.s12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SIGNS ON THE ROAD (TEMPORARY)', style: Fx.label(context)),
+          const SizedBox(height: 4),
+          Text(
+            'A sign says who may use the road it stands on. Place it on the picture. It is only drawn on the photos and the video of '
+            'this analysis: nothing is written into your video, and it goes when you start a new analysis.',
+            style: Fx.caption(context),
+          ),
+          const SizedBox(height: Fx.s8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final sign in LaneSigns.all)
+                ChoiceChip(
+                  key: ValueKey('sign-type-${sign.key}'),
+                  label: Text(sign.label),
+                  selected: _laneSign == sign.key,
+                  onSelected: (_) => setState(() => _laneSign = sign.key),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('May use it: ${LaneSigns.allowedText(_laneSign)}', key: const ValueKey('sign-allowed'), style: Fx.caption(context)),
+          const SizedBox(height: Fx.s8),
+          FilledButton.tonalIcon(
+            key: const ValueKey('sign-place'),
+            onPressed: () => setState(() => _tool = placing ? ZoneTool.zone : ZoneTool.sign),
+            icon: Icon(placing ? Icons.check : Icons.add_location_alt_outlined, size: 18),
+            label: Text(placing ? 'Done placing signs' : 'Place this sign on the picture'),
+          ),
+          if (placing) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Click on the road to place it. Drag a sign to move it. Right-click removes it.',
+              key: const ValueKey('sign-help'),
+              style: Fx.caption(context),
+            ),
+          ],
+          if (_signs.isNotEmpty) ...[
+            const SizedBox(height: Fx.s8),
+            for (var i = 0; i < _signs.length; i++)
+              InkWell(
+                key: ValueKey('sign-row-$i'),
+                borderRadius: BorderRadius.circular(Fx.radiusSm),
+                onTap: () => setState(() {
+                  _selSign = i;
+                  _tool = ZoneTool.sign; // so its handles can be dragged on the picture
+                }),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _selSign == i ? Fx.accent.withValues(alpha: 0.12) : null,
+                    borderRadius: BorderRadius.circular(Fx.radiusSm),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.signpost_outlined, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${LaneSigns.of(_signs[i]['type'] as String)?.label ?? 'Sign'}  ·  '
+                          '${zoneCount == 0 ? 'covers the road around it' : (_zoneOfSign(i) >= 0 ? 'sets Zone ${_zoneOfSign(i) + 1}' : 'outside every zone: not used')}',
+                          style: Fx.body(context).copyWith(fontWeight: _selSign == i ? FontWeight.w600 : null),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      IconButton(
+                        key: ValueKey('sign-delete-$i'),
+                        tooltip: 'Remove this sign',
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _removeSign(i),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_selSign != null && _selSign! < _signs.length) ...[
+              const SizedBox(height: Fx.s8),
+              Text('SIZE AND ANGLE OF THE SELECTED SIGN', style: Fx.label(context)),
+              _lookSlider('sign-scale', 'Size', _scaleOf(_selSign!), SignGeometry.minScale, SignGeometry.maxScale, '${(_scaleOf(_selSign!) * 100).round()}%', 'scale'),
+              _lookSlider('sign-angle', 'Rotate', _angleOf(_selSign!), -SignGeometry.maxAngle, SignGeometry.maxAngle, '${_angleOf(_selSign!).round()}°', 'angle'),
+              _lookSlider('sign-tilt', 'Turn away', _tiltOf(_selSign!), -SignGeometry.maxTilt, SignGeometry.maxTilt, '${_tiltOf(_selSign!).round()}°', 'tilt'),
+              Text(
+                'Or drag the corner of the sign to resize it, and the round knob above it to rotate it.',
+                key: const ValueKey('sign-handles-help'),
+                style: Fx.caption(context),
+              ),
+              TextButton(
+                key: const ValueKey('sign-reset'),
+                onPressed: () {
+                  final i = _selSign!;
+                  _signs[i]['scale'] = 1.0;
+                  _signs[i]['angle'] = 0.0;
+                  _signs[i]['tilt'] = 0.0;
+                  widget.draft.touch();
+                  setState(() {});
+                },
+                child: const Text('Reset size and angle'),
+              ),
+            ],
+            const SizedBox(height: Fx.s8),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Realistic look', style: Fx.body(context).copyWith(fontWeight: FontWeight.w600)),
+                      Text(
+                        'Soft edges, a little grain, a shadow on the road, and colours that follow the light of the scene, so the sign '
+                        'looks filmed. Turn it off for a plain, sharp sign.',
+                        style: Fx.caption(context),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  key: const ValueKey('sign-realistic'),
+                  value: _realistic,
+                  onChanged: (v) {
+                    widget.draft.config(key)['signs_realistic'] = v;
+                    widget.draft.touch();
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: Fx.s8),
+          Text(_laneSummary(), key: const ValueKey('lane-summary'), style: Fx.caption(context).copyWith(color: Fx.accent)),
+        ],
+      ),
     );
   }
 
@@ -686,8 +1051,12 @@ class _ZonePainter extends CustomPainter {
     required this.light,
     required this.tool,
     required this.stopLine,
+    this.signs = const [],
+    this.selectedSign,
   });
 
+  final List<({Offset at, String type, double scale, double angle, double tilt})> signs;
+  final int? selectedSign;
   final List<Map<String, dynamic>> saved;
   final List<Offset> poly;
   final List<Offset> arrow;
@@ -768,6 +1137,74 @@ class _ZonePainter extends CustomPainter {
     }
   }
 
+  /// An overlay sign: a blue board with its two lines of text, placed, sized, turned and turned away like it will be drawn on the
+  /// photos and the video (same size rule and same perspective as the backend). The selected one also shows its handles.
+  void _sign(Canvas canvas, ({Offset at, String type, double scale, double angle, double tilt}) sign, bool selected, Size size) {
+    final spec = LaneSigns.of(sign.type);
+    if (spec == null) return;
+    final c = _px(sign.at, size);
+    final w = SignGeometry.width(size, sign.scale), h = SignGeometry.height(size, sign.scale);
+
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    final m = Matrix4.identity()..rotateZ(sign.angle * math.pi / 180);
+    m.multiply(Matrix4.identity()..setEntry(3, 2, 1 / (3 * w)));
+    m.rotateY(-sign.tilt * math.pi / 180); // a positive turn puts the right edge farther, as in the backend
+    canvas.transform(m.storage);
+    final board = RRect.fromRectAndRadius(Rect.fromCenter(center: Offset.zero, width: w, height: h), Radius.circular(w / 22));
+    canvas.drawRRect(board.shift(Offset(w * 0.045, w * 0.07)), Paint()..color = Colors.black38);
+    canvas.drawRRect(board, Paint()..color = const Color(0xFF0A4696));
+    canvas.drawRRect(
+      board.deflate(w / 28),
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(1.0, w / 40),
+    );
+    final lines = [spec.line1, spec.line2];
+    final probe = TextPainter(
+      text: TextSpan(text: lines.reduce((a, b) => a.length >= b.length ? a : b), style: TextStyle(fontSize: h * 0.3, fontWeight: FontWeight.w600)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final fontSize = h * 0.3 * math.min(1.0, (w * 0.8) / math.max(probe.width, 1));
+    for (var i = 0; i < 2; i++) {
+      final tp = TextPainter(
+        text: TextSpan(text: lines[i], style: TextStyle(color: Colors.white, fontSize: fontSize, fontWeight: FontWeight.w600)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(-tp.width / 2, (i == 0 ? -h * 0.22 : h * 0.18) - tp.height / 2));
+    }
+    canvas.restore();
+
+    if (selected) {
+      final knob = SignGeometry.rotateKnob(c, w, h, sign.angle);
+      final corner = SignGeometry.resizeHandle(c, w, h, sign.angle);
+      final top = c + (knob - c) * ((h / 2) / (h / 2 + 26)); // where the stem leaves the top edge of the sign
+      final turned = [
+        for (final p in const [Offset(-0.5, -0.5), Offset(0.5, -0.5), Offset(0.5, 0.5), Offset(-0.5, 0.5)])
+          c + _turn(Offset(p.dx * w, p.dy * h), sign.angle),
+      ];
+      canvas.drawPath(
+        Path()..addPolygon(turned, true),
+        Paint()
+          ..color = Fx.accent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+      canvas.drawLine(top, knob, Paint()..color = Fx.accent..strokeWidth = 1.5);
+      for (final p in [knob, corner]) {
+        canvas.drawCircle(p, 8, Paint()..color = Colors.black87);
+        canvas.drawCircle(p, 6.5, Paint()..color = Colors.white);
+        canvas.drawCircle(p, 4, Paint()..color = Fx.accent);
+      }
+    }
+  }
+
+  static Offset _turn(Offset p, double degrees) {
+    final a = degrees * math.pi / 180;
+    return Offset(p.dx * math.cos(a) - p.dy * math.sin(a), p.dx * math.sin(a) + p.dy * math.cos(a));
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     // Saved zones: calm green, with their own arrows / light boxes and a number.
@@ -812,6 +1249,10 @@ class _ZonePainter extends CustomPainter {
             ..strokeWidth = 3,
         );
       }
+    }
+
+    for (var i = 0; i < signs.length; i++) {
+      _sign(canvas, signs[i], selectedSign == i, size);
     }
 
     // The zone being drawn.

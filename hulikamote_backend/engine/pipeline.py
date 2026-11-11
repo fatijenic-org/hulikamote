@@ -391,6 +391,17 @@ class DecoupledPipeline:
                     scaled[violation.zone_key] = [
                         violation.auto_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), self.flow)
                     ]
+        # A rule whose zone is optional (`zoneless`, e.g. restricted lane) that is on, with nothing drawn: the whole picture is its zone,
+        # whatever the flow mode is.
+        active = getattr(getattr(self, "registry", None), "active_violations", None)
+        if active:
+            whole = [[0, 0], [frame_w, 0], [frame_w, frame_h], [0, frame_h]]
+            settings = getattr(self, "violation_cfg", None) or {}
+            for violation in ZONE_VIOLATIONS:
+                if getattr(violation, "zoneless", False) and violation.key in active and not scaled[violation.zone_key]:
+                    scaled[violation.zone_key] = [
+                        violation.auto_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), getattr(self, "flow", None))
+                    ]
         for violation in self._learned_in_use():
             scaled[violation.zone_key] = [self._scale_learned(z, frame_w, frame_h) for z in self.learned_rois[violation.zone_key]]
         return scaled
@@ -492,6 +503,7 @@ class DecoupledPipeline:
             return
 
         # Burn ALL active ROIs onto the frame first so the evidence shows the full crime scene context
+        self._draw_dets = detections                 # rules that paint on the road (overlay crosswalk) keep vehicles on top
         base_frame = self._draw_rois(safe.copy())
         
         # Burn the vehicle bounding box
@@ -547,6 +559,7 @@ class DecoupledPipeline:
             ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
             if ledger is not None:
                 marks.draw_marks(out_frame, ledger, det.bbox)
+        self._draw_dets = detections
         return self._draw_rois(out_frame)
 
     # ── ROI parsing ──────────────────────────────────────────────────────────
@@ -645,13 +658,15 @@ class DecoupledPipeline:
         """
         import supervision as sv
 
-        polygons = [
-            z["polygon"]
+        active_zones = [
+            z
             for violation, key in ZONE_RULES.items()
             if violation in self.registry.active_violations
             for z in scaled_rois.get(key, [])
-            if z.get("polygon")
         ]
+        polygons = [z["polygon"] for z in active_zones if z.get("polygon")]
+        if len(polygons) < len(active_zones):
+            return detections           # a zone without a road section (a solid line alone) is the whole picture: nothing is cut away
 
         if not polygons or not detections:
             return detections

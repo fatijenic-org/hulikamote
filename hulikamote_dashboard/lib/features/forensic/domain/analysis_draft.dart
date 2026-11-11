@@ -212,8 +212,34 @@ class AnalysisDraft extends ChangeNotifier {
     'illegal_parking',
   };
 
+  /// "Crossing a solid line" needs no drawing: with no line drawn, the analysis finds the painted solid lines in the video
+  /// (the switch in its editor, on unless the operator turned it off). A line that is drawn is used instead.
+  bool findsLinesItself(String key) => key == 'crossing_solid_line' && ((config(key)['auto_lines'] as bool?) ?? true);
+
+  /// Rules that take a drawn zone but do not need one: with nothing drawn the whole picture is the zone ("Restricted lane":
+  /// a camera that watches only the reserved road needs no drawing; "Tricycle on a national highway": ticking the rule says the
+  /// whole view is a road where the ban applies; a drawn zone still limits the rule to where it is).
+  static const zoneOptionalKeys = {'restricted_lane', 'tricycle_on_highway'};
+
+  /// The overlay signs placed on the roads for "Restricted lane": [{type, x, y}] in the 1920x1080 reference space.
+  /// Temporary: they belong to this analysis only and are never written into the video.
+  List<Map<String, dynamic>> signs(String key) => (config(key).putIfAbsent('signs', () => <dynamic>[]) as List).cast<Map<String, dynamic>>();
+
+  /// The overlay crosswalks placed on the picture for "Pedestrian lane" (testing): [{x, y, scale, depth, angle, slant, stripes, wear}]
+  /// in the 1920x1080 reference space. Each one IS a crosswalk zone; temporary, never written into the video.
+  List<Map<String, dynamic>> crosswalks(String key) =>
+      (config(key).putIfAbsent('crosswalks', () => <dynamic>[]) as List).cast<Map<String, dynamic>>();
+
+  /// How many overlay crosswalks a rule has (0 for a rule that has none).
+  int crosswalkCount(String key) => key == 'pedestrian_lane' ? crosswalks(key).length : 0;
+
   bool zonesReady(String key) =>
-      !needsZone(key) || zones(key).isNotEmpty || (settings.autoFlow && autoFlowKeys.contains(key));
+      !needsZone(key) ||
+      zones(key).isNotEmpty ||
+      crosswalkCount(key) > 0 ||
+      (settings.autoFlow && autoFlowKeys.contains(key)) ||
+      findsLinesItself(key) ||
+      zoneOptionalKeys.contains(key);
 
   /// Selected violations that still need a zone.
   List<String> get missingZones => [

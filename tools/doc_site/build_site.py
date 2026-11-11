@@ -28,6 +28,7 @@ PAGES = {
     "pipeline": "content_pipeline",
     "violations": "content_violations",
     "qa": "content_qa",
+    "live": "content_live",
 }
 
 

@@ -148,7 +148,7 @@ primary_anchor:             # Philippine vehicles (only if you fine-tune the veh
     trust: B
     notes: "real Philippine jeepney / tricycle photos mixed with generic web, stock and Street View pictures; heavy augmentation (rotated, upside-down, noise)"
     classes: {car: car, truck: truck, bus: bus, motorcycle: motorcycle, pedestrian: person,
-              tricycle: tricycle, jeepney: bus}
+              tricycle: tricycle, jeepney: jeepney}
   - id: ph_plate_vehicle
     workspace: research-3wj93
     project: philippine-plate-and-vehicle
@@ -157,10 +157,10 @@ primary_anchor:             # Philippine vehicles (only if you fine-tune the veh
     country: Philippines
     ph: true
     trust: B
-    classes: {car: car, truck: truck, semi-truck: truck, jeepney: bus, e-jeepney: bus,
+    classes: {car: car, truck: truck, semi-truck: truck, jeepney: jeepney, e-jeepney: jeepney,
               motorcycle: motorcycle, person: person, tricycle: tricycle, e-tricycle: tricycle}
   # --- needs key (Philippine vehicle sets with tricycle / jeepney / van) ---
-  - id: ph_vehicle_classification   # 6,854 imgs, 7 classes; van counts as car, jeepney as bus
+  - id: ph_vehicle_classification   # 6,854 imgs, 7 classes; van counts as car, jeepney is its own class
     workspace: thesis-vdkcz         # 2026-10-25: the download was cut off (roboflow.zip is incomplete): re-run with your key
     project: vehicle-classification-philippines
     version: latest
@@ -168,7 +168,7 @@ primary_anchor:             # Philippine vehicles (only if you fine-tune the veh
     country: Philippines
     ph: true
     trust: B
-    classes: {car: car, truck: truck, bus: bus, van: car, jeepney: bus, motorcycles: motorcycle, tricycles: tricycle}
+    classes: {car: car, truck: truck, bus: bus, van: car, jeepney: jeepney, motorcycles: motorcycle, tricycles: tricycle}
   - id: ph_vehicles_selfdev         # 5,752 imgs; no person class in the download (7 vehicle classes)
     workspace: selfdev-l0ovg
     project: ph-vehicles
@@ -180,7 +180,17 @@ primary_anchor:             # Philippine vehicles (only if you fine-tune the veh
     force_split: train              # its own val / test hold almost no motorcycle / tricycle / bus boxes, so they would score the wrong thing
     notes: "checked by eye 2026-10-25: Philippine web photos of single vehicles (jeepney, van, bus, tricycle), large boxes"
     classes: {truck: truck, Bus: bus, Motorcycle: motorcycle, Van: car, Tricycle: tricycle, person: person,
-              cars: car, Jeepney: bus}
+              cars: car, Jeepney: jeepney}
+  - id: ph_traffic_detection        # 1,984 imgs of Philippine street traffic; "Vehicles" is its catch-all for the rest
+    workspace: new-workspace-he7oi
+    project: philippine-traffic-detection
+    version: 4
+    license: CC BY 4.0
+    country: Philippines
+    ph: true
+    trust: B
+    notes: "Jeep and Tricycle have their own classes here. 'Vehicles' (775 boxes) is mapped to car; Bicycle is not one of ours, so it is dropped."
+    classes: {Bus: bus, Jeep: jeepney, Motorcycle: motorcycle, Tricycle: tricycle, Pedestrian: person, Vehicles: car}
 
 plate_specialist:           # the licence plate on a vehicle
   - id: ph_plates

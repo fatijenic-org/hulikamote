@@ -54,7 +54,7 @@ class WikiDecksView extends StatelessWidget {
         path: 'Progress Report/index.html',
         tag: 'Recommended',
         icon: Icons.slideshow_rounded,
-        color: const Color(0xFFEC4899),
+        color: const Color(0xFF3B82F6),
         stats: 'Modern UI • Milestone Timeline • System Overview',
       ),
       (
@@ -63,7 +63,7 @@ class WikiDecksView extends StatelessWidget {
         path: 'Progress Report/previous version/index.html',
         tag: 'Archive',
         icon: Icons.history_edu_rounded,
-        color: const Color(0xFF8B5CF6),
+        color: const Color(0xFF3B82F6),
         stats: 'Historical Journey • Early Prototypes',
       ),
       (
@@ -81,7 +81,7 @@ class WikiDecksView extends StatelessWidget {
         path: 'docs/THESIS_REVISIONS.md',
         tag: 'Thesis',
         icon: Icons.school_rounded,
-        color: const Color(0xFF10B981),
+        color: const Color(0xFF3B82F6),
         stats: 'Oral Defense • Panelist Alignment • Academic Rigor',
       ),
       (
@@ -90,7 +90,7 @@ class WikiDecksView extends StatelessWidget {
         path: 'docs/PROGRESS_SINCE_AUG25.md',
         tag: 'Changelog',
         icon: Icons.update_rounded,
-        color: const Color(0xFFF59E0B),
+        color: const Color(0xFF3B82F6),
         stats: 'Milestone Tracking • Commits • Performance Deltas',
       ),
     ];
@@ -105,10 +105,10 @@ class WikiDecksView extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEC4899).withOpacity(0.12),
+                  color: const Color(0xFF3B82F6).withOpacity(0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(Icons.slideshow_rounded, size: 20, color: Color(0xFFEC4899)),
+                child: const Icon(Icons.slideshow_rounded, size: 20, color: Color(0xFF3B82F6)),
               ),
               const SizedBox(width: 12),
               Expanded(

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../data/docs_loader.dart';
 import '../../domain/models/doc_block.dart';
+import '../../domain/live_slides.dart';
 import '../../domain/models/doc_page.dart';
 import '../../domain/palette/doc_palette.dart';
 import '../widgets/block_renderer.dart';
 import '../widgets/cmd_widget.dart';
 import '../widgets/inline_text_renderer.dart';
+import '../widgets/present_view.dart';
 
 class DocsScreen extends StatefulWidget {
   final Directory? root;
@@ -27,6 +29,7 @@ class _DocsScreenState extends State<DocsScreen> {
   late int _activeTabIndex;
   bool _isLoading = true;
   bool _isSiteMissing = false;
+  bool _presenting = false;
   Map<String, String> _glossary = {};
   DocPage? _currentPage;
   final ScrollController _scrollController = ScrollController();
@@ -130,6 +133,17 @@ class _DocsScreenState extends State<DocsScreen> {
       return _buildMissingSiteView(palette);
     }
 
+    if (_presenting) {
+      return Scaffold(
+        backgroundColor: palette.page,
+        body: PresentView(
+          slides: liveSlides,
+          palette: palette,
+          onClose: () => setState(() => _presenting = false),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: palette.page,
       body: Column(
@@ -220,6 +234,18 @@ class _DocsScreenState extends State<DocsScreen> {
               ),
             ),
           ),
+          if (DocsLoader.tabs[_activeTabIndex].id == 'live') ...[
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: () => setState(() => _presenting = true),
+              icon: const Icon(Icons.slideshow_rounded, size: 18),
+              label: const Text('Present'),
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.accent,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
         ],
       ),
     );
