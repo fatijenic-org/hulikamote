@@ -1,65 +1,77 @@
 {
   "model": "primary_anchor",
   "applied": true,
-  "seconds": 1080.9,
+  "seconds": 618.1,
   "classes": [
     "motorcycle",
     "car",
     "bus",
     "truck",
     "person",
-    "tricycle"
+    "tricycle",
+    "jeepney"
   ],
   "layout_moves": [],
-  "checked": 32891,
-  "kept": 29421,
+  "checked": 35905,
+  "kept": 30854,
   "dropped": {
-    "leak": 3144,
-    "duplicate": 326
+    "leak": 3311,
+    "duplicate": 1733,
+    "no_boxes": 7
   },
-  "fixed_labels": 17,
+  "fixed_labels": 141,
   "resaved_pictures": 3241,
   "issues_kept": {},
   "images_per_split": {
-    "train": 27108,
-    "val": 1531,
-    "test": 782
+    "train": 28445,
+    "val": 1587,
+    "test": 822
   },
   "eval_pictures_with_train_twin": {
-    "val": 782,
-    "test": 364
+    "test": 389,
+    "val": 845
   },
   "boxes_per_class": {
     "train": {
-      "car": 16245,
-      "motorcycle": 7288,
-      "bus": 11087,
-      "tricycle": 5676,
-      "person": 27109,
-      "truck": 6821
+      "car": 17088,
+      "motorcycle": 7873,
+      "jeepney": 6447,
+      "tricycle": 6279,
+      "person": 28235,
+      "truck": 6818,
+      "bus": 5783
     },
     "val": {
       "car": 1461,
       "tricycle": 238,
-      "bus": 568,
+      "jeepney": 184,
       "truck": 498,
       "motorcycle": 892,
-      "person": 1815
+      "person": 1854,
+      "bus": 443
     },
     "test": {
-      "motorcycle": 487,
-      "car": 824,
+      "motorcycle": 493,
+      "car": 834,
       "truck": 301,
-      "bus": 290,
+      "jeepney": 92,
       "tricycle": 124,
-      "person": 1082
+      "person": 1115,
+      "bus": 242
     }
   },
   "per_source": {
     "ph_plate_vehicle": {
       "train": 67,
       "val": 20,
-      "test": 13
+      "test": 13,
+      "dropped": 1
+    },
+    "ph_traffic_detection": {
+      "train": 1345,
+      "val": 60,
+      "test": 40,
+      "dropped": 93
     },
     "ph_vehicle_classification": {
       "train": 2345,
@@ -68,12 +80,14 @@
       "dropped": 3470
     },
     "ph_vehicles": {
-      "train": 19490,
-      "val": 856,
-      "test": 417
+      "train": 19508,
+      "val": 852,
+      "test": 417,
+      "dropped": 915
     },
     "ph_vehicles_selfdev": {
-      "train": 5206
+      "train": 5180,
+      "dropped": 572
     }
   },
   "long_side_px": {
@@ -82,9 +96,9 @@
     "max": 1280
   },
   "box_area_share": {
-    "p10": 0.0014,
-    "median": 0.03223,
-    "p90": 0.59191
+    "p10": 0.00148,
+    "median": 0.03059,
+    "p90": 0.58283
   },
   "empty_pictures_kept": 0,
   "eval_twins_before_first_cleaning": {

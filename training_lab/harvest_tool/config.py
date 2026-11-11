@@ -95,15 +95,16 @@ CLASS_HELP = {
     "primary_anchor": {
         "motorcycle": "A motorcycle. Box the whole bike.",
         "car": "A car, van or SUV.",
-        "bus": "A bus or a jeepney.",
+        "bus": "A full-size bus (a jeepney is its own class).",
         "truck": "A truck or a pickup.",
         "person": "A rider or passenger sitting on a motorcycle or tricycle (not people walking).",
         "tricycle": "A tricycle: a motorcycle with a sidecar.",
+        "jeepney": "A jeepney: the long open-sided passenger vehicle with benches along the sides.",
     },
 }
 
 # Colours used for the boxes in the labelling page (one per class index).
-CLASS_COLORS = ["#2f9e44", "#e03131", "#1971c2", "#f08c00", "#9c36b5", "#0c8599"]
+CLASS_COLORS = ["#2f9e44", "#e03131", "#1971c2", "#f08c00", "#9c36b5", "#0c8599", "#e64980"]
 
 # Data the app already collects by itself; shown on the board so everything is in one place.
 AUTOMATIC = [

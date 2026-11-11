@@ -24,7 +24,7 @@ MODELS = {
     "helmet_specialist": ("Helmet", "riders with / without a helmet"),
     "plate_specialist": ("Plate", "the license plate on a vehicle"),
     "cabin_specialist": ("Cabin", "windshield, seatbelt, phone, mirrors"),
-    "primary_anchor": ("Vehicles", "cars, motorcycles, buses, trucks, people, tricycles"),
+    "primary_anchor": ("Vehicles", "cars, motorcycles, buses, jeepneys, trucks, people, tricycles"),
 }
 # Overall score (mAP@50) wanted before deploying (from training_config.yaml notes)
 TARGET = {"helmet_specialist": 0.85, "plate_specialist": 0.90, "cabin_specialist": 0.80, "primary_anchor": 0.80}
