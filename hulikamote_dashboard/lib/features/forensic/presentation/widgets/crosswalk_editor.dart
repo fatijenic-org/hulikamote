@@ -56,7 +56,7 @@ class _PedestrianLaneEditorState extends State<PedestrianLaneEditor> {
 }
 
 /// What a drag on the canvas is doing to the selected crosswalk.
-enum _Grab { none, move, resize, rotate }
+enum _Grab { none, move, resize, rotate, corner, side }
 
 /// Places overlay crosswalks on the first frame of the video and sets how each one looks. Same ideas as the lane signs of
 /// "Restricted lane": click to place, drag to move, drag the corner to resize, drag the knob to turn, right-click to remove.
@@ -75,6 +75,8 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
   bool _placing = false;
   int? _sel;
   _Grab _grab = _Grab.none;
+  int _grip = 0; // which corner / side is held (corner and side grabs)
+  Offset _last = Offset.zero; // where the pointer was at the last update (side grabs move by the difference)
   Offset _grabOffset = Offset.zero; // from the pointer to the crosswalk's centre when a move starts (0..1 canvas coordinates)
   double _aspect = 16 / 9;
   ImageStream? _stream;
@@ -126,6 +128,21 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
   _Grab _handleAt(Offset local, Size size) {
     final i = _sel;
     if (i == null || i >= _items.length) return _Grab.none;
+    if (CrosswalkOverlay.isFree(_items[i])) {            // loose corners: each corner and each side has its own handle
+      for (var k = 0; k < 4; k++) {
+        if ((CrosswalkOverlay.cornerHandle(_items[i], k, size) - local).distance <= 16) {
+          _grip = k;
+          return _Grab.corner;
+        }
+      }
+      for (var k = 0; k < 4; k++) {
+        if ((CrosswalkOverlay.sideHandle(_items[i], k, size) - local).distance <= 14) {
+          _grip = k;
+          return _Grab.side;
+        }
+      }
+      return _Grab.none;
+    }
     if ((CrosswalkOverlay.rotateKnob(_items[i], size) - local).distance <= 16) return _Grab.rotate;
     if ((CrosswalkOverlay.resizeHandle(_items[i], size) - local).distance <= 16) return _Grab.resize;
     return _Grab.none;
@@ -160,6 +177,7 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
     final handle = _handleAt(local, size);
     if (handle != _Grab.none) {
       _grab = handle;
+      _last = local;
       return;
     }
     final i = _at(local, size);
@@ -185,6 +203,11 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
         c['scale'] = CrosswalkOverlay.scaleFor(c, size, local);
       case _Grab.rotate:
         c['angle'] = CrosswalkOverlay.angleFor(c, size, local);
+      case _Grab.corner:
+        CrosswalkOverlay.moveCorner(c, _grip, size, local);
+      case _Grab.side:
+        CrosswalkOverlay.moveSide(c, _grip, size, local - _last);
+        _last = local;
       case _Grab.none:
         return;
     }
@@ -381,10 +404,33 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
                   children: [
                     Text('Crosswalk ${i! + 1}', style: Fx.heading(context)),
                     const SizedBox(height: Fx.s8),
-                    _slider('Size', 'scale', CrosswalkOverlay.scaleOf(selected), CrosswalkOverlay.minScale, CrosswalkOverlay.maxScale, (v) => '×${v.toStringAsFixed(1)}'),
-                    _slider('Depth', 'depth', CrosswalkOverlay.depthOf(selected), CrosswalkOverlay.minDepth, CrosswalkOverlay.maxDepth, (v) => '×${v.toStringAsFixed(1)}'),
-                    _slider('Rotate', 'angle', CrosswalkOverlay.angleOf(selected), -CrosswalkOverlay.maxAngle, CrosswalkOverlay.maxAngle, (v) => '${v.round()}°'),
-                    _slider('Perspective', 'slant', CrosswalkOverlay.slantOf(selected), 0, CrosswalkOverlay.maxSlant, (v) => '${v.round()}°'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('cw-free'),
+                        onPressed: () {
+                          if (CrosswalkOverlay.isFree(selected)) {
+                            CrosswalkOverlay.unfreeze(selected);
+                          } else {
+                            CrosswalkOverlay.freeze(selected);
+                          }
+                          widget.draft.touch();
+                          setState(() {});
+                        },
+                        icon: Icon(CrosswalkOverlay.isFree(selected) ? Icons.crop_square : Icons.polyline, size: 18),
+                        label: Text(CrosswalkOverlay.isFree(selected) ? 'Back to the simple shape' : 'Move the corners'),
+                      ),
+                    ),
+                    const SizedBox(height: Fx.s8),
+                    if (CrosswalkOverlay.isFree(selected))
+                      Text('Drag a corner to reshape it. Drag the dot in the middle of a side to stretch the crosswalk that way. '
+                          'Drag the crosswalk itself to move it.', key: const ValueKey('cw-free-hint'), style: Fx.caption(context))
+                    else ...[
+                      _slider('Size', 'scale', CrosswalkOverlay.scaleOf(selected), CrosswalkOverlay.minScale, CrosswalkOverlay.maxScale, (v) => '×${v.toStringAsFixed(1)}'),
+                      _slider('Depth', 'depth', CrosswalkOverlay.depthOf(selected), CrosswalkOverlay.minDepth, CrosswalkOverlay.maxDepth, (v) => '×${v.toStringAsFixed(1)}'),
+                      _slider('Rotate', 'angle', CrosswalkOverlay.angleOf(selected), -CrosswalkOverlay.maxAngle, CrosswalkOverlay.maxAngle, (v) => '${v.round()}°'),
+                      _slider('Perspective', 'slant', CrosswalkOverlay.slantOf(selected), 0, CrosswalkOverlay.maxSlant, (v) => '${v.round()}°'),
+                    ],
                     _slider('Stripes', 'stripes', CrosswalkOverlay.stripesOf(selected).toDouble(), CrosswalkOverlay.minStripes.toDouble(),
                         CrosswalkOverlay.maxStripes.toDouble(), (v) => '${v.round()}',
                         divisions: CrosswalkOverlay.maxStripes - CrosswalkOverlay.minStripes, whole: true),
@@ -498,7 +544,18 @@ class _CrosswalkPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = n == selected ? 2 : 1,
       );
-      if (n == selected) {
+      if (n == selected && CrosswalkOverlay.isFree(c)) {
+        for (var k = 0; k < 4; k++) {                          // the four sides stretch, the four corners reshape
+          final side = CrosswalkOverlay.sideHandle(c, k, size);
+          canvas.drawRect(Rect.fromCenter(center: side, width: 11, height: 11), Paint()..color = Fx.accent);
+          canvas.drawRect(Rect.fromCenter(center: side, width: 11, height: 11), Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 1.5);
+        }
+        for (var k = 0; k < 4; k++) {
+          final at = CrosswalkOverlay.cornerHandle(c, k, size);
+          canvas.drawCircle(at, 8, Paint()..color = Colors.white);
+          canvas.drawCircle(at, 8, Paint()..color = Fx.accent..style = PaintingStyle.stroke..strokeWidth = 2);
+        }
+      } else if (n == selected) {
         final knob = CrosswalkOverlay.rotateKnob(c, size);
         final handle = CrosswalkOverlay.resizeHandle(c, size);
         final centre = px(CrosswalkOverlay.centerOf(c));

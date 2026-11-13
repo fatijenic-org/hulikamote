@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'line_paint.dart';
 import 'parking_reasons.dart';
 import 'zone_geometry.dart';
 
@@ -24,7 +25,24 @@ class LoadingSigns {
   static List<String> linesFor(String rule, {String? kind}) => rule == parkingRuleKey ? ParkingReasons.of(kind).lines : lines;
 
   /// What a sign of [rule] bans, for the words on the screen.
-  static String banFor(String rule) => rule == parkingRuleKey ? 'no-parking' : 'no-loading';
+  static String banFor(String rule) => switch (rule) {
+    parkingRuleKey => 'no-parking',
+    'double_parking' => 'no-double-parking',
+    'blocking_intersection' => 'keep-clear',
+    'truck_ban' => 'no-trucks',
+    'tricycle_on_highway' => 'no-tricycles',
+    'sidewalk_driving' => 'no-vehicles',
+    _ => 'no-loading',
+  };
+
+  /// The object placed for each rule that has one fixed object (Illegal parking picks its own, see parking_reasons.dart).
+  static const Map<String, String> ruleKinds = {
+    'double_parking': 'double_parking',
+    'blocking_intersection': 'keep_clear',
+    'truck_ban': 'no_trucks',
+    'tricycle_on_highway': 'no_tricycles',
+    'sidewalk_driving': 'sidewalk',
+  };
 
   static const double defaultWidth = 420; // reference pixels: about a car-and-a-half long stretch of kerb in a 1080p picture
   static const double defaultHeight = 230;
@@ -36,7 +54,7 @@ class LoadingSigns {
   static const List<String> stands = ['none', 'post', 'tripod'];
 
   /// The object that stands in the box of [sign]: for Illegal parking what it marks (sign, hydrant ...), for Illegal loading the plate.
-  static String objectKind(String rule, Map<String, dynamic> sign) => rule == parkingRuleKey ? ParkingReasons.of(sign['kind'] as String?).key : 'no_loading';
+  static String objectKind(String rule, Map<String, dynamic> sign) => rule == parkingRuleKey ? ParkingReasons.of(sign['kind'] as String?).key : (ruleKinds[rule] ?? 'no_loading');
 
   /// A plate can stand on a pole or a tripod; a hydrant and a painted kerb stand alone.
   static bool standable(String kind) => kind != 'hydrant' && kind != 'corner';
@@ -63,10 +81,116 @@ class LoadingSigns {
   /// The tint of the banned area, the same as the backend's (engine/overlay_objects.py KINDS).
   static Color tintOf(String kind) => switch (kind) {
     'sign' => const Color(0xFF145AC8),
-    'driveway' => const Color(0xFFFFBE00),
+    'driveway' || 'keep_clear' => const Color(0xFFFFBE00),
+    'sidewalk' => const Color(0xFF145AC8),
     'no_loading' => const Color(0xFFFF8C00),
     _ => const Color(0xFFC82828), // hydrant, fire station, corner
   };
+
+  // ── a free-shaped area: the banned area can be any polygon and the object can stand anywhere ("Edit shape") ──
+
+  static const int minAreaPoints = 3;
+
+  static bool hasArea(Map<String, dynamic> s) => s['area'] is List && (s['area'] as List).length >= minAreaPoints;
+
+  /// The corners of the banned area in 0..1: the free shape when there is one, else the box.
+  static List<Offset> areaOf(Map<String, dynamic> s) {
+    if (hasArea(s)) {
+      return [
+        for (final p in s['area'] as List) Offset((p[0] as num).toDouble() / ZoneGeometry.refWidth, (p[1] as num).toDouble() / ZoneGeometry.refHeight),
+      ];
+    }
+    final r = rectOf(s);
+    return [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft];
+  }
+
+  /// Sets the free shape; the box (x, y, w, h) follows it, because it is what the rest of the wizard and the backend fall back on.
+  static void setArea(Map<String, dynamic> s, List<Offset> points) {
+    final pts = [for (final p in points) Offset(p.dx.clamp(0.0, 1.0).toDouble(), p.dy.clamp(0.0, 1.0).toDouble())];
+    s['area'] = [for (final p in pts) [p.dx * ZoneGeometry.refWidth, p.dy * ZoneGeometry.refHeight]];
+    var l = pts.first.dx, t = pts.first.dy, r = l, b = t;
+    for (final p in pts) {
+      l = math.min(l, p.dx);
+      t = math.min(t, p.dy);
+      r = math.max(r, p.dx);
+      b = math.max(b, p.dy);
+    }
+    _setRect(s, Rect.fromLTRB(l, t, math.max(r, l + minSide / ZoneGeometry.refWidth), math.max(b, t + minSide / ZoneGeometry.refHeight)));
+  }
+
+  /// Turns the box into a free shape (its four corners).
+  static void startArea(Map<String, dynamic> s) {
+    if (!hasArea(s)) setArea(s, areaOf(s));
+  }
+
+  /// Back to a box: the box that holds the shape, with the object in its middle.
+  static void clearArea(Map<String, dynamic> s) {
+    s.remove('area');
+    s.remove('ax');
+    s.remove('ay');
+  }
+
+  /// Where the object stands, 0..1: where it was put, else the middle of the box.
+  static Offset anchorOf(Map<String, dynamic> s) {
+    final x = s['ax'], y = s['ay'];
+    return x is num && y is num ? Offset(x.toDouble() / ZoneGeometry.refWidth, y.toDouble() / ZoneGeometry.refHeight) : rectOf(s).center;
+  }
+
+  static void setAnchor(Map<String, dynamic> s, Offset n) {
+    s['ax'] = n.dx.clamp(0.0, 1.0) * ZoneGeometry.refWidth;
+    s['ay'] = n.dy.clamp(0.0, 1.0) * ZoneGeometry.refHeight;
+  }
+
+  /// Turns the shape by [degrees] (clockwise on the picture) round its middle.
+  static void rotateArea(Map<String, dynamic> s, double degrees) => setArea(s, LinePaint.rotated(areaOf(s), degrees));
+
+  static void moveVertex(Map<String, dynamic> s, int v, Offset to) {
+    final pts = areaOf(s);
+    if (v < 0 || v >= pts.length) return;
+    pts[v] = to;
+    setArea(s, pts);
+  }
+
+  /// The corner of a free shape within [radius] canvas pixels of [at], or null.
+  static int? vertexAt(Map<String, dynamic> s, Offset at, Size canvas, {double radius = 16}) {
+    if (!hasArea(s)) return null;
+    final pts = areaOf(s);
+    int? best;
+    var bestDistance = radius;
+    for (var i = 0; i < pts.length; i++) {
+      final d = (Offset(pts[i].dx * canvas.width, pts[i].dy * canvas.height) - at).distance;
+      if (d <= bestDistance) {
+        bestDistance = d;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  /// Adds a corner in the middle of edge [edge] (the one from corner [edge] to the next) and gives back its number.
+  static int insertVertex(Map<String, dynamic> s, int edge) {
+    final pts = areaOf(s);
+    pts.insert(edge + 1, Offset.lerp(pts[edge], pts[(edge + 1) % pts.length], 0.5)!);
+    setArea(s, pts);
+    return edge + 1;
+  }
+
+  /// Takes a corner away; a shape keeps at least three. False when it was not possible.
+  static bool removeVertex(Map<String, dynamic> s, int v) {
+    if (!hasArea(s) || (s['area'] as List).length <= minAreaPoints) return false;
+    final pts = areaOf(s)..removeAt(v);
+    setArea(s, pts);
+    return true;
+  }
+
+  static bool _inside(Offset p, List<Offset> poly) {
+    var inside = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      final a = poly[i], b = poly[j];
+      if ((a.dy > p.dy) != (b.dy > p.dy) && p.dx < (b.dx - a.dx) * (p.dy - a.dy) / (b.dy - a.dy) + a.dx) inside = !inside;
+    }
+    return inside;
+  }
 
   /// The corners, in the order of [cornerAt]: top left, top right, bottom right, bottom left.
   static const int corners = 4;
@@ -107,6 +231,7 @@ class LoadingSigns {
 
   /// The corner of the sign within [radius] canvas pixels of [at], or null.
   static int? cornerAt(Map<String, dynamic> s, Offset at, Size canvas, {double radius = 16}) {
+    if (hasArea(s)) return null; // a free shape has its own corners, see vertexAt
     final r = rectOf(s);
     final points = [r.topLeft, r.topRight, r.bottomRight, r.bottomLeft];
     int? best;
@@ -125,28 +250,63 @@ class LoadingSigns {
   static int? bodyAt(List<Map<String, dynamic>> signs, Offset at, Size canvas) {
     final n = Offset(at.dx / canvas.width, at.dy / canvas.height);
     for (var i = signs.length - 1; i >= 0; i--) {
-      if (rectOf(signs[i]).contains(n)) return i;
+      if (hasArea(signs[i]) ? _inside(n, areaOf(signs[i])) : rectOf(signs[i]).contains(n)) return i;
     }
     return null;
   }
 
-  /// What a press at [at] grabs: a corner (to resize; the opposite corner stays where it is) or the body (to move). Null: nothing.
-  static ({int i, bool resize, Offset grab, Offset anchor})? grab(List<Map<String, dynamic>> signs, Offset at, Size canvas) {
+  /// What a press at [at] grabs. A free shape that is [selected] first: its object (the diamond), a corner, the middle of an edge (a new
+  /// corner is wanted there, see [insertVertex]). Then a box corner (to resize; the opposite corner stays) or the body (to move). Null: nothing.
+  static ({int i, bool resize, Offset grab, Offset anchor, int? vertex, int? edge, bool object})? grab(
+    List<Map<String, dynamic>> signs,
+    Offset at,
+    Size canvas, {
+    int? selected,
+  }) {
+    Offset px(Offset n) => Offset(n.dx * canvas.width, n.dy * canvas.height);
+    final sel = selected;
+    if (sel != null && sel >= 0 && sel < signs.length && hasArea(signs[sel])) {
+      final s = signs[sel];
+      if ((px(anchorOf(s)) - at).distance <= 16) {
+        return (i: sel, resize: false, grab: Offset.zero, anchor: Offset.zero, vertex: null, edge: null, object: true);
+      }
+      final v = vertexAt(s, at, canvas);
+      if (v != null) return (i: sel, resize: false, grab: Offset.zero, anchor: Offset.zero, vertex: v, edge: null, object: false);
+      final pts = areaOf(s);
+      for (var k = 0; k < pts.length; k++) {
+        if ((px(Offset.lerp(pts[k], pts[(k + 1) % pts.length], 0.5)!) - at).distance <= 12) {
+          return (i: sel, resize: false, grab: Offset.zero, anchor: Offset.zero, vertex: null, edge: k, object: false);
+        }
+      }
+    }
     for (var i = signs.length - 1; i >= 0; i--) {
       final corner = cornerAt(signs[i], at, canvas);
       if (corner == null) continue;
       final r = rectOf(signs[i]);
       final opposite = [r.bottomRight, r.bottomLeft, r.topLeft, r.topRight][corner];
-      return (i: i, resize: true, grab: Offset.zero, anchor: opposite);
+      return (i: i, resize: true, grab: Offset.zero, anchor: opposite, vertex: null, edge: null, object: false);
     }
     final i = bodyAt(signs, at, canvas);
     if (i == null) return null;
     final centre = rectOf(signs[i]).center;
-    return (i: i, resize: false, grab: Offset(at.dx / canvas.width, at.dy / canvas.height) - centre, anchor: Offset.zero);
+    return (i: i, resize: false, grab: Offset(at.dx / canvas.width, at.dy / canvas.height) - centre, anchor: Offset.zero, vertex: null, edge: null, object: false);
   }
 
-  /// Moves a grabbed sign so that it follows the pointer [to] (0..1), without leaving the picture.
+  /// Moves a grabbed sign so that it follows the pointer [to] (0..1), without leaving the picture. A free shape moves whole, with its object.
   static void moveBy(Map<String, dynamic> s, Offset to, Offset grab) {
+    if (hasArea(s)) {
+      final r = rectOf(s);
+      final want = to - grab; // where the middle of the shape's box should be
+      final d = Offset(
+        (want.dx - r.center.dx).clamp(-r.left, 1 - r.right).toDouble(),
+        (want.dy - r.center.dy).clamp(-r.top, 1 - r.bottom).toDouble(),
+      );
+      final anchor = anchorOf(s) + d;
+      final custom = s['ax'] is num && s['ay'] is num;
+      setArea(s, [for (final p in areaOf(s)) p + d]);
+      if (custom) setAnchor(s, anchor);
+      return;
+    }
     s['x'] = (to.dx - grab.dx) * ZoneGeometry.refWidth;
     s['y'] = (to.dy - grab.dy) * ZoneGeometry.refHeight;
     fit(s);

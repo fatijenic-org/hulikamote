@@ -17,7 +17,7 @@ class CrosswalkOverlay {
   static const double minDepth = 0.25, maxDepth = 2.0;
   static const double maxAngle = 90.0; // turned in the picture, degrees clockwise
   static const double maxSlant = 70.0; // perspective: how far the camera looks along the road, degrees
-  static const int minStripes = 3, maxStripes = 16;
+  static const int minStripes = 3, maxStripes = 30;
   static const double fill = 0.58; // share of each stripe slot that is paint
 
   static const double defaultScale = 1.0, defaultDepth = 1.0, defaultAngle = 0.0, defaultSlant = 30.0, defaultWear = 0.2;
@@ -53,8 +53,74 @@ class CrosswalkOverlay {
   /// Where the crosswalk is, as a point in 0..1 canvas coordinates.
   static Offset centerOf(Map c) => Offset(_num(c, 'x', 0) / ZoneGeometry.refWidth, _num(c, 'y', 0) / ZoneGeometry.refHeight);
 
+  /// The corners the operator placed one by one ('pts': four [dx, dy] from the centre, reference space), or null for the simple look.
+  static List<Offset>? ptsOf(Map c) {
+    final raw = c['pts'];
+    if (raw is! List || raw.length != 4) return null;
+    final out = <Offset>[];
+    for (final p in raw) {
+      if (p is! List || p.length != 2 || p[0] is! num || p[1] is! num) return null;
+      final x = (p[0] as num).toDouble(), y = (p[1] as num).toDouble();
+      if (!x.isFinite || !y.isFinite) return null;
+      out.add(Offset(x, y));
+    }
+    return out;
+  }
+
+  static bool isFree(Map c) => ptsOf(c) != null;
+
+  /// Turns the simple shape into four loose corners (the shape stays the same until one is moved).
+  static void freeze(Map c) {
+    c['pts'] = [for (final p in corners(c)) [p.dx, p.dy]];
+  }
+
+  /// Back to the simple look (size, depth, angle, perspective).
+  static void unfreeze(Map c) => c.remove('pts');
+
+  /// A corner or side handle, in canvas pixels. Sides: 0 = far, 1 = right, 2 = near, 3 = left (side k joins corner k and k+1).
+  static Offset cornerHandle(Map c, int i, Size canvas) {
+    final q = quad(c)[i];
+    return Offset(q.dx * canvas.width, q.dy * canvas.height);
+  }
+
+  static Offset sideHandle(Map c, int k, Size canvas) => (cornerHandle(c, k, canvas) + cornerHandle(c, (k + 1) % 4, canvas)) / 2;
+
+  /// Puts corner [i] under the pointer (a point in canvas pixels). Needs free corners.
+  static void moveCorner(Map c, int i, Size canvas, Offset pointer) {
+    final pts = ptsOf(c);
+    if (pts == null) return;
+    final at = _toRef(pointer, canvas);
+    pts[i] = Offset(at.dx - _num(c, 'x', 0), at.dy - _num(c, 'y', 0));
+    _store(c, pts);
+  }
+
+  /// Pushes side [k] (both its corners) by [delta] canvas pixels: stretches the crosswalk that way.
+  static void moveSide(Map c, int k, Size canvas, Offset delta) {
+    final pts = ptsOf(c);
+    if (pts == null) return;
+    final d = Offset(delta.dx * ZoneGeometry.refWidth / canvas.width, delta.dy * ZoneGeometry.refHeight / canvas.height);
+    for (final i in [k, (k + 1) % 4]) {
+      pts[i] = pts[i] + d;
+    }
+    _store(c, pts);
+  }
+
+  static Offset _toRef(Offset canvasPx, Size canvas) =>
+      Offset(canvasPx.dx / canvas.width * ZoneGeometry.refWidth, canvasPx.dy / canvas.height * ZoneGeometry.refHeight);
+
+  static void _store(Map c, List<Offset> pts) {
+    final x = _num(c, 'x', 0), y = _num(c, 'y', 0);
+    // a corner stays within a little more than the picture (the paint is clipped at its edge)
+    double keep(double v, double centre, double size) => (centre + v).clamp(-0.1 * size, 1.1 * size).toDouble() - centre;
+    c['pts'] = [
+      for (final p in pts) [keep(p.dx, x, ZoneGeometry.refWidth), keep(p.dy, y, ZoneGeometry.refHeight)],
+    ];
+  }
+
   /// The four corners (far-left, far-right, near-right, near-left) relative to the centre, in the reference space.
   static List<Offset> corners(Map c) {
+    final free = ptsOf(c);
+    if (free != null) return free;
     final length = ZoneGeometry.refWidth * sizeShare * scaleOf(c);
     final depth = length * depthRatio * depthOf(c);
     final slant = slantOf(c) * math.pi / 180;

@@ -157,6 +157,21 @@ class _ForensicAnalyzerScreenState extends State<ForensicAnalyzerScreen> {
       setState(() => _libraryToken++);
       return;
     }
+    if (open != null || _opening) {
+      // The reviewer is looking at another analysis: do not pull them away from it, offer the finished one instead.
+      setState(() => _libraryToken++);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('The analysis that was running has finished.'),
+        duration: const Duration(seconds: 12),
+        action: SnackBarAction(
+          label: 'Open',
+          onPressed: () {
+            if (mounted) _show(taskId, result.tickets, result.resultVideo, DateTime.now(), const {});
+          },
+        ),
+      ));
+      return;
+    }
     _show(taskId, result.tickets, result.resultVideo, DateTime.now(), const {});
     setState(() => _libraryToken++);
   }
@@ -205,29 +220,26 @@ class _ForensicAnalyzerScreenState extends State<ForensicAnalyzerScreen> {
   }
 
   Widget _body(BuildContext context) {
-    if (_opening) {
-      return const EmptyState(icon: Icons.hourglass_top, title: 'Opening the analysis…', message: 'Loading its tickets and your earlier decisions.');
-    }
     final run = _open;
-    if (run != null) {
-      // The controller changes while a run is followed (its video appears when it ends), so the button follows it.
-      return ListenableBuilder(
-        listenable: run.controller,
-        builder: (context, _) => ResultsWorkspace(
-          key: ValueKey(run.taskId),
-          controller: run.controller,
-          media: _media,
-          title: run.title,
-          subtitle: run.subtitle,
-          videoUrl: run.videoUrl,
-          videoBuilder: widget.videoBuilder,
-          onBack: () => _closeRun(),
-          onNewAnalysis: () => _closeRun(toTab: 0),
-          onSendToLive: (run.videoUrl ?? run.controller.resultVideo) == null ? null : () => _sendToLive(run.taskId),
-          harvest: _labeling,
+    final Widget? cover = _opening
+        ? const EmptyState(icon: Icons.hourglass_top, title: 'Opening the analysis…', message: 'Loading its tickets and your earlier decisions.')
+        : run != null
+            ? _workspace(run)
+            : null;
+    // The pages underneath (the wizard with the progress of a running analysis, the library) stay alive while a result is
+    // open, so coming back finds them as they were; they are only hidden, and their animations are paused.
+    return Stack(children: [
+      Positioned.fill(
+        child: Offstage(
+          offstage: cover != null,
+          child: TickerMode(enabled: cover == null, child: _pages(context, covered: cover != null)),
         ),
-      );
-    }
+      ),
+      if (cover != null) Positioned.fill(child: cover),
+    ]);
+  }
+
+  Widget _pages(BuildContext context, {required bool covered}) {
     return Column(children: [
       _header(context),
       if (_openError != null)
@@ -253,10 +265,81 @@ class _ForensicAnalyzerScreenState extends State<ForensicAnalyzerScreen> {
             onSendToLive: _sendToLive,
             onNew: () => setState(() => _tab = 0),
           ),
-          HarvestCategoriesView(labeling: _labeling, active: _tab == 2),
+          HarvestCategoriesView(labeling: _labeling, active: _tab == 2 && !covered),
         ]),
       ),
     ]);
+  }
+
+  /// The review of one analysis. While an analysis is running, a bar on top says so and leads back to its progress.
+  Widget _workspace(_OpenRun run) {
+    return Column(children: [
+      ListenableBuilder(
+        listenable: _runner,
+        builder: (context, _) => _runner.active ? _runningBar(context) : const SizedBox.shrink(),
+      ),
+      Expanded(
+        // The controller changes while a run is followed (its video appears when it ends), so the button follows it.
+        child: ListenableBuilder(
+          listenable: run.controller,
+          builder: (context, _) => ResultsWorkspace(
+            key: ValueKey(run.taskId),
+            controller: run.controller,
+            media: _media,
+            title: run.title,
+            subtitle: run.subtitle,
+            videoUrl: run.videoUrl,
+            videoBuilder: widget.videoBuilder,
+            onBack: () => _closeRun(),
+            onNewAnalysis: () => _closeRun(toTab: 0),
+            onSendToLive: (run.videoUrl ?? run.controller.resultVideo) == null ? null : () => _sendToLive(run.taskId),
+            harvest: _labeling,
+          ),
+        ),
+      ),
+    ]);
+  }
+
+  /// "An analysis is running": always one press from its full progress with Stop here and Cancel.
+  Widget _runningBar(BuildContext context) {
+    return Container(
+      key: const Key('running-bar'),
+      padding: const EdgeInsets.symmetric(horizontal: Fx.s24, vertical: Fx.s8),
+      decoration: BoxDecoration(
+        color: Fx.accent.withValues(alpha: 0.10),
+        border: Border(bottom: BorderSide(color: Fx.border(context))),
+      ),
+      child: Row(children: [
+        const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+        const SizedBox(width: Fx.s12),
+        Expanded(
+          child: Text(
+            'An analysis is running · ${_runner.progress.toStringAsFixed(0)}% · ${_runner.stage}',
+            style: Fx.body(context),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: Fx.s12),
+        FilledButton.tonalIcon(
+          key: const Key('view-progress'),
+          onPressed: _showProgress,
+          icon: const Icon(Icons.timelapse, size: 18),
+          label: const Text('View progress'),
+        ),
+      ]),
+    );
+  }
+
+  /// Leaves the open result and shows the progress of the running analysis (Stop here / Cancel are there).
+  void _showProgress() {
+    final run = _open;
+    setState(() {
+      _open = null;
+      _openError = null;
+      _tab = 0;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => run?.controller.dispose());
   }
 
   Widget _header(BuildContext context) {
@@ -277,18 +360,29 @@ class _ForensicAnalyzerScreenState extends State<ForensicAnalyzerScreen> {
           ]),
         ),
         const Spacer(),
-        if (_runner.active)
-          Padding(
-            padding: const EdgeInsets.only(right: Fx.s12),
-            child: ListenableBuilder(
-              listenable: _runner,
-              builder: (context, _) => StatusPill(
-                label: 'Analyzing ${_runner.progress.toStringAsFixed(0)}%',
-                color: Fx.accent,
-                icon: Icons.autorenew,
-              ),
-            ),
-          ),
+        ListenableBuilder(
+          listenable: _runner,
+          // Shown while an analysis runs (the page itself is not rebuilt when it starts); pressing it shows the full
+          // progress, with Stop here and Cancel, from any tab.
+          builder: (context, _) => !_runner.active
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(right: Fx.s12),
+                  child: Tooltip(
+                    message: 'View progress',
+                    child: InkWell(
+                      key: const Key('header-progress'),
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () => setState(() => _tab = 0),
+                      child: StatusPill(
+                        label: 'Analyzing ${_runner.progress.toStringAsFixed(0)}%',
+                        color: Fx.accent,
+                        icon: Icons.autorenew,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
         SegmentedButton<int>(
           showSelectedIcon: false,
           segments: const [

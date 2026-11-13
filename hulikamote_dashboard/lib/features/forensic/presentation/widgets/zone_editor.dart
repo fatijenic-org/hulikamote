@@ -79,6 +79,9 @@ class _ZoneEditorState extends State<ZoneEditor> {
   String get _ban => LoadingSigns.banFor(key);
   String get _banned => key == LoadingSigns.parkingRuleKey ? 'parking' : 'loading';
 
+  /// Loading and parking have their own sentences; the other rules say what they check.
+  bool get _ownWords => key == 'illegal_loading' || key == LoadingSigns.parkingRuleKey;
+
   /// The zone is optional for this rule (nothing drawn = the whole picture), see AnalysisDraft.wholeFrameKeys.
   bool get _zoneOptional => AnalysisDraft.wholeFrameKeys.contains(key);
 
@@ -324,7 +327,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
   bool get _realistic => (widget.draft.config(key)['signs_realistic'] as bool?) ?? true;
 
   // ── overlay signs (Illegal loading): a box placed anywhere, moved by its body and resized by its corners ──
-  ({int i, bool resize, Offset grab, Offset anchor})? _loadDrag;
+  ({int i, bool resize, Offset grab, Offset anchor, int? vertex, int? edge, bool object})? _loadDrag;
 
   /// Illegal parking: what the next placed sign marks (a hydrant, a corner ...), see parking_reasons.dart.
   String _kind = ParkingReasons.defaultKind;
@@ -342,7 +345,11 @@ class _ZoneEditorState extends State<ZoneEditor> {
     final grab = _loadDrag;
     if (grab == null) return;
     final to = _norm(local, size);
-    if (grab.resize) {
+    if (grab.object) {
+      LoadingSigns.setAnchor(_signs[grab.i], to); // the object goes where the pointer is, away from the middle of the area
+    } else if (grab.vertex != null) {
+      LoadingSigns.moveVertex(_signs[grab.i], grab.vertex!, to);
+    } else if (grab.resize) {
       LoadingSigns.resizeTo(_signs[grab.i], to, grab.anchor);
     } else {
       LoadingSigns.moveBy(_signs[grab.i], to, grab.grab);
@@ -374,7 +381,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
   void _tap(Offset local, Size size) {
     if (_tool == ZoneTool.sign) {
       if (_boxSigns) {
-        final hit = LoadingSigns.grab(_signs, local, size);
+        final hit = LoadingSigns.grab(_signs, local, size, selected: _selSign);
         if (hit == null) {
           _placeLoadingSign(local, size); // a click on a sign is not a new sign
         } else {
@@ -412,6 +419,18 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   void _removeAt(Offset local, Size size) {
     if (_tool == ZoneTool.sign) {
+      final sel = _selSign;
+      if (_boxSigns && sel != null && sel < _signs.length) {
+        final v = LoadingSigns.vertexAt(_signs[sel], local, size);
+        if (v != null) {
+          // a corner of a free shape goes (three stay); the sign itself stays
+          if (LoadingSigns.removeVertex(_signs[sel], v)) {
+            widget.draft.touch();
+            setState(() {});
+          }
+          return;
+        }
+      }
       final i = _boxSigns ? LoadingSigns.bodyAt(_signs, local, size) : _signAt(local, size);
       if (i != null) _removeSign(i);
       return;
@@ -562,8 +581,17 @@ class _ZoneEditorState extends State<ZoneEditor> {
                               _removeAt(d.localPosition, size),
                           onPanStart: (d) {
                             if (_boxSigns && _tool == ZoneTool.sign) {
-                              _loadDrag = LoadingSigns.grab(_signs, d.localPosition, size); // a corner resizes, the body moves
-                              if (_loadDrag != null) setState(() => _selSign = _loadDrag!.i);
+                              // a corner resizes, the body moves; a free shape that is selected: its corners, edges and object
+                              var grab = LoadingSigns.grab(_signs, d.localPosition, size, selected: _selSign);
+                              final edge = grab?.edge;
+                              if (grab != null && edge != null) {
+                                // the middle of an edge: a new corner appears there, and it is the one dragged
+                                final v = LoadingSigns.insertVertex(_signs[grab.i], edge);
+                                grab = (i: grab.i, resize: false, grab: Offset.zero, anchor: Offset.zero, vertex: v, edge: null, object: false);
+                              }
+                              _loadDrag = grab;
+                              final picked = grab;
+                              if (picked != null) setState(() => _selSign = picked.i);
                               return;
                             }
                             _drag = _tool == ZoneTool.sign
@@ -609,7 +637,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                   signs: _isLane
                                       ? [
                                           for (var i = 0; i < _signs.length; i++)
-                                            (at: _signPoints[i], type: _signs[i]['type'] as String, scale: _scaleOf(i), angle: _angleOf(i), tilt: _tiltOf(i)),
+                                            (at: _signPoints[i], type: _signs[i]['type'] as String, scale: _scaleOf(i), angle: _angleOf(i), tilt: _tiltOf(i), stand: (_signs[i]['stand'] as String?) ?? 'none'),
                                         ]
                                       : const [],
                                   selectedSign: _tool == ZoneTool.sign ? _selSign : null,
@@ -855,7 +883,9 @@ class _ZoneEditorState extends State<ZoneEditor> {
                       child: Text(
                         _boxSigns
                             ? (_signs.isNotEmpty
-                                  ? 'No zone drawn: the placed signs mark where $_banned is banned.'
+                                  ? (_ownWords
+                                      ? 'No zone drawn: the placed signs mark where $_banned is banned.'
+                                      : 'No zone drawn: the placed signs are where "${ViolationCatalog.of(key).label}" is checked.')
                                   : 'No zone and no sign: the whole picture is watched. Place a sign or save a zone to limit the rule.')
                             : _zoneOptional
                             ? 'No zone drawn: $_nothingDrawn. Draw a zone to limit the rule to one area.'
@@ -1021,6 +1051,22 @@ class _ZoneEditorState extends State<ZoneEditor> {
               _lookSlider('sign-scale', 'Size', _scaleOf(_selSign!), SignGeometry.minScale, SignGeometry.maxScale, '${(_scaleOf(_selSign!) * 100).round()}%', 'scale'),
               _lookSlider('sign-angle', 'Rotate', _angleOf(_selSign!), -SignGeometry.maxAngle, SignGeometry.maxAngle, '${_angleOf(_selSign!).round()}°', 'angle'),
               _lookSlider('sign-tilt', 'Turn away', _tiltOf(_selSign!), -SignGeometry.maxTilt, SignGeometry.maxTilt, '${_tiltOf(_selSign!).round()}°', 'tilt'),
+              const SizedBox(height: 4),
+              SegmentedButton<String>(
+                key: const ValueKey('sign-stand'),
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: 'none', label: Text('Ground')),
+                  ButtonSegment(value: 'post', label: Text('Pole')),
+                  ButtonSegment(value: 'tripod', label: Text('Tripod')),
+                ],
+                selected: {(_signs[_selSign!]['stand'] as String?) ?? 'none'},
+                onSelectionChanged: (v) {
+                  _signs[_selSign!]['stand'] = v.first;
+                  widget.draft.touch();
+                  setState(() {});
+                },
+              ),
               Text(
                 'Or drag the corner of the sign to resize it, and the round knob above it to rotate it.',
                 key: const ValueKey('sign-handles-help'),
@@ -1033,6 +1079,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                   _signs[i]['scale'] = 1.0;
                   _signs[i]['angle'] = 0.0;
                   _signs[i]['tilt'] = 0.0;
+                  _signs[i].remove('stand');
                   widget.draft.touch();
                   setState(() {});
                 },
@@ -1085,8 +1132,10 @@ class _ZoneEditorState extends State<ZoneEditor> {
           final rect = LoadingSigns.rectOf(s);
           return BoxObject(
             box: rect,
+            polygon: LoadingSigns.areaOf(s),
+            editing: LoadingSigns.hasArea(s),
             kind: kind,
-            at: rect.center,
+            at: LoadingSigns.anchorOf(s),
             selected: _tool == ZoneTool.sign && _selSign == i,
             preview: _previews.peek(
               kind,
@@ -1133,6 +1182,65 @@ class _ZoneEditorState extends State<ZoneEditor> {
             },
           ),
         ],
+        const SizedBox(height: 4),
+        Text('AREA SHAPE', style: Fx.label(context)),
+        if (!LoadingSigns.hasArea(sign))
+          Row(
+            children: [
+              Expanded(child: Text('A box. Edit the shape to move any corner, add or take away corners, and put the object anywhere.', style: Fx.caption(context))),
+              OutlinedButton(
+                key: const ValueKey('box-shape-edit'),
+                onPressed: () {
+                  LoadingSigns.startArea(sign);
+                  widget.draft.touch();
+                  setState(() {});
+                },
+                child: const Text('Edit shape'),
+              ),
+            ],
+          )
+        else ...[
+          Text(
+            'Drag a corner to move it. Drag the middle of an edge to add a corner. Right-click a corner to take it away (three stay). '
+            'Drag the diamond to move the object. Drag inside to move everything.',
+            key: const ValueKey('box-shape-help'),
+            style: Fx.caption(context),
+          ),
+          Row(
+            children: [
+              IconButton(
+                key: const ValueKey('box-shape-rotate-left'),
+                tooltip: 'Turn the area 5 degrees counter-clockwise',
+                icon: const Icon(Icons.rotate_left, size: 20),
+                onPressed: () {
+                  LoadingSigns.rotateArea(sign, -5);
+                  widget.draft.touch();
+                  setState(() {});
+                },
+              ),
+              IconButton(
+                key: const ValueKey('box-shape-rotate-right'),
+                tooltip: 'Turn the area 5 degrees clockwise',
+                icon: const Icon(Icons.rotate_right, size: 20),
+                onPressed: () {
+                  LoadingSigns.rotateArea(sign, 5);
+                  widget.draft.touch();
+                  setState(() {});
+                },
+              ),
+              const Spacer(),
+              TextButton(
+                key: const ValueKey('box-shape-reset'),
+                onPressed: () {
+                  LoadingSigns.clearArea(sign);
+                  widget.draft.touch();
+                  setState(() {});
+                },
+                child: const Text('Back to a box'),
+              ),
+            ],
+          ),
+        ],
         Row(
           children: [
             Expanded(child: Text('Realistic look', style: Fx.body(context))),
@@ -1171,6 +1279,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
       if (signs > 0) '$signs sign${signs == 1 ? '' : 's'}',
       if (zones > 0) '$zones zone${zones == 1 ? '' : 's'}',
     ];
+    if (!_ownWords) return '"${ViolationCatalog.of(key).label}" is checked in the ${parts.join(' and ')}.';
     final who = key == LoadingSigns.parkingRuleKey ? 'A vehicle' : 'A bus, jeepney, tricycle or truck';
     return '${_cap(_banned)} is banned in the ${parts.join(' and ')}. $who that stands still there too long is flagged.';
   }
@@ -1450,7 +1559,7 @@ class _ZonePainter extends CustomPainter {
     this.loadingHandles = false,
   });
 
-  final List<({Offset at, String type, double scale, double angle, double tilt})> signs;
+  final List<({Offset at, String type, double scale, double angle, double tilt, String stand})> signs;
   final int? selectedSign;
 
   /// The boxes of Illegal parking / Illegal loading: the banned area (0..1), what stands in it (a hydrant, a plate on a pole ...) and where.
@@ -1539,11 +1648,29 @@ class _ZonePainter extends CustomPainter {
 
   /// An overlay sign: a blue board with its two lines of text, placed, sized, turned and turned away like it will be drawn on the
   /// photos and the video (same size rule and same perspective as the backend). The selected one also shows its handles.
-  void _sign(Canvas canvas, ({Offset at, String type, double scale, double angle, double tilt}) sign, bool selected, Size size) {
+  void _sign(Canvas canvas, ({Offset at, String type, double scale, double angle, double tilt, String stand}) sign, bool selected, Size size) {
     final spec = LaneSigns.of(sign.type);
     if (spec == null) return;
     final c = _px(sign.at, size);
     final w = SignGeometry.width(size, sign.scale), h = SignGeometry.height(size, sign.scale);
+
+    if (sign.stand != 'none') {
+      // the pole or tripod goes straight down from the board to the ground, like the backend draws it
+      final top = Offset(c.dx, c.dy + h / 2), foot = top + Offset(0, 1.5 * w);
+      final metal = Paint()
+        ..color = const Color(0xFF969899)
+        ..strokeWidth = math.max(2.0, w * 0.06)
+        ..strokeCap = StrokeCap.round;
+      if (sign.stand == 'tripod') {
+        final knee = top + Offset(0, 0.82 * w);
+        canvas.drawLine(top, knee, metal);
+        canvas.drawLine(knee, foot + Offset(-0.36 * w, 0), metal);
+        canvas.drawLine(knee, foot + Offset(0.36 * w, 0), metal);
+      } else {
+        canvas.drawLine(top, foot, metal);
+        canvas.drawLine(foot + Offset(-0.14 * w, 0), foot + Offset(0.14 * w, 0), metal);
+      }
+    }
 
     canvas.save();
     canvas.translate(c.dx, c.dy);
@@ -1610,22 +1737,23 @@ class _ZonePainter extends CustomPainter {
   /// A box of Illegal parking / Illegal loading: the banned area as a faint tinted patch with a dashed edge, and the object that stands in it
   /// (a picture made by the backend, so it is the one the evidence photos show). While the picture is on its way, a dot marks the spot.
   void _boxObject(Canvas canvas, BoxObject s, Size size) {
-    final box = Rect.fromLTRB(s.box.left * size.width, s.box.top * size.height, s.box.right * size.width, s.box.bottom * size.height);
+    Offset px(Offset n) => Offset(n.dx * size.width, n.dy * size.height);
+    final ring = [for (final p in s.polygon) px(p)];
+    final area = Path()..addPolygon(ring, true);
     final tint = LoadingSigns.tintOf(s.kind);
-    canvas.drawRect(box, Paint()..color = tint.withValues(alpha: 0.14));
+    canvas.drawPath(area, Paint()..color = tint.withValues(alpha: 0.14));
     final dash = Paint()
       ..color = Colors.white.withValues(alpha: 0.9)
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
-    final corners = [box.topLeft, box.topRight, box.bottomRight, box.bottomLeft, box.topLeft];
-    for (var i = 0; i < 4; i++) {
-      final a = corners[i], b = corners[i + 1];
+    for (var i = 0; i < ring.length; i++) {
+      final a = ring[i], b = ring[(i + 1) % ring.length];
       final length = (b - a).distance;
       for (var d = 0.0; d < length; d += 16) {
         canvas.drawLine(a + (b - a) * (d / length), a + (b - a) * (math.min(d + 8, length) / length), dash);
       }
     }
-    final at = Offset(s.at.dx * size.width, s.at.dy * size.height);
+    final at = px(s.at);
     final p = s.preview;
     if (p != null) {
       final k = size.width / ZoneGeometry.refWidth; // the picture was made for a frame 1920 wide
@@ -1639,15 +1767,35 @@ class _ZonePainter extends CustomPainter {
       canvas.drawCircle(at, 6, Paint()..color = tint);
     }
     if (s.selected) {
-      canvas.drawRect(
-        box,
+      canvas.drawPath(
+        area,
         Paint()
           ..color = Colors.cyanAccent
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
       );
     }
-    if (loadingHandles) {
+    if (s.editing && s.selected) {
+      for (var i = 0; i < ring.length; i++) {
+        final mid = Offset.lerp(ring[i], ring[(i + 1) % ring.length], 0.5)!; // drag it to add a corner
+        canvas.drawCircle(mid, 5, Paint()..color = Colors.white.withValues(alpha: 0.8));
+        canvas.drawCircle(mid, 5, Paint()..color = _loadingRed..style = PaintingStyle.stroke..strokeWidth = 1.5);
+      }
+      for (final corner in ring) {
+        final handle = Rect.fromCenter(center: corner, width: 12, height: 12);
+        canvas.drawRect(handle.inflate(1.5), Paint()..color = _loadingRed);
+        canvas.drawRect(handle, Paint()..color = Colors.white);
+      }
+      final diamond = Path()
+        ..moveTo(at.dx, at.dy - 9)
+        ..lineTo(at.dx + 9, at.dy)
+        ..lineTo(at.dx, at.dy + 9)
+        ..lineTo(at.dx - 9, at.dy)
+        ..close(); // the object: drag it away from the middle
+      canvas.drawPath(diamond, Paint()..color = Colors.cyanAccent);
+      canvas.drawPath(diamond, Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 1.5);
+    } else if (loadingHandles && !s.editing) {
+      final box = Rect.fromLTRB(s.box.left * size.width, s.box.top * size.height, s.box.right * size.width, s.box.bottom * size.height);
       for (final corner in [box.topLeft, box.topRight, box.bottomRight, box.bottomLeft]) {
         final handle = Rect.fromCenter(center: corner, width: 12, height: 12);
         canvas.drawRect(handle.inflate(1.5), Paint()..color = _loadingRed);

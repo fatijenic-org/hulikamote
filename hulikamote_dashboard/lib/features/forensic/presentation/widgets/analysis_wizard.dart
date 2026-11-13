@@ -81,6 +81,11 @@ class _AnalysisWizardState extends State<AnalysisWizard> {
   void initState() {
     super.initState();
     widget.runner.addListener(_onRunner);
+    // Built again while an analysis runs (or just failed): go straight to its progress, the other steps are locked anyway.
+    if (widget.runner.active || widget.runner.phase == RunPhase.failed) {
+      _step = _steps.length - 1;
+      _reached = _step;
+    }
   }
 
   @override
