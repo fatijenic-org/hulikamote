@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from engine import specialists
+from engine import marks, specialists
 from inference.providers import make_session, active_provider, get_providers
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -145,6 +145,51 @@ BBOX_MIN_THICKNESS = 2          # never draw thinner than 2px
 BBOX_FONT_SCALE_DIVISOR = 3000.0  # higher = smaller label text (60% smaller than 1200)
 BBOX_MIN_FONT_SCALE = 0.3
 PLATE_BOX_COLOR = (0, 200, 255)  # amber outline for the detected plate crop
+
+
+def vehicle_label(d) -> str:
+    """What a box says about the vehicle: "PLATE - TYPE", or just "VEHICLE" while the plate is not read. Never an id."""
+    plate = getattr(d, "plate_text", None)
+    return f"{plate} - {d.cls.upper()}" if plate else "VEHICLE"
+
+
+def box_specs(detections) -> list[dict]:
+    """Boxes to draw, as plain data (BGR colours): vehicles only. People are drawn only through the violation marks
+    (riders, passengers outside, pickup bed: engine/marks.py), never as boxes of their own."""
+    from engine.violations.base import VEHICLE_CLASSES
+    specs = []
+    for d in detections:
+        if d.cls not in VEHICLE_CLASSES:
+            continue
+        who = vehicle_label(d)
+        if d.is_violator:
+            color = COLORS.get(d.violation_type, (0, 0, 255))
+            lines = d.violation_type.replace("_", " ").upper().split("+") + [who]   # the plate and type stay with a violation
+        else:
+            color, lines = (0, 255, 0), [who]
+        plate_box = getattr(d, "plate_bbox", None)
+        specs.append({"box": [int(v) for v in d.bbox], "color": color, "lines": lines,
+                      "plate": [int(v) for v in plate_box] if plate_box else None})
+    return specs
+
+
+def draw_specs(out: np.ndarray, specs: list[dict]) -> None:
+    """Draw box_specs() on a picture in place: thin lines, labels kept inside the picture."""
+    img_w = out.shape[1]
+    font_scale = max(BBOX_MIN_FONT_SCALE, img_w / BBOX_FONT_SCALE_DIVISOR)
+    old_thickness = max(BBOX_MIN_THICKNESS, int(img_w / BBOX_THICKNESS_DIVISOR))
+    box_thickness = max(1, round(old_thickness / 2))      # half of the old line width
+    text_thickness = max(1, int(old_thickness * 0.8))
+    text_thickness = max(2, text_thickness) if font_scale >= 0.5 else 1   # bold enough to read, without blobs on small pictures
+    for spec in specs:
+        x, y, w, h = spec["box"]
+        color = tuple(spec["color"])
+        cv2.rectangle(out, (x, y), (x + w, y + h), color, box_thickness)
+        text_color = (0, 0, 0) if color in [(0, 255, 255), (0, 255, 0)] else (255, 255, 255)
+        marks.draw_label_block(out, spec["box"], spec["lines"], color, text_color, font_scale, text_thickness)
+        if spec.get("plate"):                              # a thin, unobtrusive box around the plate crop
+            px, py, pw, ph = spec["plate"]
+            cv2.rectangle(out, (px, py), (px + pw, py + ph), (255, 255, 0), 1)
 
 
 class YoloDetection:
@@ -431,55 +476,9 @@ class YoloInference:
         return detections
 
     def draw_detections(self, frame: np.ndarray, detections: list[YoloDetection]) -> np.ndarray:
-        """Draw bounding boxes and labels on a copy of the frame."""
+        """Draw the vehicle boxes and labels on a copy of the frame."""
         out = frame.copy()
-        
-        h, img_w = frame.shape[:2]
-        font_scale = max(BBOX_MIN_FONT_SCALE, img_w / BBOX_FONT_SCALE_DIVISOR)
-        box_thickness = max(BBOX_MIN_THICKNESS, int(img_w / BBOX_THICKNESS_DIVISOR))
-        text_thickness = max(1, int(box_thickness * 0.8)) # Slightly thinner than box but bolder relative to the new small text size
-
-        # Ensure text is bold (at least 2 if image is large enough, but 1 if it's too small to avoid blobs)
-        if font_scale >= 0.5:
-            text_thickness = max(2, text_thickness)
-        else:
-            text_thickness = 1
-
-        for d in detections:
-            x, y, w, h = d.bbox
-            plate = getattr(d, "plate_text", None)
-            id_label = plate if plate else (f"ID:P{d.track_id - PERSON_ID_BASE}" if d.track_id >= PERSON_ID_BASE else f"ID:{d.track_id}")
-
-            # Multiline logic for bounding boxes that have compound violations
-            if not d.is_violator:
-                color = (0, 255, 0) # Green
-                lines = [f"{d.cls.upper()} {id_label} {d.confidence:.0%}"]
-            else:
-                color = COLORS.get(d.violation_type, (0, 0, 255)) # Red default for violator
-                v_str = d.violation_type.replace('_', ' ').upper()
-                v_lines = v_str.split('+')
-                if len(v_lines) > 1:
-                    lines = v_lines + [id_label]
-                else:
-                    lines = [f"{v_lines[0]} {id_label}"]
-
-            cv2.rectangle(out, (x, y), (x + w, y + h), color, box_thickness)
-            text_color = (0, 0, 0) if color in [(0, 255, 255), (0, 255, 0)] else (255, 255, 255)
-            
-            # Draw from bottom up
-            current_y = y
-            for line in reversed(lines):
-                (tw, th), _ = cv2.getTextSize(line, cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_thickness)
-                cv2.rectangle(out, (x, current_y - th - 6), (x + tw + 4, current_y), color, -1)
-                cv2.putText(out, line, (x + 2, current_y - 4), cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_color, text_thickness, cv2.LINE_AA)
-                current_y -= (th + 6)
-
-            # Draw a thin, unobtrusive box specifically around the plate crop
-            plate_bbox = getattr(d, "plate_bbox", None)
-            if plate_bbox:
-                px, py, pw, ph = plate_bbox
-                cv2.rectangle(out, (px, py), (px + pw, py + ph), (255, 255, 0), 1)
-
+        draw_specs(out, box_specs(detections))
         return out
 
     @staticmethod

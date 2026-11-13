@@ -48,7 +48,7 @@ class RestrictedLane(Violation):
             if inside:                                       # the signs on this lane: they set its rule and are drawn on it
                 zone["sign_points"] = [[s["x"], s["y"]] for s in inside]
                 zone["sign_types"] = [s["type"] for s in inside]
-                zone["sign_looks"] = [{k: s[k] for k in ("scale", "angle", "tilt")} for s in inside]
+                zone["sign_looks"] = [lane_signs.look_with_stand(s) for s in inside]
                 zone["sign_realistic"] = bool(cfg.get("signs_realistic", True))
             zones.append(zone)
         return zones
@@ -59,7 +59,7 @@ class RestrictedLane(Violation):
         fw, fh = frame_size
         zone["allowed_classes"] = cfg.get("allowed_classes", ["bus"])
         zone["signs"] = [{"type": s["type"], "at": (s["x"] * fw / lane_signs.REF[0], s["y"] * fh / lane_signs.REF[1]),
-                          "allowed": lane_signs.SIGNS[s["type"]]["allowed"], "look": {k: s[k] for k in ("scale", "angle", "tilt")}}
+                          "allowed": lane_signs.SIGNS[s["type"]]["allowed"], "look": lane_signs.look_with_stand(s)}
                          for s in lane_signs.usable_signs(cfg.get("signs"))]
         zone["sign_realistic"] = bool(cfg.get("signs_realistic", True))
         return zone

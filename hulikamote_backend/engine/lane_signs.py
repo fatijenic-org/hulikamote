@@ -74,7 +74,10 @@ def usable_signs(raw) -> list[dict]:
     for s in raw or []:
         try:
             if s.get("type") in SIGNS:
-                signs.append({"type": s["type"], "x": float(s["x"]), "y": float(s["y"]), **look_of(s)})
+                sign = {"type": s["type"], "x": float(s["x"]), "y": float(s["y"]), **look_of(s)}
+                if s.get("stand") in ("none", "post", "tripod"):
+                    sign["stand"] = s["stand"]                    # what the board is mounted on (engine/overlay_objects.py)
+                signs.append(sign)
         except (AttributeError, KeyError, TypeError, ValueError):
             continue
     return signs
@@ -179,13 +182,23 @@ def _light_of(frame: np.ndarray) -> int:
     return int(min(3, frame[::16, ::16].mean() / 64.0))
 
 
-def draw_sign(frame: np.ndarray, at, sign_type: str, scale: float = 1.0, angle: float = 0.0, tilt: float = 0.0, realistic: bool = True) -> None:
-    """The sign on the picture, standing on `at` (frame pixels): sized by `scale`, turned by `angle`, turned away by `tilt`. Changes `frame`."""
+def look_with_stand(sign: dict) -> dict:
+    """The look of a sign as the wizard sent it: size, angle, tilt, and the stand when one was chosen."""
+    return {k: sign[k] for k in ("scale", "angle", "tilt", "stand") if k in sign}
+
+
+def draw_sign(frame: np.ndarray, at, sign_type: str, scale: float = 1.0, angle: float = 0.0, tilt: float = 0.0, realistic: bool = True,
+              stand: str = "none") -> None:
+    """The sign on the picture, its middle on `at` (frame pixels): sized by `scale`, turned by `angle`, turned away by `tilt`, on a pole or
+    a tripod when `stand` says so (the stand goes down from the board to the ground). Changes `frame`."""
     if sign_type not in SIGNS:
         return
     look = look_of({"scale": scale, "angle": angle, "tilt": tilt})
     fh, fw = frame.shape[:2]
     width = int(round(sign_width(fw, look["scale"])))
+    if stand in ("post", "tripod"):
+        from engine import overlay_objects                              # imported here: overlay_objects uses this module
+        overlay_objects.draw_stand(frame, (at[0], at[1] + 0.5 * width * HEIGHT_RATIO + 1.5 * width), width, stand, realistic)
     blend(frame, _sprite(sign_type, width, round(look["angle"] * 2) / 2, round(look["tilt"] * 2) / 2, bool(realistic), _light_of(frame)), at)
 
 

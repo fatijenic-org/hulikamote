@@ -13,10 +13,12 @@ Legal basis: DILG MC 2020-036 (17 Feb 2020) bans tricycles and pedicabs from nat
 Each LGU lists its national highways, and the portions tricycles may use where there is no alternative route, in its Tricycle Route
 Plan, and may allow those by ordinance. So whether a given road is banned is a local fact to confirm for Zamboanga City.
 """
+from engine.violations.box_signs import BoxSigns
 from engine.violations.banned_in_zone import BannedInZone
 
 
-class TricycleOnHighway(BannedInZone):
+class TricycleOnHighway(BoxSigns, BannedInZone):
+    sign_kind = "no_tricycles"                       # the object placed for it (engine/overlay_objects.py)
     key = "tricycle_on_highway"
     zone_key = "highway_zones"
     whole_frame = True         # with no zone drawn, the whole picture is the banned road (see pipeline._get_scaled_rois)

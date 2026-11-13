@@ -8,10 +8,12 @@ with no time found the truck is still flagged but its ticket says "time not conf
 The wizard's vehicle-type picker can ban more types than trucks.
 Legal basis: MMDA truck-ban / truck-lane rules and LGU ordinances (to be confirmed for Zamboanga City).
 """
+from engine.violations.box_signs import BoxSigns
 from engine.violations.banned_in_zone import BannedInZone
 
 
-class TruckBan(BannedInZone):
+class TruckBan(BoxSigns, BannedInZone):
+    sign_kind = "no_trucks"                       # the object placed for it (engine/overlay_objects.py)
     key = "truck_ban"
     zone_key = "truck_ban_zones"
     whole_frame = True

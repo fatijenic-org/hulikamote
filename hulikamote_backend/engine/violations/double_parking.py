@@ -16,6 +16,7 @@ import math
 
 from engine.violations.base import VEHICLE_CLASSES
 from engine.violations.geometry import STOP_SPEED, dot, point_in_polygon, stopped_too_long, unit
+from engine.violations.box_signs import BoxSigns
 from engine.violations.stopped_in_zone import StoppedInZone
 
 MOVING_SPEED = 3 * STOP_SPEED     # px/s; a vehicle faster than this is "traffic flowing"
@@ -34,7 +35,8 @@ def still_for(ledger) -> float:
     return t_last - since
 
 
-class DoubleParking(StoppedInZone):
+class DoubleParking(BoxSigns, StoppedInZone):
+    sign_kind = "double_parking"                       # the object placed for it (engine/overlay_objects.py)
     key = "double_parking"
     zone_key = "double_parking_zones"
     whole_frame = True

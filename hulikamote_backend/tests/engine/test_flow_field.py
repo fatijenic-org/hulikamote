@@ -223,7 +223,7 @@ def test_the_flow_is_learned_only_when_a_rule_needs_it_and_nothing_is_drawn():
 
 def test_the_rules_that_need_the_flow_are_exactly_these():
     from engine.violations import ZONE_VIOLATIONS
-    assert {v.key for v in ZONE_VIOLATIONS if v.needs_flow} == {"counterflow", "illegal_parking", "illegal_loading"}
+    assert {v.key for v in ZONE_VIOLATIONS if v.needs_flow} == {"counterflow", "illegal_parking", "illegal_loading", "blocking_intersection"}
 
 
 def test_the_flow_mode_is_read_from_the_config(tmp_path, monkeypatch):

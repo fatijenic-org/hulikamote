@@ -48,8 +48,11 @@ class FakePipeline:
             type(self).on_frame(idx)
         return frame, []
 
-    def annotate_frame_fast(self, frame, detections):
+    def annotate_frame_fast(self, frame, detections, boxes=True):
         return frame
+
+    def box_specs(self, detections):
+        return []
 
 
 def _fake_ffmpeg(cmd, **_kwargs):

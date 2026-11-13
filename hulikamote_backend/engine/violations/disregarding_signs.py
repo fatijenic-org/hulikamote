@@ -7,6 +7,7 @@ disregarding_signs - breaking a traffic sign. One zone per sign; each sign type 
   vehicle_ban a banned vehicle type in the zone (e.g. "no trucks")
   stop        crossed the stop line without first coming to a full stop (under 25 px/s over 1 s)
 """
+from engine import line_paint, overlay_objects
 from engine.violations.base import Violation
 from engine.violations.geometry import (
     STOP_SPEED, crossed_line, moving_along, point_in_polygon, recent_speed, stopped_too_long, turned_into,
@@ -48,6 +49,20 @@ class DisregardingSigns(Violation):
             }
             for z in cfg.get("rois", []) if z.get("polygon") and z.get("sign")
         ]
+
+    # A stop zone is drawn like a real one: the stop line painted on the road (vehicles drive over it) and a stop sign beside its right end.
+    # The paint and the sign are only pictures; the rule judges the line's points. Other sign types keep their outline and arrow.
+    STOP_PAINT = {"style": "solid_white", "width": 2.4, "wear": 0.15, "taper": 0.5}
+
+    def draw_zone(self, pipe, frame, index, zone):
+        line = zone.get("stop_line") if zone.get("sign") == "stop" else None
+        if line and len(line) >= 2:
+            boxes = [d.bbox for d in getattr(pipe, "_draw_dets", ()) if getattr(d, "cls", None) in line_paint.OCCLUDES]
+            line_paint.draw(frame, line, self.STOP_PAINT, True, occluders=boxes)
+        super().draw_zone(pipe, frame, index, zone)
+        if line and len(line) >= 2:
+            end = max(line, key=lambda p: p[0])
+            overlay_objects.draw_object(frame, (end[0] + 0.035 * frame.shape[1], end[1]), "stop_sign", {"scale": 1.2}, True)
 
     def evaluate(self, mgr, track_id, zones):
         """Each zone: {"polygon", "sign", "vector"?, "stop_line"?, "time_limit"?, "banned_classes"?}."""

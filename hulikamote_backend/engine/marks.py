@@ -11,7 +11,34 @@ import cv2
 import numpy as np
 
 MARK_TTL_S = 3.0
+TIMER_TTL_S = 1.0      # a stopwatch is rewritten on every frame it runs; it vanishes this long after the rule stops writing it
 RED, GREEN, YELLOW = (0, 0, 255), (0, 200, 0), (0, 220, 255)
+AMBER = (0, 165, 255)
+
+
+def clock(seconds: float) -> str:
+    """72 -> "1:12"."""
+    minutes, secs = divmod(int(max(0, seconds)), 60)
+    return f"{minutes}:{secs:02d}"
+
+
+def set_timer(ledger, key: str, text: str, over: bool, t: float) -> None:
+    """A stopwatch on the vehicle's own box (e.g. illegal parking: "PARKED 0:07 / 0:10"): amber while counting, red once over the
+    limit. It is a separate chip on the bottom edge of the box: the labels above the box and the marks are not touched."""
+    ledger.timers[key] = {"t": t, "text": text, "over": over}
+
+
+def clear_timer(ledger, key: str) -> None:
+    ledger.timers.pop(key, None)
+
+
+def current_timers(ledger) -> list[tuple]:
+    """[(text, BGR colour)] of the stopwatches running on this vehicle now."""
+    timers = getattr(ledger, "timers", None)
+    if not timers:
+        return []
+    now = ledger.path[-1][0] if ledger.path else 0.0
+    return [(tm["text"], RED if tm["over"] else AMBER) for tm in timers.values() if now - tm["t"] <= TIMER_TTL_S]
 
 
 def to_relative(box: list, vehicle: list) -> tuple:
@@ -53,8 +80,72 @@ def current_marks(ledger, vehicle: list) -> list[tuple]:
     return out
 
 
+def line_width(thick: int) -> int:
+    """Box line width: half of the old `thick + 1`, never below 1 pixel."""
+    return max(1, round((thick + 1) / 2))
+
+
+def place_block(box: list, size: tuple, bw: int, bh: int) -> tuple[int, int]:
+    """Top-left corner of a label block (bw x bh) for a box, kept INSIDE a picture of `size` (W, H) even when the box is
+    partly outside it: the block sits on the visible part of the box, above it when there is room, else inside its top edge."""
+    width, height = size
+    x, y = box[0], box[1]
+    x0 = min(max(0, x), max(0, width - bw))
+    y0 = max(0, y) - bh
+    if y0 < 0:
+        y0 = max(0, y)
+    return int(x0), int(min(y0, max(0, height - bh)))
+
+
+def draw_label_block(img: np.ndarray, box: list, lines: list, colour: tuple, text_colour: tuple, scale: float, thick: int) -> None:
+    """Stack the lines (top to bottom) on a coloured background above the box, kept inside the picture."""
+    height, width = img.shape[:2]
+    sizes = [cv2.getTextSize(line, cv2.FONT_HERSHEY_SIMPLEX, scale, thick)[0] for line in lines]
+    rows = [th + 6 for _, th in sizes]
+    x0, y = place_block(box, (width, height), max(tw for tw, _ in sizes) + 4, sum(rows))
+    for line, (tw, _), row in zip(lines, sizes, rows):
+        cv2.rectangle(img, (x0, y), (x0 + tw + 4, y + row), colour, -1)
+        cv2.putText(img, line, (x0 + 2, y + row - 4), cv2.FONT_HERSHEY_SIMPLEX, scale, text_colour, thick, cv2.LINE_AA)
+        y += row
+
+
+def draw_timers(frame: np.ndarray, ledger, vehicle: list) -> None:
+    """The stopwatch chips, stacked up from the bottom edge of the vehicle's box, kept inside the picture."""
+    chips = current_timers(ledger)
+    if not chips:
+        return
+    height, width = frame.shape[:2]
+    scale = max(0.4, height / 1400)
+    thick = max(1, height // 400)
+    vx, vy, vw, vh = vehicle
+    bottom = int(min(vy + vh, height))
+    for text, colour in chips:
+        (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thick)
+        bw, bh = tw + 6, th + 8
+        x = int(min(max(0, vx), max(0, width - bw)))
+        y = int(max(0, min(bottom - bh, height - bh)))
+        cv2.rectangle(frame, (x, y), (x + bw, y + bh), colour, -1)
+        cv2.putText(frame, text, (x + 3, y + bh - 5), cv2.FONT_HERSHEY_SIMPLEX, scale,
+                    (255, 255, 255) if colour == RED else (0, 0, 0), thick, cv2.LINE_AA)
+        bottom = y
+
+
+def mark_specs(ledger, vehicle: list) -> list[dict]:
+    """The marks of one vehicle as plain data (BGR colours), for the replay's box file: {box, color, lines}, {note, at}
+    or {timer, box, color}: a stopwatch chip on the bottom edge of the vehicle's box."""
+    out = [{"timer": text, "box": [int(v) for v in vehicle], "color": list(colour), "lines": []}
+           for text, colour in current_timers(ledger)]
+    for box, label, colour in sorted(current_marks(ledger, vehicle), key=lambda it: it[2] == RED):
+        if box is None:
+            out.append({"note": label, "at": [int(vehicle[0]), int(vehicle[1] + vehicle[3])]})
+        else:
+            out.append({"box": [int(v) for v in box], "color": list(colour), "lines": [label]})
+    return out
+
+
 def draw_marks(frame: np.ndarray, ledger, vehicle: list) -> np.ndarray:
-    """Draw the marks of one vehicle in place (and return the frame)."""
+    """Draw the marks (and the stopwatch chips) of one vehicle in place (and return the frame)."""
+    draw_timers(frame, ledger, vehicle)
     items = current_marks(ledger, vehicle)
     if not items:
         return frame
@@ -67,12 +158,8 @@ def draw_marks(frame: np.ndarray, ledger, vehicle: list) -> np.ndarray:
             notes.append(label)
             continue
         x, y, w, h = box
-        cv2.rectangle(frame, (x, y), (x + w, y + h), colour, thick + 1)
-        (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, scale, thick)
-        ty = max(th + 4, y - 4)
-        cv2.rectangle(frame, (x, ty - th - 4), (x + tw + 4, ty + 2), colour, -1)
-        cv2.putText(frame, label, (x + 2, ty - 2), cv2.FONT_HERSHEY_SIMPLEX, scale, (255, 255, 255), thick,
-                    cv2.LINE_AA)
+        cv2.rectangle(frame, (x, y), (x + w, y + h), colour, line_width(thick))
+        draw_label_block(frame, box, [label], colour, (255, 255, 255), scale, thick)
     vx, vy, vw, vh = vehicle
     for i, note in enumerate(notes):   # e.g. "3 RIDERS (max 2)", "1/2 MIRRORS" under the vehicle
         y = min(frame.shape[0] - 6, vy + vh + int((i + 1) * 28 * scale * 1.6))
@@ -89,7 +176,7 @@ def draw_boxes(image: np.ndarray, items: list, note: str | None = None) -> np.nd
     thick = max(1, min(h, w) // 200)
     for box, label, colour in sorted(items, key=lambda it: it[2] == RED):
         x, y, bw, bh = (int(v) for v in box)
-        cv2.rectangle(image, (x, y), (x + bw, y + bh), colour, thick + 1)
+        cv2.rectangle(image, (x, y), (x + bw, y + bh), colour, line_width(thick))
         text_scale = scale
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, text_scale, thick)
         if tw + 6 > w:                                  # a narrow crop: shrink the label so it is not cut off

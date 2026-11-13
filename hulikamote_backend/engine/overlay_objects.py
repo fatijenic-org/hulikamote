@@ -43,6 +43,16 @@ KINDS: dict[str, dict] = {
     "driveway": {"share": 0.055, "stand": "post", "tint": (0, 190, 255), "label": "Driveway plate"},
     "no_loading": {"share": 0.055, "stand": "post", "tint": (0, 140, 255), "label": "No-loading plate"},
     "corner": {"share": 0.16, "stand": None, "tint": (40, 40, 200), "label": "Painted kerb"},
+    "double_parking": {"share": 0.05, "stand": "post", "tint": (40, 40, 200), "label": "No double parking plate"},
+    "keep_clear": {"share": 0.05, "stand": "post", "tint": (0, 190, 255), "label": "Keep clear plate", "hatch": True},
+    "no_trucks": {"share": 0.05, "stand": "post", "tint": (40, 40, 200), "label": "No trucks sign"},
+    "no_tricycles": {"share": 0.05, "stand": "post", "tint": (40, 40, 200), "label": "No tricycles plate"},
+    "sidewalk": {"share": 0.05, "stand": "post", "tint": (200, 90, 20), "label": "Sidewalk plate"},
+    "stop_sign": {"share": 0.05, "stand": "post", "tint": (40, 40, 200), "label": "Stop sign"},
+    "traffic_light_red": {"share": 0.026, "stand": "post", "tint": (40, 40, 200), "label": "Traffic light"},
+    "traffic_light_yellow": {"share": 0.026, "stand": "post", "tint": (0, 200, 250), "label": "Traffic light"},
+    "traffic_light_green": {"share": 0.026, "stand": "post", "tint": (60, 200, 60), "label": "Traffic light"},
+    "traffic_light_off": {"share": 0.026, "stand": "post", "tint": (90, 90, 90), "label": "Traffic light"},
 }
 DEFAULT_KIND = "sign"
 SUPERSAMPLE = 2
@@ -125,6 +135,13 @@ class _Canvas:
         d = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
         mask = np.clip(r_out + 0.5 - d, 0.0, 1.0) * np.clip(d - r_in + 0.5, 0.0, 1.0)
         self._put((slice(y0, y1), slice(x0, x1)), mask, np.broadcast_to(np.array(colour, np.float32), mask.shape + (3,)))
+
+    def polygon(self, points, colour) -> None:
+        """A flat-coloured polygon (an octagon for the stop sign)."""
+        m8 = np.zeros((self.h, self.w), np.uint8)
+        cv2.fillPoly(m8, [np.array([[int(round(x)), int(round(y))] for x, y in points], np.int32)], 255, cv2.LINE_AA)
+        self._put((slice(0, self.h), slice(0, self.w)), m8.astype(np.float32) / 255.0,
+                  np.broadcast_to(np.array(colour, np.float32), (self.h, self.w, 3)))
 
     def stroke(self, points, colour, thickness: float) -> None:
         """A line through `points` (several = a chain of segments)."""
@@ -241,6 +258,61 @@ def _no_loading(w: int, stand: str):
     return _rect_plate(w, stand, WHITE, RED, RED, ("NO LOADING", "UNLOADING"))
 
 
+def _stop_sign(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
+    def plate(c: _Canvas, w: int, h: int) -> None:
+        cx = cy = w / 2
+
+        def octagon(radius: float) -> list[tuple[float, float]]:
+            return [(cx + radius * math.cos(math.radians(22.5 + 45 * k)), cy + radius * math.sin(math.radians(22.5 + 45 * k))) for k in range(8)]
+        c.polygon(octagon(w * 0.54), WHITE)
+        c.polygon(octagon(w * 0.48), RED)
+        c.text(["STOP"], cx - w * 0.38, cy - w * 0.16, cx + w * 0.38, cy + w * 0.16, WHITE, widest_share=0.96, thick_div=26)
+    return _plated(w, stand, w, plate)
+
+
+def _no_trucks(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
+    def plate(c: _Canvas, w: int, h: int) -> None:
+        cx = cy = w / 2
+        c.disc(cx, cy, w * 0.50, WHITE, shade=False)
+        c.ring(cx, cy, w * 0.46, w * 0.35, RED)
+        c.rect(cx - w * 0.27, cy - w * 0.14, cx + w * 0.05, cy + w * 0.10, BLACK, None)            # the load
+        c.rect(cx + w * 0.07, cy - w * 0.04, cx + w * 0.24, cy + w * 0.10, BLACK, None)            # the cab
+        c.disc(cx - w * 0.15, cy + w * 0.13, w * 0.055, BLACK, shade=False)
+        c.disc(cx + w * 0.14, cy + w * 0.13, w * 0.055, BLACK, shade=False)
+        d = w * 0.30
+        c.stroke([(cx - d, cy - d), (cx + d, cy + d)], RED, w * 0.075)
+    return _plated(w, stand, w, plate)
+
+
+def _traffic_light(state: str):
+    on = {"red": (40, 40, 235), "yellow": (30, 200, 250), "green": (70, 205, 60)}
+    off = {"red": (20, 20, 75), "yellow": (20, 65, 75), "green": (25, 75, 25)}
+
+    def draw(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
+        h = int(w * 2.9)
+        c = _Canvas(w, h + (0 if stand == "none" else int(1.6 * w)))
+        _stand_under(c, w, h, stand)
+        c.rect(w * 0.05, 0, w * 0.95, h, (34, 36, 38), None, radius=max(2, w // 8))
+        c.rect(w * 0.02, h * 0.02, w * 0.98, h * 0.98, (150, 152, 155), None, radius=max(2, w // 8))        # a light rim round the housing
+        c.rect(w * 0.07, h * 0.03, w * 0.93, h * 0.97, (34, 36, 38), None, radius=max(2, w // 9))
+        for k, colour in enumerate(("red", "yellow", "green")):
+            cx, cy = w / 2, h * (0.18 + k * 0.32)
+            c.disc(cx, cy, w * 0.37, (12, 12, 14), shade=False)                                       # the lamp well
+            c.disc(cx, cy, w * 0.31, on[colour] if colour == state else off[colour])
+            if colour == state:
+                c.disc(cx - w * 0.07, cy - w * 0.09, w * 0.10, (225, 235, 245), shade=False)           # the lit glass
+            c.rect(cx - w * 0.40, cy - w * 0.45, cx + w * 0.40, cy - w * 0.34, (18, 18, 20), "h")      # the visor above the lamp
+        return c.result()
+    return draw
+
+
+def _stand_only(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
+    """Just the pole or the tripod, for a board that is drawn on top of it."""
+    c = _Canvas(w, int(1.5 * w))
+    _stand_under(c, w, 0, stand)
+    return c.result()
+
+
 def _corner(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
     """A kerb painted in red and white blocks, lying along the road."""
     h = max(6, int(w * 0.13))
@@ -252,7 +324,18 @@ def _corner(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
     return c.result()
 
 
-_FLAT = {"hydrant": _hydrant, "sign": _no_parking, "fire_station": _fire_station, "driveway": _driveway, "no_loading": _no_loading, "corner": _corner}
+_FLAT = {
+    "hydrant": _hydrant, "sign": _no_parking, "fire_station": _fire_station, "driveway": _driveway, "no_loading": _no_loading, "corner": _corner,
+    "double_parking": lambda w, s: _rect_plate(w, s, WHITE, RED, BLACK, ("NO DOUBLE", "PARKING")),
+    "keep_clear": lambda w, s: _rect_plate(w, s, (40, 200, 245), BLACK, BLACK, ("KEEP", "CLEAR")),
+    "no_trucks": _no_trucks,
+    "stop_sign": _stop_sign,
+    "no_tricycles": lambda w, s: _rect_plate(w, s, WHITE, RED, RED, ("NO", "TRICYCLES")),
+    "sidewalk": lambda w, s: _rect_plate(w, s, WHITE, BLUE, BLUE, ("NO VEHICLES", "SIDEWALK")),
+    "traffic_light_red": _traffic_light("red"), "traffic_light_yellow": _traffic_light("yellow"),
+    "traffic_light_green": _traffic_light("green"), "traffic_light_off": _traffic_light("off"),
+    "stand_only": _stand_only,
+}
 
 
 def object_width(frame_width: int, kind: str, scale: float = 1.0) -> int:
@@ -313,6 +396,15 @@ def draw_area(frame: np.ndarray, polygon, kind: str, realistic: bool = True) -> 
     cv2.fillPoly(tinted, [local], KINDS[kind_of(kind)]["tint"])
     share = 0.10 if realistic else 0.18
     roi[:] = cv2.addWeighted(tinted, share, roi, 1.0 - share, 0)
+    if KINDS[kind_of(kind)].get("hatch"):                         # a yellow box junction: diagonal hatching inside the area
+        lines = np.zeros_like(roi)
+        step = max(10, int(fw * 0.02))
+        for k in range(-roi.shape[0], roi.shape[1], step):
+            cv2.line(lines, (k, 0), (k + roi.shape[0], roi.shape[0]), (40, 200, 245), max(1, fh // 300), cv2.LINE_AA)
+        inside = np.zeros(roi.shape[:2], np.uint8)
+        cv2.fillPoly(inside, [local], 255)
+        hatched = (inside > 0) & lines.any(axis=2)
+        roi[hatched] = (roi[hatched] * 0.35 + lines[hatched] * 0.65).astype(np.uint8)
     dash = max(6, int(fw * 0.010))
     thick = max(1, fh // 400)
     ring = np.vstack([local, local[:1]]).astype(np.float32)
@@ -326,10 +418,43 @@ def draw_area(frame: np.ndarray, polygon, kind: str, realistic: bool = True) -> 
             cv2.line(roi, (int(p[0]), int(p[1])), (int(q[0]), int(q[1])), (235, 235, 235), thick, cv2.LINE_AA)
 
 
+def draw_stand(frame: np.ndarray, ground, width: int, stand: str, realistic: bool = True) -> None:
+    """A pole or tripod standing on `ground` (frame pixels), `width` wide, for a board drawn on top of it (the lane signs)."""
+    if stand not in ("post", "tripod"):
+        return
+    lane_signs.blend(frame, _sprite("stand_only", int(width), 0.0, 0.0, stand, bool(realistic), lane_signs._light_of(frame)), ground)
+
+
+def draw_traffic_light(frame: np.ndarray, state: str, seconds_left, slot: int = 0, box=None, realistic: bool = True) -> None:
+    """The simulated traffic light of the red light rule, as a real-looking light with the lit lamp, a countdown and the word SIM.
+    With a `box` (the two corners the operator drew round the light) it stands there on a pole; without one it hangs in the top-right
+    corner, `slot` stacking several lights side by side. Changes `frame`."""
+    kind = f"traffic_light_{state if state in ('red', 'yellow', 'green') else 'off'}"
+    fh, fw = frame.shape[:2]
+    if box:
+        (x1, y1), (x2, y2) = box
+        top, bottom = min(float(y1), float(y2)), max(float(y1), float(y2))
+        look = look_of({"scale": max(8.0, (bottom - top) / 2.9) / max(24.0, fw * KINDS[kind]["share"])}, kind)   # the box is the housing
+        width = object_width(fw, kind, look["scale"])
+        draw_object(frame, ((float(x1) + float(x2)) / 2, bottom + 1.6 * width), kind, look, realistic)          # its pole goes down from the box
+        label_at = (int(max(float(x1), float(x2)) + 0.5 * width), int(top + width))
+    else:
+        width = object_width(fw, kind, 1.0)
+        pad = max(4, fh // 80)
+        at = (fw - (slot + 0.9) * 1.8 * width, pad + 2.9 * width)
+        draw_object(frame, at, kind, {"stand": "none"}, realistic)
+        label_at = (int(at[0] - width / 2), int(at[1] + 0.9 * width))
+    label = f"{int(seconds_left) + 1}s" if (seconds_left is not None and state in ("red", "yellow", "green")) else "--"
+    scale = max(0.4, width / 36.0)
+    cv2.putText(frame, label, label_at, cv2.FONT_HERSHEY_SIMPLEX, scale, (255, 255, 255), max(1, int(scale * 1.5)), cv2.LINE_AA)
+    cv2.putText(frame, "SIM", (label_at[0], label_at[1] + int(26 * scale)), cv2.FONT_HERSHEY_SIMPLEX, scale * 0.7, (190, 190, 190), 1, cv2.LINE_AA)
+
+
 def zone_fields(sign: dict, kind: str, cfg: dict) -> dict:
     """What a box zone carries so that it can be drawn as an object: where the object stands (the middle of the box, in the 1920x1080
     reference space, scaled like the zone's own points), its look, and whether it looks filmed."""
-    return {"sign_points": [[sign["x"], sign["y"]]], "look": look_of(sign, kind), "realistic": bool(cfg.get("signs_realistic", True))}
+    return {"sign_points": [[sign.get("ax", sign["x"]), sign.get("ay", sign["y"])]], "look": look_of(sign, kind),
+            "realistic": bool(cfg.get("signs_realistic", True))}
 
 
 def parsed_fields(raw: dict, polygon, kind: str) -> dict:

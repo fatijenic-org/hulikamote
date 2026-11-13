@@ -13,6 +13,17 @@ from engine.track_stitcher import (
 from engine.violations import ALL as ALL_VIOLATIONS
 
 
+def inside_any(box, boxes, share: float = 0.4) -> bool:
+    """True when at least `share` of `box` (x, y, w, h) lies inside one of `boxes`."""
+    x, y, w, h = box
+    area = max(1.0, w * h)
+    for bx, by, bw, bh in boxes:
+        ix, iy = min(x + w, bx + bw) - max(x, bx), min(y + h, by + bh) - max(y, by)
+        if ix > 0 and iy > 0 and ix * iy / area >= share:
+            return True
+    return False
+
+
 class TrackLedger:
     # Cap on saved evidence frames per violation — bounds disk usage while still
     # giving reviewers a multi-second timeline instead of a single frame.
@@ -21,6 +32,9 @@ class TrackLedger:
     # as extra evidence: only the most confident few of the looks that voted for a violation.
     DETAIL_CAP = 3
     DETAIL_MIN_GAP_S = 1.0
+    # A "person" that moves too fast to walk is a rider the detector saw without the bike (see check_rider).
+    RIDER_SPEED = 2.0      # body heights per second over the last second (walking ~0.8, running ~1.7, a motorbike >2.5)
+    RIDER_SECONDS = 0.8    # it must stay that fast this long
 
     def __init__(self, track_id: int):
         self.track_id = track_id
@@ -42,6 +56,9 @@ class TrackLedger:
         self.made_stop: set = set()       # keys of stop-sign zones where it came to a full stop
         self.votes: dict = {}             # violation -> deque of recent True/False looks (see vote)
         self.marks: dict = {}             # violation -> boxes showing why (see engine/marks.py)
+        self.timers: dict = {}            # violation -> stopwatch drawn on the vehicle's box (see engine/marks.py set_timer)
+        self.rides: bool = False          # a "person" that moves like a vehicle: judged as a motorcycle from now on
+        self._fast_since: float | None = None
         self.blink: deque = deque(maxlen=200)   # (t, left amber, right amber) indicator samples
         self.turns_judged: set = set()    # signal-light zones where this vehicle's turn was already judged
         self.plate_checks: int = 0                        # plate looks that counted (see violations/no_plate.py)
@@ -70,6 +87,8 @@ class TrackLedger:
     @property
     def vclass(self) -> str:
         """Return the most common vehicle class over the track's lifetime (Temporal Consensus)."""
+        if self.rides:
+            return "motorcycle"
         if not self._classes_history:
             return "unknown"
             
@@ -88,6 +107,8 @@ class TrackLedger:
     @property
     def latest_class(self) -> str:
         """The class of the newest detection (vclass needs 5 looks to settle; this is known at once)."""
+        if self.rides:
+            return "motorcycle"
         return self._classes_history[-1] if self._classes_history else "unknown"
 
     def add_evidence_frame(self, path: str, bbox: list | None = None, t: float | None = None,
@@ -139,6 +160,27 @@ class TrackLedger:
         if self.appearance is not None and self._appearance_updates % APPEARANCE_EVERY_N != 0:
             return
         self.appearance = blend_signature(self.appearance, compute_signature(frame, bbox))
+
+    def check_rider(self, covered: bool) -> None:
+        """A "person" track that keeps moving faster than a person can is a rider (the detector saw the rider, not the bike):
+        from then on it is a motorcycle. Speed is counted in body heights per second so it does not depend on the camera.
+        `covered`: the box sits inside a vehicle's box (a passenger, or a rider already inside a bike box): never changed."""
+        if self.rides or covered or len(self.history) < 4:
+            return
+        last = self.history[-1]
+        window = [h for h in self.history if last[0] - h[0] <= 1.0]
+        dt = last[0] - window[0][0]
+        if len(window) < 4 or dt < 0.4:
+            return
+        heights = sorted(h[3][3] for h in window)
+        height = max(1.0, heights[len(heights) // 2])
+        ratio = math.hypot(last[1] - window[0][1], last[2] - window[0][2]) / dt / height
+        if ratio < self.RIDER_SPEED:
+            self._fast_since = None
+        elif self._fast_since is None:
+            self._fast_since = last[0]
+        elif last[0] - self._fast_since >= self.RIDER_SECONDS:
+            self.rides = True
 
     def get_movement_vector(self) -> tuple[float, float]:
         """Returns the displacement vector over the available history."""
@@ -253,13 +295,21 @@ class ActiveLedgerManager:
                     present.add(raw)
                     self._log_event("birth", now, id=raw, bbox=list(det.bbox), cls=getattr(det, "cls", None))
 
+        others = [d.bbox for d in detections if getattr(d, "cls", "person") != "person"]   # boxes a person could sit inside
         for det, cid in assigned:
             det.track_id = cid
             ledger = self.ledgers[cid]
             cls_val = getattr(det, "cls", "unknown")
+            if ledger.rides and cls_val == "person":      # moves like a vehicle: it is a motorcycle (see TrackLedger.check_rider)
+                det.cls = cls_val = "motorcycle"
             if cls_val != "unknown":
                 ledger._classes_history.append(cls_val)
             ledger.update_position(det.bbox, timestamp)
+            if cls_val == "person":
+                ledger.check_rider(inside_any(det.bbox, others))
+                if ledger.rides:
+                    det.cls = "motorcycle"
+                    ledger._classes_history.append("motorcycle")
             if frame is not None:
                 ledger.update_appearance(frame, det.bbox)
 

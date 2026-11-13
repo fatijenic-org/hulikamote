@@ -10,7 +10,8 @@ The light comes from the camera (the colour inside a box the operator drew aroun
 SIMULATED timer cycle for recorded footage (engine/traffic_light.py). prepare() reads it once per
 frame into zone["light"]; the simulated light and a countdown are drawn on every frame.
 """
-from engine.traffic_light import LightReader, draw_virtual_light, timer_phase
+from engine import overlay_objects
+from engine.traffic_light import LightReader, timer_phase
 from engine.violations.base import Violation
 from engine.violations.geometry import crossed_line, point_in_polygon
 
@@ -84,4 +85,4 @@ class RedLight(Violation):
     def draw_extra(self, pipe, frame, index, zone):
         state, seconds_left = pipe._light_states.get(index, ("unknown", None))
         if seconds_left is not None:   # simulated light: draw it on the frame
-            draw_virtual_light(frame, state, seconds_left, slot=index)
+            overlay_objects.draw_traffic_light(frame, state, seconds_left, slot=index, box=zone.get("light_box"), realistic=zone.get("realistic", True))

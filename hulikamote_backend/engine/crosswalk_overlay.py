@@ -13,6 +13,9 @@ Wizard form: {"x", "y", "scale", "depth", "angle", "slant", "stripes", "wear"}, 
   slant    perspective: how far the camera looks along the road; the far edge gets shorter and the band flatter (0 = seen from straight above)
   stripes  how many white bars (3 to 16)
   wear     how worn the paint is: 0 = fresh, 1 = patchy and chipped
+  pts      optional: the four corners (far-left, far-right, near-right, near-left) as [dx, dy] from the centre. When given, the operator has
+           moved the corners one by one (any four-sided shape, longer or wider than the simple look allows) and scale, depth, angle and
+           slant are not used.
 `crosswalks_realistic` (wizard setting, on by default) paints it like it was filmed: soft edges, grain, paint dulled to the light of the scene,
 the road's texture showing through. Off = flat white bars.
 
@@ -31,13 +34,25 @@ MIN_SCALE, MAX_SCALE = 0.3, 3.0
 MIN_DEPTH, MAX_DEPTH = 0.25, 2.0
 MAX_ANGLE = 90.0
 MAX_SLANT = 70.0
-MIN_STRIPES, MAX_STRIPES = 3, 16
+MIN_STRIPES, MAX_STRIPES = 3, 30
 FILL = 0.58                     # share of each stripe slot that is paint
 DEFAULTS = {"scale": 1.0, "depth": 1.0, "angle": 0.0, "slant": 30.0, "stripes": 8, "wear": 0.2}
 
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
+
+
+def _free_corners(raw: dict):
+    """The four hand-placed corners ([dx, dy] from the centre), or None when there are none or they make no sense."""
+    try:
+        pts = [(float(p[0]), float(p[1])) for p in raw.get("pts")]
+    except (TypeError, ValueError, IndexError, KeyError):
+        return None
+    if len(pts) != 4 or not all(math.isfinite(v) for p in pts for v in p):
+        return None
+    limit = REF[0] * 1.5
+    return [(_clamp(x, -limit, limit), _clamp(y, -limit, limit)) for x, y in pts]
 
 
 def look_of(raw: dict) -> dict:
@@ -48,12 +63,16 @@ def look_of(raw: dict) -> dict:
         except (TypeError, ValueError):
             return float(DEFAULTS[key])
         return value if math.isfinite(value) else float(DEFAULTS[key])
-    return {"scale": _clamp(number("scale"), MIN_SCALE, MAX_SCALE),
+    look = {"scale": _clamp(number("scale"), MIN_SCALE, MAX_SCALE),
             "depth": _clamp(number("depth"), MIN_DEPTH, MAX_DEPTH),
             "angle": _clamp(number("angle"), -MAX_ANGLE, MAX_ANGLE),
             "slant": _clamp(number("slant"), 0.0, MAX_SLANT),
             "stripes": int(_clamp(round(number("stripes")), MIN_STRIPES, MAX_STRIPES)),
             "wear": _clamp(number("wear"), 0.0, 1.0)}
+    free = _free_corners(raw)
+    if free:
+        look["pts"] = free
+    return look
 
 
 def usable(raw) -> list[dict]:
@@ -71,6 +90,8 @@ def corners(look: dict) -> list[tuple[float, float]]:
     """The four corners (far-left, far-right, near-right, near-left) of the band, relative to its centre, in the reference space.
     The far edge is the top one: `slant` makes it shorter and the band flatter, then `angle` turns the whole thing (clockwise)."""
     look = look_of(look)
+    if look.get("pts"):                                         # corners placed by hand: they ARE the shape
+        return list(look["pts"])
     length = REF[0] * SIZE_SHARE * look["scale"]
     depth = length * DEPTH_RATIO * look["depth"]
     slant = math.radians(look["slant"])
