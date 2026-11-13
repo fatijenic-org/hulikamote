@@ -15,7 +15,7 @@ Added 2026-11-09: `overtaking_on_right` and `kuliglig_with_passengers` (both pro
 
 | Violation | Basis | Grade | Why |
 |---|---|---|---|
-| illegal_parking | [RA 4136 §46](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (a to h) | 2 | Rule is simple (stopped in zone longer than the limit). Telling a parked car from a queued one needs the traffic-flow guard (built). |
+| illegal_parking | [RA 4136 §46](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (a to h) | 2 | Rule is simple (stopped in zone longer than the limit). Telling a parked car from a queued one needs the traffic-flow guard (built). The eight places of §46 and how each is implemented: section 10. |
 | pedestrian_lane | [RA 4136 §46(b)](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (on a crosswalk) | 2 | Same rule with a 3 s limit. A red-light queue looks the same, so the signal state matters. |
 | blocking_intersection | [RA 4136 §54](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (obstruction), §46(a) (within an intersection) | 3 | Waiting before the box is legal, so only "stopped inside" counts. The box is drawn by hand. |
 | illegal_loading | [RA 4136 §54](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html) (loading or unloading that obstructs traffic) | 3 | Video cannot tell loading from plain stopping; only a vehicle-class filter. |
@@ -109,3 +109,22 @@ The Progress Report's "JAO 2014-01" link points to LTO Memorandum Circular AVT-2
 - [LTO LETAS page (fines by offense)](https://lto.gov.ph/httpswww.lto.gov.ph/law-enforcement-and-adjudication-of-cases/536-new-letas.html): LTO-hosted, not opened.
 - [RA 11229 Child Safety in Motor Vehicles Act](https://lawphil.net/statutes/repacts/ra2019/ra_11229_2019.html): read; §5 bars children 12 and under from the front seat unless they meet the height rule and use the seat belt. Possible later addition (child in the front seat); not in the 10 above.
 - [RA 10586 Anti-Drunk and Drugged Driving Act](https://lawphil.net/statutes/repacts/ra2013/ra_10586_2013.html): not camera-detectable, listed only so it is not forgotten.
+
+## 10. Illegal parking: the eight places of RA 4136 Section 46, and how each one is implemented
+
+**Source (Read, lawphil.net, 2026-11-11):** [RA 4136](https://lawphil.net/statutes/repacts/ra1964/ra_4136_1964.html), Section 46 "Parking prohibited in specified places". It says no driver shall park a vehicle, or permit it to stand, whether attended or unattended, upon a highway in these places. The lead-in says "park" and "permit it to stand"; it does not say "stop" (item (g) does speak of a vehicle "stopped or parked").
+
+| Item | Place | Distance in the text | How the system handles it |
+|---|---|---|---|
+| (a) | Within an intersection | none | Rule **Blocking the intersection** (junction box zone) |
+| (b) | On a crosswalk | none | Rule **Pedestrian lane blocked** (crosswalk zone or overlay crosswalk) |
+| (c) | Within 6 m of the intersection of curb lines (a corner) | **6 m** | **Illegal parking**, box marked "Corner" |
+| (d) | Within 4 m of the driveway entrance to a fire station | **4 m** | **Illegal parking**, box marked "Fire station driveway" |
+| (e) | Within 4 m of a fire hydrant | **4 m** | **Illegal parking**, box marked "Fire hydrant" |
+| (f) | In front of a private driveway | none | **Illegal parking**, box marked "Private driveway" |
+| (g) | On the roadway side of a vehicle stopped or parked at the curb or edge (double parking) | none | Rule **Double parking** |
+| (h) | Where official signs prohibit parking | none | **Illegal parking**, box marked "No-parking sign" |
+
+**Corrections to the text the idea came from.** The corner distance is **6 meters**, not 5. The 4 meters for a hydrant is in RA 4136 §46(e) only. The Fire Code, [RA 9514](https://lawphil.net/statutes/repacts/ra2008/ra_9514_2008.html), Section 8(d) bans "obstructing designated fire lanes or access to fire hydrants", but it does not mention parking and gives no distance; its penalties are in Section 11 (administrative fine and, for willful failure to correct, imprisonment). The RA 9514 implementing rules were not opened, so no IRR distance is claimed. Sidewalk parking is not in §46: §52 covers it (rule Sidewalk driving).
+
+**How it works in the system.** In the Forensic wizard, Illegal parking has a card "What counts as illegal parking" that lists the eight items. Five are marked on the picture by the operator as a box (the box is the banned area; the operator sizes it, and 4 m is about one car length). The other three show the rule that judges them and a button to switch that rule on. A vehicle that stays still inside a box longer than the time limit is flagged, and its evidence photos carry the reason as a label (for example "Within 4 m of fire hydrant"). The box is not measured in meters: the operator sizes it by eye, so the distances are as exact as that. Boxes are temporary overlays: they are drawn on the photos and the result video and are never written into the video.
