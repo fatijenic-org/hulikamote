@@ -19,6 +19,7 @@ import numpy as np
 
 from engine import marks, privacy
 from engine.flow_field import FlowField
+from engine.video_clock import OffsetClock, WallClock, start_from_text
 from engine.ledger import ActiveLedgerManager
 from engine.registry import ModelRegistry
 from engine.specialist_jobs import JOBS
@@ -37,9 +38,9 @@ SPECIALIST_INTERVAL = 5
 # existing "/snapshots" mount in main.py (subfolders are included).
 EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "snapshots" / "evidence"
 
-# flow_mode "auto": the rules marked `auto` (engine/violations/*.py) work without drawn zones: each gets one implicit
-# whole-frame zone built from its own wizard settings (Violation.auto_zone)
-AUTO_ZONE_KEYS = tuple(v.zone_key for v in ZONE_VIOLATIONS if v.auto)
+# The rules marked `whole_frame` (engine/violations/*.py) need no drawing: when one is on and nothing is drawn for it, it gets one
+# implicit zone, the whole picture, built from its own wizard settings (Violation.whole_frame_zone)
+WHOLE_FRAME_ZONE_KEYS = tuple(v.zone_key for v in ZONE_VIOLATIONS if v.whole_frame)
 
 
 # ─── EasyOCR (lazy singleton) ─────────────────────────────────────────────────
@@ -324,11 +325,17 @@ class DecoupledPipeline:
 
         # Read tracker type and flow mode from config and initialize YOLO inference immediately
         self.tracker_type = "bytetrack"
-        self.flow_mode = "zones"        # "zones": drawn zones and arrows only; "auto": also learn the flow (no drawing needed)
+        self.flow_mode = "zones"        # "auto": always learn the traffic flow; "zones": only when a rule needs it (see learns_flow)
         self.violation_cfg: dict = {}   # the wizard's per-violation settings (an automatic rule reads its own: time limit, banned turns ...)
+        # What time is it in the picture? Live: this computer's clock. An analysis sets the time found in its video (forensic.py).
+        # `clock_start` ("7:30") in the config pretends a start time, e.g. to show a ban hour in a live demo.
+        self.clock = WallClock()
         try:
             with open(config_path) as f:
                 cfg = json.load(f)
+                pretend = start_from_text(cfg.get("clock_start"))
+                if pretend is not None:
+                    self.clock = OffsetClock(pretend)
                 self.tracker_type = cfg.get("tracker", "bytetrack")
                 self.flow_mode = "auto" if cfg.get("flow_mode") == "auto" else "zones"
                 self.violation_cfg = cfg.get("per_violation_configs") or {}
@@ -355,6 +362,15 @@ class DecoupledPipeline:
             return int(cfg.get("video_native_width", 0)), int(cfg.get("video_native_height", 0))
         except Exception:
             return 0, 0
+
+    @property
+    def learns_flow(self) -> bool:
+        """True when the traffic flow must be learned from the video: the config says so (flow_mode "auto"), or a rule that needs the
+        flow (Violation.needs_flow: counterflow, parking, loading) is on and has nothing drawn, so it watches the whole picture."""
+        if getattr(self, "flow_mode", "zones") == "auto":
+            return True
+        active = getattr(getattr(self, "registry", None), "active_violations", None) or []
+        return any(v.needs_flow and v.key in active and not self.rois.get(v.zone_key) for v in ZONE_VIOLATIONS)
 
     def _scale_polygon(self, polygon: list, frame_w: int, frame_h: int) -> list:
         """
@@ -383,24 +399,15 @@ class DecoupledPipeline:
             return out
 
         scaled = {key: [scale(z) for z in self.rois.get(key, [])] for key in ZONE_RULES.values()}
-        if getattr(self, "flow_mode", "zones") == "auto":     # no drawn zone for these rules: the whole frame is the zone
-            whole = [[0, 0], [frame_w, 0], [frame_w, frame_h], [0, frame_h]]
-            settings = getattr(self, "violation_cfg", {})
-            for violation in ZONE_VIOLATIONS:
-                if violation.auto and not scaled[violation.zone_key]:
-                    scaled[violation.zone_key] = [
-                        violation.auto_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), self.flow)
-                    ]
-        # A rule whose zone is optional (`zoneless`, e.g. restricted lane) that is on, with nothing drawn: the whole picture is its zone,
-        # whatever the flow mode is.
+        # A rule that needs no drawing (`whole_frame`) that is on, with nothing drawn (and no sign placed): the whole picture is its zone.
         active = getattr(getattr(self, "registry", None), "active_violations", None)
         if active:
             whole = [[0, 0], [frame_w, 0], [frame_w, frame_h], [0, frame_h]]
             settings = getattr(self, "violation_cfg", None) or {}
             for violation in ZONE_VIOLATIONS:
-                if getattr(violation, "zoneless", False) and violation.key in active and not scaled[violation.zone_key]:
+                if violation.whole_frame and violation.key in active and not scaled[violation.zone_key]:
                     scaled[violation.zone_key] = [
-                        violation.auto_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), getattr(self, "flow", None))
+                        violation.whole_frame_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), getattr(self, "flow", None))
                     ]
         for violation in self._learned_in_use():
             scaled[violation.zone_key] = [self._scale_learned(z, frame_w, frame_h) for z in self.learned_rois[violation.zone_key]]
@@ -699,7 +706,7 @@ class DecoupledPipeline:
         detections = self._filter_to_roi(yolo.infer(frame), scaled_rois)
         self.ledger_manager.update(detections, timestamp, frame)
 
-        if self.flow_mode == "auto":
+        if self.learns_flow:
             self.flow.observe_frame(self.ledger_manager, detections, fw, fh)
             if self.learn_only:                  # pre-scan: learn the flow, judge nothing, keep no evidence
                 return frame, detections

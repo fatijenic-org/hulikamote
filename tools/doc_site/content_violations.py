@@ -17,8 +17,8 @@ STATUS_CHIP = {
     "experimental": ("warn", "Experimental"),
 }
 DRAW = {
-    "counterflow": "zone + arrow (nothing in automatic mode)", "illegal_parking": "zone + time limit", "restricted_lane": "zone + allowed types",
-    "pedestrian_lane": "zone + time limit", "illegal_turn": "zone + arrow", "illegal_u_turn": "zone", "swerving": "zone (nothing in automatic mode)",
+    "counterflow": "zone + arrow (nothing: whole picture)", "illegal_parking": "zone + time limit", "restricted_lane": "zone + allowed types",
+    "pedestrian_lane": "zone + time limit", "illegal_turn": "zone + arrow", "illegal_u_turn": "zone", "swerving": "zone (or nothing: whole picture)",
     "crossing_solid_line": "zone + line", "blocking_intersection": "zone + time limit", "red_light": "zone + stop line + light",
     "disregarding_signs": "one zone per sign", "signal_light": "zone", "overloading": "max riders", "pickup_passengers": "nothing",
     "riding_outside_vehicle": "nothing", "no_plate": "nothing", "no_helmet": "nothing", "no_seatbelt": "nothing", "distracted_driving": "nothing",
@@ -254,7 +254,7 @@ def build() -> Page:
     p.add(code(ENG + "pipeline.py", "DecoupledPipeline.process_frame", walk=[
         ("yolo.infer(frame)", "Find vehicles and people, and track them."),
         ("self.ledger_manager.update(detections", "Update each vehicle's ledger (and re-join broken tracks)."),
-        ("self.flow.observe_frame(", "In automatic flow mode: let the traffic teach the flow field."),
+        ("self.flow.observe_frame(", "When a rule needs the traffic flow (counterflow, parking, loading) and has no zone: let the traffic teach the flow field."),
         ("self._run_specialists(frame", "Helmet, plate and cabin models look at the vehicles they apply to."),
         ("self._judge(frame", "Zone rules and frame checks run."),
         ("self._capture_evidence_frame(frame, det, tid, detections)", "Anything flagged gets an evidence photo with the 'why' boxes."),

@@ -12,10 +12,16 @@ from the side it was first seen on (geometry.crossed_line: it must end up clearl
 box width and at least 10 px, so a car wobbling on the line is not a crossing; points beyond the line's ends
 are ignored). Legal basis: the no-overtaking / no-crossing rules of RA 4136 and local ordinances (to be
 confirmed before it is quoted on a ticket).
+
+Painted overlay (engine/line_paint.py, for testing): a saved line that carries a `look` is also drawn like paint on the road (solid white or
+yellow, double yellow, dashed white; width, wear, perspective taper; vehicles drive over it). The paint is only a picture of the line the rule
+already judges: the rule uses the line's points, never the paint. It is drawn on the evidence photos and the result video, never written
+into the video, and belongs to the analysis.
 """
 import cv2
 import numpy as np
 
+from engine import line_paint
 from engine.violations.base import Violation
 from engine.violations.geometry import crossed_line, point_in_polygon
 
@@ -31,15 +37,24 @@ class CrossingSolidLine(Violation):
         line = raw.get("stop_line")                                                   # stored like a stop line, with any number of points
         if not line or len(line) < 2:
             return None
-        return {"polygon": raw.get("coordinates") or [], "stop_line": line}          # no polygon = the line alone
+        zone = {"polygon": raw.get("coordinates") or [], "stop_line": line}          # no polygon = the line alone
+        if raw.get("look"):
+            zone["look"] = line_paint.look_of(raw["look"])                           # painted on the picture too
+            zone["realistic"] = bool(raw.get("realistic", True))
+        return zone
 
     def from_wizard(self, cfg):
         # "line" = the points the operator clicked (ui_vector: the two points older drawings and the paint finder gave)
         zones = []
+        realistic = bool(cfg.get("lines_realistic", True))
         for z in cfg.get("rois", []):
             line = z.get("line") or z.get("ui_vector")
             if line and len(line) >= 2:
-                zones.append({"coordinates": z.get("polygon") or [], "stop_line": line})
+                zone = {"coordinates": z.get("polygon") or [], "stop_line": line}
+                if z.get("look") is not None:                                          # "Paint it": a look, even an empty one, means paint
+                    zone["look"] = line_paint.look_of(z["look"])
+                    zone["realistic"] = realistic
+                zones.append(zone)
         return zones
 
     def evaluate(self, mgr, track_id, zones):
@@ -64,5 +79,9 @@ class CrossingSolidLine(Violation):
             cv2.polylines(frame, [np.array(zone["polygon"], dtype=np.int32)], isClosed=True, color=self.color, thickness=2)
         line = zone.get("stop_line")
         if line:
+            painted = zone.get("look") is not None
+            if painted:                                                                  # the paint first, vehicles on top of it
+                boxes = [d.bbox for d in getattr(pipe, "_draw_dets", ()) if getattr(d, "cls", None) in line_paint.OCCLUDES]
+                line_paint.draw(frame, line, zone["look"], zone.get("realistic", True), occluders=boxes)
             cv2.polylines(frame, [np.array(line, dtype=np.int32)], isClosed=False, color=self.line_colour(pipe, index),
-                          thickness=4, lineType=cv2.LINE_AA)
+                          thickness=2 if painted else 4, lineType=cv2.LINE_AA)

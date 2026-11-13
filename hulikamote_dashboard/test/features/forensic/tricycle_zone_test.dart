@@ -47,15 +47,13 @@ void main() {
       expect((d.buildConfig()['per_violation_configs'] as Map)[_rule]['banned_classes'], ['tricycle']);
     });
 
-    test('without the automatic-flow switch too, and the picker says "Zone optional"', () {
-      final d = _draft();
-      expect(d.settings.autoFlow, isFalse);
-      expect(AnalysisDraft.zoneOptionalKeys, contains(_rule));
+    test('the rule is a whole-picture rule, and the picker says the zone is optional', () {
+      expect(AnalysisDraft.wholeFrameKeys, contains(_rule));
       expect(ViolationCatalog.of(_rule).zoneHint, contains('A zone is optional'));
     });
 
-    test('the truck ban and the other zone rules still need their zone', () {
-      expect(_draft('truck_ban').zonesReady('truck_ban'), isFalse);
+    test('the truck ban needs no zone either, the sidewalk rule still does', () {
+      expect(_draft('truck_ban').zonesReady('truck_ban'), isTrue);
       expect(_draft('sidewalk_driving').zonesReady('sidewalk_driving'), isFalse);
     });
 
@@ -70,8 +68,8 @@ void main() {
     });
 
     testWidgets('a rule that needs its zone still says so', (tester) async {
-      final d = _draft('truck_ban');
-      await _pump(tester, d, rule: 'truck_ban');
+      final d = _draft('sidewalk_driving');
+      await _pump(tester, d, rule: 'sidewalk_driving');
       expect(find.text('Save at least one zone to continue.'), findsOneWidget);
     });
   });

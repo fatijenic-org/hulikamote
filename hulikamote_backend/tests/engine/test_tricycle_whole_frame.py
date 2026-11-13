@@ -33,10 +33,10 @@ def run(zones, cls):
 
 
 def test_the_rule_is_zone_optional():
-    assert RULE.zoneless
+    assert RULE.whole_frame
 
 
-def test_with_nothing_drawn_the_whole_picture_is_the_banned_road_in_any_flow_mode():
+def test_with_nothing_drawn_the_whole_picture_is_the_banned_road():
     for mode in ("zones", "auto"):
         scaled = pipeline([KEY], flow_mode=mode)._get_scaled_rois(960, 540)
         (zone,) = scaled[RULE.zone_key]

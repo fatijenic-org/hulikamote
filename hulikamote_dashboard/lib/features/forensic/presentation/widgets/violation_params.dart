@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../domain/analysis_draft.dart';
 import '../../domain/violation_catalog.dart';
+import 'ban_hours_editor.dart';
 import 'fx.dart';
 
 /// The numbers and choices of one violation that are not drawn: time limits, which vehicle
@@ -43,6 +44,8 @@ class ViolationParams extends StatelessWidget {
         _slider(context, 'How long may a vehicle stand in the lane?', 'time_limit', 3, 120, suffix: 'seconds'),
       if (violationKey == 'truck_ban' || violationKey == 'tricycle_on_highway' || violationKey == 'sidewalk_driving')
         _chips(context, 'Vehicle types NOT allowed here', 'banned_classes'),
+      // The truck ban only holds at certain hours in most cities (Zamboanga's are in its ordinance).
+      if (violationKey == 'truck_ban') BanHoursEditor(draft: draft, violationKey: violationKey, onChanged: onChanged),
       if (violationKey == 'disregarding_signs') ...[
         _slider(context, 'No-stopping limit (for “No stopping” zones)', 'time_limit', 1, 60, suffix: 'seconds'),
         _chips(context, 'Vehicle types banned (for “Vehicle type banned” zones)', 'banned_classes'),

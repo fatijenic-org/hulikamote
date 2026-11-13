@@ -11,8 +11,8 @@ Updated 2026-11-09. This guide covers all **25 violations built** in `hulikamote
 - **Flags:** A vehicle drives against the legal direction for 2 s or more.
 - **Does not flag:** Normal traffic on the same road; a vehicle crossing the road sideways.
 - **Camera view:** Any fixed view where the road direction is clear.
-- **Operator setup:** Zones mode: draw the zone and the legal-flow arrow. Auto mode (flow_mode auto): no drawing, but the clip needs about 60 s of normal traffic first, because the legal direction is learned from it.
-- **Known limit:** Two-way roads are never judged in auto mode (both directions are normal there). Needs a fixed camera.
+- **Operator setup:** Draw the zone and the legal-flow arrow, or draw nothing (whole picture): then the clip needs about 60 s of normal traffic first, because the legal direction is learned from it.
+- **Known limit:** Two-way roads are never judged when the direction is learned (both directions are normal there). Needs a fixed camera.
 
 #### `illegal_parking`: Illegal parking
 - **Flags:** A vehicle stands in the no-parking zone longer than the zone's time limit.
@@ -51,7 +51,7 @@ Updated 2026-11-09. This guide covers all **25 violations built** in `hulikamote
 - **Flags:** A vehicle weaves left-right-left within 6 s (swings of at least half its width).
 - **Does not flag:** A single lane change; a steady straight path.
 - **Camera view:** Rear or front view along the road; the vehicle visible for 6 s or more and travelling at least 2 box widths.
-- **Operator setup:** Draw the monitored zone (auto flow mode gives it the whole frame).
+- **Operator setup:** Draw the monitored zone, or draw nothing: then the whole frame is watched.
 
 #### `red_light`: Red light running
 - **Flags:** A vehicle crosses the stop line while the light is red.

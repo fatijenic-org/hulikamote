@@ -1,0 +1,30 @@
+DELETED FOR DISK SPACE - 2026-11-13
+===================================
+The disk had 2.1 GB free. This was removed. Nothing here was source code or a dataset.
+
+KEPT ON PURPOSE
+- training_lab/datasets (all of it)
+- the analysis f3452519-0bb2-4e53-8566-4e762a345e7b (the 15-minute video) and its photos
+- hulikamote_backend/snapshots/evidence/forensic/temp
+- users and vehicles in hulikamote.db
+- Android SDK (C:\Users\nekol\AppData\Local\Android\Sdk) and .gradle
+
+REMOVED AND HOW TO GET IT BACK
+1. C:\Users\nekol\AppData\Local\Temp (everything except Temp\claude)
+   Windows temp files. Nothing to restore; programs recreate what they need.
+2. C:\Users\nekol\.android\avd  (about 13.5 GB, Android emulator phones)
+   Not needed to build the app (a real phone works). To get an emulator back:
+   Android Studio > Device Manager > Create Device, pick a phone + system image, Finish.
+   (Command line: sdkmanager "system-images;android-34;google_apis;x86_64", then avdmanager create avd.)
+   debug.keystore in C:\Users\nekol\.android was NOT touched.
+3. hulikamote_backend/snapshots/evidence/forensic/<old analysis folders> (58 folders) and the loose
+   evidence photos older than 2026-11-13 06:37 in hulikamote_backend/snapshots/evidence
+   Only way back: run the analysis again from the original video in the Forensic Analyzer.
+4. hulikamote_backend/snapshots/live_uploads  (old Live Monitor upload videos)
+   Upload the video again in the Live Monitor.
+5. training_lab/harvest_inbox: the pictures (cabin_specialist, helmet_specialist, plate_specialist,
+   primary_anchor, reid_pairs), gallery.json and harvest.db
+   Harvest > collect fills them again from analyses that kept their video. protected.json was kept.
+6. hulikamote_backend/hulikamote.db: all violation rows except the ones of analysis f3452519 (1020 rows removed).
+   A copy from before the cleanup is in the Claude scratchpad of this session
+   (hulikamote_before_cleanup.db); the git history also holds older committed versions of the file.

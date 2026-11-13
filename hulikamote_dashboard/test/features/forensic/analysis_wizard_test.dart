@@ -162,10 +162,10 @@ void main() {
     expect(find.text('Model not trained yet'), findsWidgets);
     await _next(tester);
 
-    // 3 rules: needs a zone before it can go on
+    // 3 rules: counterflow needs no zone (the direction is learned), but a zone and its arrow can still be drawn
     expect(find.text('Set up the rules'), findsOneWidget);
-    expect(tester.widget<FilledButton>(_continue()).onPressed, isNull);
-    expect(find.textContaining('Still needs a zone: Counterflow'), findsOneWidget);
+    expect(tester.widget<FilledButton>(_continue()).onPressed, isNotNull);
+    expect(find.textContaining('Still needs a zone'), findsNothing);
 
     await _tapCanvas(tester, 0.2, 0.9);
     await _tapCanvas(tester, 0.8, 0.9);
@@ -217,7 +217,7 @@ void main() {
     h.runner.clear(); // stop polling
   });
 
-  testWidgets('counterflow can skip the drawing from the zones step itself, other rules cannot', (tester) async {
+  testWidgets('counterflow needs no drawing (no flow switch either), rules that only the law can place still do', (tester) async {
     final h = await _pump(tester);
     await tester.tap(find.text('Choose video…'));
     await tester.pump(const Duration(milliseconds: 100));
@@ -226,19 +226,17 @@ void main() {
     await tester.pump();
     await _next(tester);
 
-    // this step blocks without a zone, so the switch must be right here (not only in Settings, which is behind it)
-    expect(tester.widget<FilledButton>(_continue()).onPressed, isNull);
-    expect(find.text('Detect traffic flow automatically'), findsOneWidget);
-    await tester.tap(find.byType(Switch));
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(h.draft.settings.autoFlow, isTrue);
-    expect(find.text('Automatic: learns the flow'), findsOneWidget);
+    // nothing drawn: the whole picture is watched and the direction is learned from the traffic, with no switch to turn on
+    expect(find.text('Detect traffic flow automatically'), findsNothing);
+    expect(find.text('Whole picture: learns the direction'), findsOneWidget);
     expect(tester.widget<FilledButton>(_continue()).onPressed, isNotNull);
+    expect(h.draft.learnsFlow, isTrue);
+    expect(h.draft.buildConfig()['flow_mode'], 'auto');
     await _next(tester);
     expect(find.text('Fine-tune the pipeline'), findsOneWidget);
     expect(h.draft.zones('counterflow'), isEmpty);
 
-    // a rule that only the law can place has no such switch
+    // a rule that only the law can place still needs its drawing
     h.draft
       ..clearSelection()
       ..toggle('pedestrian_lane', on: true);
@@ -248,7 +246,7 @@ void main() {
     expect(tester.widget<FilledButton>(_continue()).onPressed, isNull);
   });
 
-  testWidgets('the learned flow can be hidden or shown right under "Detect traffic flow automatically", and in Settings', (tester) async {
+  testWidgets('the learned flow can be hidden or shown in Settings', (tester) async {
     final h = await _pump(tester);
     await tester.tap(find.text('Choose video…'));
     await tester.pump(const Duration(milliseconds: 100));
@@ -256,12 +254,11 @@ void main() {
     await tester.tap(find.text('Counterflow').first);
     await tester.pump();
     await _next(tester);
+    await _next(tester); // Settings
 
     final flowSwitch = find.byKey(const ValueKey('show-flow-switch'));
-    expect(find.text('Show the learned flow'), findsNothing); // nothing to show while the flow is not learned
-    h.draft.settings.autoFlow = true;
-    h.draft.touch();
-    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('Fine-tune the pipeline'), findsOneWidget);
+    await tester.scrollUntilVisible(flowSwitch, 200, scrollable: find.byType(Scrollable).first);
     expect(find.text('Show the learned flow'), findsOneWidget);
     expect(tester.takeException(), isNull); // the extra row fits
     expect(tester.widget<Switch>(flowSwitch).value, isTrue); // on by default, as before
@@ -271,29 +268,22 @@ void main() {
     expect(h.draft.config('counterflow')['show_flow'], isFalse); // the very value Counterflow's own switch uses
     final sent = h.draft.buildConfig()['per_violation_configs'] as Map;
     expect(sent['counterflow']['show_flow'], isFalse);
-
-    await _next(tester); // Settings: the same switch, the same value
-    expect(find.text('Fine-tune the pipeline'), findsOneWidget);
-    await tester.scrollUntilVisible(flowSwitch, 200, scrollable: find.byType(Scrollable).first);
-    expect(tester.takeException(), isNull);
-    expect(tester.widget<Switch>(flowSwitch).value, isFalse);
     await tester.tap(flowSwitch);
     await tester.pump(const Duration(milliseconds: 50));
     expect(h.draft.config('counterflow')['show_flow'], isTrue);
   });
 
   testWidgets('the show-the-flow switch is not offered when Counterflow (the rule that draws it) is not chosen', (tester) async {
-    final h = await _pump(tester);
+    await _pump(tester);
     await tester.tap(find.text('Choose video…'));
     await tester.pump(const Duration(milliseconds: 100));
     await _next(tester);
     await tester.tap(find.text('Illegal turn').first);
     await tester.pump();
     await _next(tester);
-    h.draft.settings.autoFlow = true;
-    h.draft.touch();
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(find.text('Detect traffic flow automatically'), findsOneWidget);
+    await _next(tester); // Settings
+    expect(find.text('Fine-tune the pipeline'), findsOneWidget);
+    expect(find.text('Detect traffic flow automatically'), findsNothing); // illegal turn has nothing to do with the flow
     expect(find.text('Show the learned flow'), findsNothing);
   });
 
@@ -342,7 +332,7 @@ void main() {
 
     await _tapButton(tester, find.byTooltip('Delete zone 1'));
     expect(h.draft.zones('swerving'), isEmpty);
-    expect(find.text('Save at least one zone to continue.'), findsOneWidget);
+    expect(find.textContaining('No zone drawn: the whole picture is the zone'), findsOneWidget); // swerving needs no zone: the whole picture is watched
   });
 
   group('a running analysis can be stopped here or cancelled', () {

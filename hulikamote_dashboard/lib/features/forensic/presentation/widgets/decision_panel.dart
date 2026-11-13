@@ -619,6 +619,27 @@ class DecisionPanel extends StatelessWidget {
           ].join(' · '),
           style: Fx.caption(context),
         ),
+        // When it happened (the clock of the video), and where that time came from; or that a human must check it.
+        if (t.time != null) ...[
+          const SizedBox(height: 2),
+          Row(
+            key: const ValueKey('ticket-time'),
+            children: [
+              Icon(
+                t.time!.needsCheck ? Icons.help_outline : Icons.schedule,
+                size: 14,
+                color: t.time!.needsCheck ? Fx.warning : Fx.muted(context),
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  t.time!.long,
+                  style: Fx.caption(context).copyWith(color: t.time!.needsCheck ? Fx.warning : null),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }

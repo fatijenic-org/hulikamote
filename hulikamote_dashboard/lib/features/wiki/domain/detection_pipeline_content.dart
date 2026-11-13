@@ -244,7 +244,7 @@ const List<PipelineStep> _shared = [
     facts: [
       ('How', 'sv.PolygonZone.trigger() tests each box against every active zone polygon'),
       ('No zones drawn', 'nothing is filtered'),
-      ('Auto flow mode', 'ten rules (counterflow, swerving, illegal turn, illegal U-turn, signal light, truck ban, tricycle on highway, illegal loading, double parking, illegal parking) use the whole frame as their zone when none is drawn'),
+      ('Whole picture', 'eleven rules (counterflow, swerving, illegal turn, illegal U-turn, signal light, truck ban, tricycle on highway, restricted lane, illegal loading, double parking, illegal parking) need no drawing: with none drawn the whole frame is their zone. Counterflow and parking / loading also learn the traffic flow, by themselves'),
       ('Rules by family', '17 zone rules · 3 frame checks · 5 specialist checks = 25 violations'),
     ],
     figure: DetectionFigure.zoneFilter,

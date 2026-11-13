@@ -6,7 +6,7 @@ over its whole track, so one wrong frame cannot decide) is not in the zone's all
 An empty allowed list closes the lane to everyone. A class that is still "unknown" is never judged.
 
 A zone is optional. Drawn zones limit the rule to where they are. With none drawn the whole picture is the lane
-(`zoneless`: the pipeline gives the rule one implicit whole-picture zone, Violation.auto_zone), so a camera that watches
+(`whole_frame`: the pipeline gives the rule one implicit whole-picture zone, Violation.whole_frame_zone), so a camera that watches
 only the restricted road needs no drawing.
 
 Overlay signs (engine/lane_signs.py) say who may use a road: a sign inside a zone sets that zone's allowed vehicle types; with
@@ -22,7 +22,7 @@ class RestrictedLane(Violation):
     key = "restricted_lane"
     zone_key = "restricted_lane_zones"
     color = (0, 255, 255)
-    zoneless = True            # with no zone drawn, the whole picture is the lane (see pipeline._get_scaled_rois)
+    whole_frame = True         # with no zone drawn, the whole picture is the lane (see pipeline._get_scaled_rois)
 
     def parse_zone(self, raw):
         coords = raw.get("coordinates")
@@ -53,9 +53,9 @@ class RestrictedLane(Violation):
             zones.append(zone)
         return zones
 
-    def auto_zone(self, cfg, polygon, frame_size, flow):
+    def whole_frame_zone(self, cfg, polygon, frame_size, flow):
         """The whole picture as one lane: the tick boxes, and the signs (placed in the wizard's 1920x1080 space) moved onto this frame."""
-        zone = super().auto_zone(cfg, polygon, frame_size, flow)
+        zone = super().whole_frame_zone(cfg, polygon, frame_size, flow)
         fw, fh = frame_size
         zone["allowed_classes"] = cfg.get("allowed_classes", ["bus"])
         zone["signs"] = [{"type": s["type"], "at": (s["x"] * fw / lane_signs.REF[0], s["y"] * fh / lane_signs.REF[1]),

@@ -1,17 +1,18 @@
 """
 counterflow - driving against the legal direction of traffic.
 
-Two ways to know the legal direction (flow_mode in the camera config):
-  zones  an operator draws a zone with a legal-flow arrow (the original way; kept for tests and as ground truth)
-  auto   no drawing: the legal direction is learned from the traffic itself (engine/flow_field.py).
-         Drawn zones, when there are any, still take priority.
+Two ways to know the legal direction:
+  drawn         an operator draws a zone with a legal-flow arrow (the original way; kept for tests and as ground truth)
+  whole picture nothing drawn: the legal direction is learned from the traffic itself (engine/flow_field.py; the pipeline
+                learns the flow on its own when this rule is on and has no zone).
+                Drawn zones, when there are any, still take priority.
 
 Zone heuristic: inside a drawn zone, the vehicle's CURRENT heading (ledger.path) points against the zone's
 legal-flow arrow (more than 135 deg off), it is really driving, and it keeps doing so for 1.5 s in a row.
   - a parked or crawling vehicle is never judged (box jitter and drift are not driving)
   - a sideways move, a turn or a single noisy frame is not enough
   - each zone has its own arrow, so a junction can have several flows
-Auto heuristic: the same, against the learned dominant direction of the vehicle's cell.
+Whole-picture heuristic: the same, against the learned dominant direction of the vehicle's cell.
 Cells that are not learned yet, or two-way, are never judged.
 
 Two wizard settings of this violation (both only for looking at / testing the rule):
@@ -32,6 +33,8 @@ AGAINST_COS = math.cos(math.radians(135.0))   # "against" = more than 135 deg of
 class Counterflow(Violation):
     key = "counterflow"
     zone_key = "counterflow_zones"
+    whole_frame = True
+    needs_flow = True
     color = (255, 0, 255)
     auto = True
 
@@ -61,14 +64,14 @@ class Counterflow(Violation):
                           "test_reversed": reverse})
         return zones
 
-    def auto_zone(self, cfg, polygon, frame_size, flow):
-        zone = super().auto_zone(cfg, polygon, frame_size, flow)
+    def whole_frame_zone(self, cfg, polygon, frame_size, flow):
+        zone = super().whole_frame_zone(cfg, polygon, frame_size, flow)
         zone["show_flow"] = bool(cfg.get("show_flow", True))
         zone["invert"] = bool(cfg.get("invert_flow", False))
         return zone
 
     def evaluate(self, mgr, track_id, zones):
-        """Each zone: {"polygon": [...], "vector": (x, y)}, or the whole-frame zone of auto mode."""
+        """Each zone: {"polygon": [...], "vector": (x, y)}, or the whole-frame zone (nothing drawn)."""
         if track_id not in mgr.ledgers or not zones:
             return False
         ledger = mgr.ledgers[track_id]
@@ -82,8 +85,8 @@ class Counterflow(Violation):
                 del ledger.stop_timers[key]         # left the zones: the wrong-way run is broken
             return False
         index, zone = found
-        if zone.get("auto"):
-            return self._evaluate_auto(ledger, zone)
+        if zone.get("whole_frame"):
+            return self._evaluate_learned(ledger, zone)
 
         legal = unit(*zone.get("vector", (1.0, 0.0)))
         current = heading(ledger)                   # None while barely moving
@@ -91,7 +94,7 @@ class Counterflow(Violation):
                  and dot(current, legal) < AGAINST_COS)
         return self._sustained(ledger, (self.key, index), wrong)
 
-    def _evaluate_auto(self, ledger, zone) -> bool:
+    def _evaluate_learned(self, ledger, zone) -> bool:
         head = heading(ledger)                      # None while barely moving
         _t, cx, cy, _w = ledger.path[-1]
         width, height = zone["frame_size"]
@@ -99,7 +102,7 @@ class Counterflow(Violation):
         if zone.get("invert"):                      # the test: going WITH the learned flow counts as going against it
             verdict = {"with": "against", "against": "with"}.get(verdict, verdict)
         wrong = head is not None and is_driving(ledger) and verdict == "against"
-        return self._sustained(ledger, (self.key, "auto"), wrong)
+        return self._sustained(ledger, (self.key, "learned"), wrong)
 
     def _sustained(self, ledger, key, wrong_way: bool) -> bool:
         """True once the vehicle has headed the wrong way for WRONG_WAY_S in a row; one bad frame never counts."""
@@ -114,7 +117,7 @@ class Counterflow(Violation):
         return False
 
     def draw_zone(self, pipe, frame, index, zone):
-        if zone.get("auto"):
+        if zone.get("whole_frame"):
             if zone.get("show_flow", True):
                 zone["field"].draw(frame, invert=zone.get("invert", False))     # what was learned as the legal flow
         else:

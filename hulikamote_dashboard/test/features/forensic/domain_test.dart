@@ -386,38 +386,50 @@ void main() {
     test('a violation that needs a zone blocks starting until one is saved', () {
       final d = AnalysisDraft();
       d.setVideo(path: 'a.mp4', name: 'a.mp4', frame: '/f.jpg');
-      d.toggle('counterflow');
-      expect(d.missingZones, ['counterflow']);
+      d.toggle('pedestrian_lane');
+      expect(d.missingZones, ['pedestrian_lane']);
       expect(d.canStart, isFalse);
-      d.zones('counterflow').add({'polygon': <List<double>>[]});
+      d.zones('pedestrian_lane').add({'polygon': <List<double>>[]});
       expect(d.missingZones, isEmpty);
       expect(d.canStart, isTrue);
       d.toggle('no_plate'); // needs no zone
       expect(d.canStart, isTrue);
     });
 
-    test('automatic flow detection lets the automatic rules start without a zone', () {
+    test('counterflow needs no zone and the flow is learned on its own, but only when nothing is drawn', () {
       final d = AnalysisDraft();
       d.setVideo(path: 'a.mp4', name: 'a.mp4', frame: '/f.jpg');
       d.toggle('counterflow');
       d.toggle('pedestrian_lane');
-      expect(d.buildConfig()['flow_mode'], 'zones'); // the default is unchanged
-      d.settings.autoFlow = true;
+      expect(d.learnsFlow, isTrue);
       expect(d.buildConfig()['flow_mode'], 'auto');
       expect(d.missingZones, ['pedestrian_lane']); // other rules still need their zone
       d.toggle('pedestrian_lane');
       expect(d.canStart, isTrue);
+      d.zones('counterflow').add({'polygon': <List<double>>[]}); // a drawn zone (and its arrow) is used instead
+      expect(d.learnsFlow, isFalse);
+      expect(d.buildConfig()['flow_mode'], 'zones');
     });
 
-    test('every automatic rule starts without a zone, and its settings still travel in the payload', () {
+    test('the flow is learned only for the rules that use it', () {
       final d = AnalysisDraft();
       d.setVideo(path: 'a.mp4', name: 'a.mp4', frame: '/f.jpg');
-      for (final k in AnalysisDraft.autoFlowKeys) {
+      for (final k in ['truck_ban', 'swerving', 'illegal_turn', 'illegal_u_turn', 'signal_light', 'tricycle_on_highway', 'double_parking']) {
         d.toggle(k);
       }
-      // without the switch every one needs a zone, except the rules whose zone is optional
-      expect(d.missingZones.toSet(), AnalysisDraft.autoFlowKeys.difference(AnalysisDraft.zoneOptionalKeys));
-      d.settings.autoFlow = true;
+      expect(d.learnsFlow, isFalse);
+      expect(d.buildConfig()['flow_mode'], 'zones');
+      d.toggle('illegal_parking'); // a stopped car counts only while traffic drives past
+      expect(d.learnsFlow, isTrue);
+      expect(AnalysisDraft.wholeFrameKeys.containsAll(AnalysisDraft.flowKeys), isTrue);
+    });
+
+    test('every rule that needs no drawing starts without a zone, and its settings still travel in the payload', () {
+      final d = AnalysisDraft();
+      d.setVideo(path: 'a.mp4', name: 'a.mp4', frame: '/f.jpg');
+      for (final k in AnalysisDraft.wholeFrameKeys) {
+        d.toggle(k);
+      }
       expect(d.missingZones, isEmpty);
       expect(d.canStart, isTrue);
       final per = d.buildConfig()['per_violation_configs'] as Map;
@@ -426,10 +438,10 @@ void main() {
       expect(per['illegal_parking']['time_limit'], isNotNull);
     });
 
-    test('rules that cannot work without a drawing are not offered as automatic', () {
-      for (final k in ['pedestrian_lane', 'red_light', 'restricted_lane', 'blocking_intersection',
+    test('rules that cannot work without a drawing are not offered as whole-picture rules', () {
+      for (final k in ['pedestrian_lane', 'red_light', 'blocking_intersection',
         'sidewalk_driving', 'disregarding_signs', 'crossing_solid_line']) {
-        expect(AnalysisDraft.autoFlowKeys.contains(k), isFalse, reason: k);
+        expect(AnalysisDraft.wholeFrameKeys.contains(k), isFalse, reason: k);
       }
     });
 

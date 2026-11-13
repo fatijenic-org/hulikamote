@@ -16,7 +16,9 @@ class PipelineSettings {
   int evidenceGap = 5; // one evidence photo every N frames of a flagged car
   bool keepInputVideo = false;
   bool blurPrivacy = true; // TEMPORARY switch: off only for the team's own training videos (saved photos then show faces)
-  bool autoFlow = false; // learn which way traffic goes instead of drawing zones (the rules in autoFlowKeys)
+
+  /// When the video started, typed by the operator ('' = find it in the video). Also the way to test a ban hour.
+  String videoStart = '';
 }
 
 /// Everything the operator sets up before an analysis starts: the video, the violations,
@@ -68,6 +70,7 @@ class AnalysisDraft extends ChangeNotifier {
     duration = 0;
     trimStart = 0;
     trimEnd = null;
+    settings.videoStart = ''; // a time typed for one video is not the next one's
     _selected.clear();
     _configs.clear();
     notifyListeners();
@@ -198,8 +201,12 @@ class AnalysisDraft extends ChangeNotifier {
 
   bool needsZone(String key) => ViolationCatalog.of(key).needsZone;
 
-  /// Rules that can work without a drawn zone when the flow is detected automatically.
-  static const autoFlowKeys = {
+  /// Rules that need no drawing: with nothing drawn (and no sign placed) the whole picture is watched, so the whole frame is
+  /// captured instead of one area; a zone you do draw still limits the rule to where it is. ("Restricted lane": a camera that
+  /// watches only the reserved road needs no drawing; "Tricycle on a national highway" / "Truck ban": ticking the rule says the
+  /// whole view is a road where the ban applies; "Counterflow": the direction is learned from the traffic.)
+  /// The backend keeps the same list (Violation.whole_frame).
+  static const wholeFrameKeys = {
     'counterflow',
     'swerving',
     'illegal_u_turn',
@@ -207,23 +214,38 @@ class AnalysisDraft extends ChangeNotifier {
     'signal_light',
     'truck_ban',
     'tricycle_on_highway',
+    'restricted_lane',
     'illegal_loading',
     'double_parking',
     'illegal_parking',
   };
 
+  /// The rules among them that also need the traffic flow when they watch the whole picture: counterflow (which way is legal)
+  /// and parking / loading (a stopped vehicle counts only while other traffic drives past). The backend learns the flow by itself
+  /// then (Violation.needs_flow); no other rule has anything to do with it.
+  static const flowKeys = {'counterflow', 'illegal_loading', 'illegal_parking'};
+
+  /// The rule watches the whole picture: it needs no drawing and nothing is drawn or placed for it.
+  bool watchesWholePicture(String key) => wholeFrameKeys.contains(key) && zones(key).isEmpty && signCount(key) == 0;
+
+  /// The traffic flow has to be learned from the video: a selected rule that needs it watches the whole picture.
+  bool get learnsFlow => selection.any((k) => flowKeys.contains(k) && watchesWholePicture(k));
+
   /// "Crossing a solid line" needs no drawing: with no line drawn, the analysis finds the painted solid lines in the video
   /// (the switch in its editor, on unless the operator turned it off). A line that is drawn is used instead.
   bool findsLinesItself(String key) => key == 'crossing_solid_line' && ((config(key)['auto_lines'] as bool?) ?? true);
 
-  /// Rules that take a drawn zone but do not need one: with nothing drawn the whole picture is the zone ("Restricted lane":
-  /// a camera that watches only the reserved road needs no drawing; "Tricycle on a national highway": ticking the rule says the
-  /// whole view is a road where the ban applies; a drawn zone still limits the rule to where it is).
-  static const zoneOptionalKeys = {'restricted_lane', 'tricycle_on_highway'};
-
-  /// The overlay signs placed on the roads for "Restricted lane": [{type, x, y}] in the 1920x1080 reference space.
+  /// The overlay signs placed on the picture: for "Restricted lane" [{type, x, y}], for "Illegal loading / unloading" and
+  /// "Illegal parking" [{x, y, w, h}], in the 1920x1080 reference space.
   /// Temporary: they belong to this analysis only and are never written into the video.
   List<Map<String, dynamic>> signs(String key) => (config(key).putIfAbsent('signs', () => <dynamic>[]) as List).cast<Map<String, dynamic>>();
+
+  /// Rules where a placed overlay sign is a zone too ("Illegal loading / unloading", "Illegal parking": the sign's box is the banned
+  /// area, so a sign is enough and nothing needs drawing). Their signs are [{x, y, w, h}] in the same reference space.
+  static const signZoneKeys = {'illegal_loading', 'illegal_parking'};
+
+  /// How many overlay signs are placed for [key] (without creating the list).
+  int signCount(String key) => ((config(key)['signs'] as List?) ?? const []).length;
 
   /// The overlay crosswalks placed on the picture for "Pedestrian lane" (testing): [{x, y, scale, depth, angle, slant, stripes, wear}]
   /// in the 1920x1080 reference space. Each one IS a crosswalk zone; temporary, never written into the video.
@@ -236,10 +258,10 @@ class AnalysisDraft extends ChangeNotifier {
   bool zonesReady(String key) =>
       !needsZone(key) ||
       zones(key).isNotEmpty ||
+      (signZoneKeys.contains(key) && signCount(key) > 0) ||
       crosswalkCount(key) > 0 ||
-      (settings.autoFlow && autoFlowKeys.contains(key)) ||
       findsLinesItself(key) ||
-      zoneOptionalKeys.contains(key);
+      wholeFrameKeys.contains(key);
 
   /// Selected violations that still need a zone.
   List<String> get missingZones => [
@@ -271,7 +293,9 @@ class AnalysisDraft extends ChangeNotifier {
       'evidence_gap': settings.evidenceGap,
       'keep_input_video': settings.keepInputVideo,
       'blur_privacy': settings.blurPrivacy,
-      'flow_mode': settings.autoFlow ? 'auto' : 'zones',
+      'flow_mode': learnsFlow ? 'auto' : 'zones',
+      if (settings.videoStart.trim().isNotEmpty) 'video_start': settings.videoStart.trim(),
+      if (videoName != null) 'video_name': videoName,
       if (trimStart > 0.001) 'trim_start': trimStart,
       if (trimEnd != null) 'trim_end': trimEnd,
       'per_violation_configs': {for (final k in selected) k: config(k)},
@@ -281,6 +305,7 @@ class AnalysisDraft extends ChangeNotifier {
   void touch() => notifyListeners();
 
   void reset() {
+    settings.videoStart = '';
     videoPath = videoName = frameUrl = null;
     fps = 30;
     frameCount = 0;

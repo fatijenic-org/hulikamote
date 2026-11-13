@@ -37,7 +37,7 @@ def count_swings(values, amplitude: float) -> int:
 class Swerving(Violation):
     key = "swerving"
     zone_key = "swerving_zones"
-    auto = True
+    whole_frame = True
     color = (0, 255, 0)
 
     def evaluate(self, mgr, track_id, zones):

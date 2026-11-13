@@ -39,6 +39,7 @@ class TicketTile extends StatelessWidget {
     }
     final span = ticket.span;
     if (span != null) parts.add('${formatVideoTime(span.start)}–${formatVideoTime(span.end)}');
+    if (ticket.time != null) parts.add(ticket.time!.short);
     parts.add('${ticket.frameCount} photo${ticket.frameCount == 1 ? '' : 's'}');
     return parts.join(' · ');
   }

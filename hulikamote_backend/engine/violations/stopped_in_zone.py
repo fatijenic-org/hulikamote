@@ -7,8 +7,8 @@ stopped car stays below this) for longer than the zone's own time limit. Each vi
 (geometry.stopped_too_long keys it by violation), so one car can be timed for several at once.
 A violation may judge only some vehicle types (default_classes, e.g. buses and tricycles for loading):
 a zone with a "classes" list ignores every other type; a zone without one judges all of them.
-Automatic zones (the whole picture, nothing drawn) only flag a vehicle that is stopped while other traffic keeps driving
-past it along the road (engine/violations/scene.py): the front of a red-light queue is stopped too, and is not parked.
+A whole-picture zone (nothing drawn) of a rule with `needs_flow` only flags a vehicle that is stopped while other traffic keeps
+driving past it along the road (engine/violations/scene.py): the front of a red-light queue is stopped too, and is not parked.
 """
 from engine.violations.base import Violation
 from engine.violations.geometry import STOP_SPEED, point_in_polygon, stopped_too_long
@@ -36,9 +36,9 @@ class StoppedInZone(Violation):
         extra = self._zone_extra({"classes": cfg.get("banned_classes")})    # the wizard's "vehicle types" picker
         return [{"coordinates": z["polygon"], "time_limit": limit, **extra} for z in cfg.get("rois", []) if z.get("polygon")]
 
-    def auto_zone(self, cfg, polygon, frame_size, flow):
+    def whole_frame_zone(self, cfg, polygon, frame_size, flow):
         zone = {"polygon": polygon, "time_limit": float(cfg.get("time_limit", self.default_limit_s)),
-                "auto": True, "field": flow, "frame_size": frame_size}
+                "whole_frame": True, "field": flow, "frame_size": frame_size}
         zone.update(self._zone_extra({"classes": cfg.get("banned_classes")}))
         return zone
 
@@ -59,7 +59,7 @@ class StoppedInZone(Violation):
         zone = next((z for z in zones if point_in_polygon(cx, cy, z["polygon"]) and self._judged(ledger, z)), None)
         limit = (zone or {}).get("time_limit") or self.default_limit_s
         flowing = True
-        if zone is not None and zone.get("auto") and ledger.get_speed() < STOP_SPEED:
+        if zone is not None and zone.get("whole_frame") and self.needs_flow and ledger.get_speed() < STOP_SPEED:
             flowing = recently_flowing(mgr, ledger, zone, self.key)       # keep the memory fresh every frame
         if stopped_too_long(ledger, self.key, zone is not None, limit) and flowing:
             ledger.violations.add(self.key)

@@ -3,6 +3,8 @@ Operator-driven ticket merge ("Same car"). Pure functions, no I/O.
 """
 import re
 
+from engine.video_clock import earlier_time
+
 _UNIDENTIFIED = ("unidentified", "no_plate_found", "")
 
 
@@ -57,6 +59,9 @@ def merge_tickets(keep: dict, drop: dict) -> dict:
     out["track_id"] = " & ".join(str(i) for i in ids)
     out["db_ids"] = _unique(list(keep.get("db_ids", [])) + list(drop.get("db_ids", [])))
     out["flags"] = []   # recomputed by the caller
+    when = earlier_time(keep.get("time"), drop.get("time"))
+    if when:
+        out["time"] = when       # the car was first seen at the earlier of the two
     return out
 
 

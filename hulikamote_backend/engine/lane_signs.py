@@ -141,7 +141,14 @@ def _sprite(sign_type: str, width: int, angle: float, tilt: float, realistic: bo
     """The finished sign as it is laid on the picture: (BGR float32, alpha 0..1, shadow 0..1, x offset, y offset), the offsets being where
     the top-left pixel sits relative to the spot the sign stands on. Cached: the same sign is drawn on every frame of the video."""
     bgr, alpha = _flat_sign(sign_type, width)
-    corners = np.float32(sign_corners(width, angle, tilt))
+    return finish_sprite(bgr, alpha, sign_corners(width, angle, tilt), width, realistic, light)
+
+
+def finish_sprite(bgr: np.ndarray, alpha: np.ndarray, corners, width: int, realistic: bool, light: int):
+    """Lays a flat, upright picture of an object (BGR + alpha, drawn larger than it will be shown) on the four `corners` (relative to the spot
+    it stands on) and gives it the look of a filmed object when `realistic`. Shared by the signs and the other overlay objects
+    (engine/overlay_objects.py). Returns (BGR float32, alpha 0..1, shadow 0..1, x offset, y offset)."""
+    corners = np.float32(corners)
     pad = int(0.14 * width) + 4                                   # room for the soft edge and the shadow
     low, high = corners.min(axis=0), corners.max(axis=0)
     out_w, out_h = int(math.ceil(high[0] - low[0])) + 2 * pad, int(math.ceil(high[1] - low[1])) + 2 * pad
@@ -179,7 +186,13 @@ def draw_sign(frame: np.ndarray, at, sign_type: str, scale: float = 1.0, angle: 
     look = look_of({"scale": scale, "angle": angle, "tilt": tilt})
     fh, fw = frame.shape[:2]
     width = int(round(sign_width(fw, look["scale"])))
-    face, cover, shadow, ox, oy = _sprite(sign_type, width, round(look["angle"] * 2) / 2, round(look["tilt"] * 2) / 2, bool(realistic), _light_of(frame))
+    blend(frame, _sprite(sign_type, width, round(look["angle"] * 2) / 2, round(look["tilt"] * 2) / 2, bool(realistic), _light_of(frame)), at)
+
+
+def blend(frame: np.ndarray, sprite, at) -> None:
+    """Lays a finished sprite (see finish_sprite) on the picture, standing on `at` (frame pixels). Changes `frame`."""
+    face, cover, shadow, ox, oy = sprite
+    fh, fw = frame.shape[:2]
     x0, y0 = int(round(at[0])) + ox, int(round(at[1])) + oy
     h, w = cover.shape
     xs, ys, xe, ye = max(x0, 0), max(y0, 0), min(x0 + w, fw), min(y0 + h, fh)

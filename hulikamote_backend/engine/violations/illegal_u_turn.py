@@ -17,7 +17,7 @@ MIN_SIDEWAYS_WIDTHS = 0.75
 class IllegalUTurn(Violation):
     key = "illegal_u_turn"
     zone_key = "illegal_u_turn_zones"
-    auto = True
+    whole_frame = True
     color = (0, 200, 255)
 
     MIN_PATH_POINTS = 4

@@ -6,13 +6,13 @@ distant or tinted indicator is hard to see), so it is not a headline result.
 Heuristic: inside a zone, the vehicle's heading swings by 45 deg or more (a turn) and neither its
 left nor its right edge showed a blinking amber light during the last 5 s. Each turn is judged once.
 prepare() samples the amber share of each vehicle's left / right 30% edge every frame into
-ledger.blink; is_blinking (engine/traffic_light.py) wants a steady on/off rhythm at 0.5 - 3 Hz, so
+ledger.blink (engine/violations/indicators.py, shared with illegal_parking); is_blinking (engine/traffic_light.py) wants a steady on/off rhythm at 0.5 - 3 Hz, so
 constantly amber paint or a parking light does not count as blinking.
 """
-from engine.slicer import NumpySlicer
-from engine.traffic_light import amber_fraction, is_blinking
-from engine.violations.base import VEHICLE_CLASSES, Violation
+from engine.traffic_light import is_blinking
+from engine.violations.base import Violation
 from engine.violations.geometry import TURN_MIN_ANGLE_COS, dot, point_in_polygon, turn_headings
+from engine.violations.indicators import sample_indicators
 
 SIGNAL_LOOKBACK_S = 5.0
 
@@ -20,23 +20,14 @@ SIGNAL_LOOKBACK_S = 5.0
 class SignalLight(Violation):
     key = "signal_light"
     zone_key = "signal_light_zones"
-    auto = True
+    whole_frame = True
     color = (0, 165, 255)
 
     MIN_PATH_POINTS = 4
-    EDGE_SHARE = 0.3
 
     def prepare(self, pipe, frame, detections, zones, t):
-        """Record the amber share of each vehicle's left / right edge (where indicators sit)."""
-        for det in detections:
-            ledger = pipe.ledger_manager.ledgers.get(det.track_id)
-            if ledger is None or det.cls not in VEHICLE_CLASSES or not ledger.path:
-                continue
-            crop = NumpySlicer.crop_box(frame, det.bbox)
-            if crop.size == 0:
-                continue
-            edge = max(1, int(crop.shape[1] * self.EDGE_SHARE))
-            ledger.blink.append((ledger.path[-1][0], amber_fraction(crop[:, :edge]), amber_fraction(crop[:, -edge:])))
+        """Record the amber share of each vehicle's left / right edge (where indicators sit); see indicators.py."""
+        sample_indicators(pipe, frame, detections)
 
     def evaluate(self, mgr, track_id, zones):
         """Each zone: {"polygon": [...]}."""
