@@ -37,7 +37,7 @@ def still_for(ledger) -> float:
 class DoubleParking(StoppedInZone):
     key = "double_parking"
     zone_key = "double_parking_zones"
-    auto = True
+    whole_frame = True
     color = (200, 120, 255)
     default_limit_s = 8.0
 

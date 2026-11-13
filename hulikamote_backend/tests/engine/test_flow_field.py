@@ -135,10 +135,10 @@ def test_a_vehicle_flagged_wrong_way_stops_teaching():
     assert field.samples == before
 
 
-# ─── counterflow in auto mode ────────────────────────────────────────────────
+# ─── counterflow on the whole picture ────────────────────────────────────────────────
 
-def auto_zone(field):
-    return {"polygon": [[0, 0], [FW, 0], [FW, FH], [0, FH]], "auto": True, "field": field, "frame_size": (FW, FH)}
+def whole_zone(field):
+    return {"polygon": [[0, 0], [FW, 0], [FW, FH], [0, FH]], "whole_frame": True, "field": field, "frame_size": (FW, FH)}
 
 
 def run_counterflow(points, field, tid=1):
@@ -147,7 +147,7 @@ def run_counterflow(points, field, tid=1):
     for i, (x, y) in enumerate(points):
         det = Det(tid, [int(x - W / 2), int(y - H), W, H])
         mgr.update([det], i / FPS)
-        flagged = REGISTRY["counterflow"].evaluate(mgr, tid, [auto_zone(field)]) or flagged
+        flagged = REGISTRY["counterflow"].evaluate(mgr, tid, [whole_zone(field)]) or flagged
     return flagged, mgr
 
 
@@ -184,30 +184,46 @@ def test_auto_counterflow_ignores_a_creeping_car():
 
 # ─── the pipeline hands out the whole-frame zone only when asked ─────────────
 
-def pipeline_with(rois, mode):
+def pipeline_with(rois, mode, active=("counterflow", "swerving")):
     pipe = object.__new__(DecoupledPipeline)
     pipe.rois, pipe.native_w, pipe.native_h = rois, 0, 0
     pipe.flow_mode, pipe.flow = mode, FlowField()
+    pipe.registry = SimpleNamespace(active_violations=list(active))
     return pipe
 
 
-def test_auto_mode_gives_counterflow_and_swerving_a_whole_frame_zone():
-    scaled = pipeline_with({}, "auto")._get_scaled_rois(FW, FH)
-    for key in ("counterflow_zones", "swerving_zones"):
-        zone = scaled[key][0]
-        assert zone["auto"] and zone["polygon"] == [[0, 0], [FW, 0], [FW, FH], [0, FH]]
-    assert scaled["restricted_lane_zones"] == []                                           # other rules still need drawn zones
+def test_a_rule_with_nothing_drawn_gets_a_whole_frame_zone_in_any_flow_mode():
+    for mode in ("auto", "zones"):
+        scaled = pipeline_with({}, mode)._get_scaled_rois(FW, FH)
+        for key in ("counterflow_zones", "swerving_zones"):
+            zone = scaled[key][0]
+            assert zone["whole_frame"] and zone["polygon"] == [[0, 0], [FW, 0], [FW, FH], [0, FH]]
+        assert scaled["red_light_zones"] == []                                             # other rules still need drawn zones
 
 
-def test_drawn_zones_take_priority_over_auto_mode():
+def test_drawn_zones_take_priority_over_the_whole_frame_zone():
     drawn = {"counterflow_zones": [{"polygon": [[0, 0], [100, 0], [100, 100]], "vector": (1.0, 0.0)}]}
     scaled = pipeline_with(drawn, "auto")._get_scaled_rois(FW, FH)
-    assert len(scaled["counterflow_zones"]) == 1 and not scaled["counterflow_zones"][0].get("auto")
+    assert len(scaled["counterflow_zones"]) == 1 and not scaled["counterflow_zones"][0].get("whole_frame")
 
 
-def test_zones_mode_never_adds_a_zone():
-    scaled = pipeline_with({}, "zones")._get_scaled_rois(FW, FH)
-    assert scaled["counterflow_zones"] == [] and scaled["swerving_zones"] == []
+def test_a_rule_that_is_not_on_gets_no_zone():
+    scaled = pipeline_with({}, "zones", active=("swerving",))._get_scaled_rois(FW, FH)
+    assert scaled["counterflow_zones"] == [] and scaled["swerving_zones"][0]["whole_frame"]
+
+
+def test_the_flow_is_learned_only_when_a_rule_needs_it_and_nothing_is_drawn():
+    drawn = {"counterflow_zones": [{"polygon": [[0, 0], [100, 0], [100, 100]], "vector": (1.0, 0.0)}]}
+    assert pipeline_with({}, "zones", active=("counterflow",)).learns_flow                # direction is learned from the traffic
+    assert pipeline_with({}, "zones", active=("illegal_parking",)).learns_flow            # the "traffic drives past" check
+    assert not pipeline_with({}, "zones", active=("truck_ban", "swerving", "illegal_turn")).learns_flow
+    assert not pipeline_with(drawn, "zones", active=("counterflow",)).learns_flow         # a drawn arrow is used instead
+    assert pipeline_with({}, "auto", active=("truck_ban",)).learns_flow                   # the config can still ask for it
+
+
+def test_the_rules_that_need_the_flow_are_exactly_these():
+    from engine.violations import ZONE_VIOLATIONS
+    assert {v.key for v in ZONE_VIOLATIONS if v.needs_flow} == {"counterflow", "illegal_parking", "illegal_loading"}
 
 
 def test_the_flow_mode_is_read_from_the_config(tmp_path, monkeypatch):
@@ -245,7 +261,7 @@ def test_a_creeping_car_does_not_teach_a_direction():
 # ─── the test options: show / hide the arrows, and the reversed flow ─────────
 
 def reversed_zone(field):
-    return {**auto_zone(field), "invert": True}
+    return {**whole_zone(field), "invert": True}
 
 
 def run_reversed(points, field, tid=1):
@@ -268,11 +284,11 @@ def test_the_reversed_flow_test_still_never_judges_what_is_not_learned():
     assert not run_reversed([(200 + 9 * i, 360) for i in range(40)], FlowField())
 
 
-def test_the_auto_zone_carries_the_two_settings_and_defaults_to_normal():
+def test_the_whole_frame_zone_carries_the_two_settings_and_defaults_to_normal():
     counterflow = REGISTRY["counterflow"]
-    plain = counterflow.auto_zone({}, [[0, 0]], (FW, FH), FlowField())
+    plain = counterflow.whole_frame_zone({}, [[0, 0]], (FW, FH), FlowField())
     assert plain["show_flow"] is True and plain["invert"] is False
-    test = counterflow.auto_zone({"show_flow": False, "invert_flow": True}, [[0, 0]], (FW, FH), FlowField())
+    test = counterflow.whole_frame_zone({"show_flow": False, "invert_flow": True}, [[0, 0]], (FW, FH), FlowField())
     assert test["show_flow"] is False and test["invert"] is True
 
 
@@ -293,15 +309,15 @@ def test_the_flow_arrows_can_be_hidden_and_the_test_always_carries_its_label():
     black = lambda: np.zeros((FH, FW, 3), dtype=np.uint8)
 
     shown = black()
-    counterflow.draw_zone(None, shown, 0, {**auto_zone(field), "show_flow": True})
+    counterflow.draw_zone(None, shown, 0, {**whole_zone(field), "show_flow": True})
     assert shown.any()
 
     hidden = black()
-    counterflow.draw_zone(None, hidden, 0, {**auto_zone(field), "show_flow": False})
+    counterflow.draw_zone(None, hidden, 0, {**whole_zone(field), "show_flow": False})
     assert not hidden.any()                                                      # nothing drawn at all
 
     hidden_test = black()
-    counterflow.draw_zone(None, hidden_test, 0, {**auto_zone(field), "show_flow": False, "invert": True})
+    counterflow.draw_zone(None, hidden_test, 0, {**whole_zone(field), "show_flow": False, "invert": True})
     assert hidden_test[:60, :400].any() and not hidden_test[400:].any()          # only the TEST label, top-left
 
 

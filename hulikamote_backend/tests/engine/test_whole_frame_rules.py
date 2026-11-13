@@ -1,32 +1,34 @@
 """
-The automatic (no drawn zone) mode of the zone rules: flow_mode "auto" gives every rule marked `auto` one whole-frame zone
-built from the wizard's own settings for it. Synthetic traffic only (no model, no video).
+The rules that need no drawing: every rule marked `whole_frame` that is on, with nothing drawn, gets one zone, the whole
+picture, built from the wizard's own settings for it. Synthetic traffic only (no model, no video).
 """
 import math
+from types import SimpleNamespace
 
 from engine.flow_field import FlowField
 from engine.ledger import ActiveLedgerManager
-from engine.pipeline import AUTO_ZONE_KEYS, DecoupledPipeline
+from engine.pipeline import WHOLE_FRAME_ZONE_KEYS, DecoupledPipeline
 from engine.violations import REGISTRY, ZONE_VIOLATIONS
 from tests.engine.test_flow_field import FH, FW, RIGHT, teach
 from tests.helpers import FPS, H, W, Det, go_up_then
 
 WHOLE = [[0, 0], [FW, 0], [FW, FH], [0, FH]]
 BIG = (2000, 2000)                    # the picture the go_up_then / U-turn paths live in
-AUTO_KEYS = {"counterflow", "swerving", "illegal_u_turn", "illegal_turn", "signal_light", "truck_ban",
-             "tricycle_on_highway", "illegal_loading", "double_parking", "illegal_parking"}
+WHOLE_FRAME_KEYS = {"counterflow", "swerving", "illegal_u_turn", "illegal_turn", "signal_light", "truck_ban",
+                    "tricycle_on_highway", "restricted_lane", "illegal_loading", "double_parking", "illegal_parking"}
 
 
 def zone_of(key, cfg=None, field=None, size=(FW, FH)):
     whole = [[0, 0], [size[0], 0], [size[0], size[1]], [0, size[1]]]
-    return REGISTRY[key].auto_zone(cfg or {}, whole, size, field or FlowField())
+    return REGISTRY[key].whole_frame_zone(cfg or {}, whole, size, field or FlowField())
 
 
-def pipeline_with(rois, settings=None):
+def pipeline_with(rois, settings=None, active=None, flow_mode="zones"):
     pipe = object.__new__(DecoupledPipeline)
     pipe.rois, pipe.native_w, pipe.native_h = rois, 0, 0
-    pipe.flow_mode, pipe.flow = "auto", FlowField()
+    pipe.flow_mode, pipe.flow = flow_mode, FlowField()
     pipe.violation_cfg = settings or {}
+    pipe.registry = SimpleNamespace(active_violations=list(WHOLE_FRAME_KEYS if active is None else active))
     return pipe
 
 
@@ -61,20 +63,26 @@ def standing(i):
     return 900, 360
 
 
-# ─── which rules are automatic, and what zone they get ───────────────────────
+# ─── which rules need no drawing, and what zone they get ─────────────────────
 
-def test_the_automatic_rules_are_exactly_these():
-    assert {v.key for v in ZONE_VIOLATIONS if v.auto} == AUTO_KEYS
-    assert set(AUTO_ZONE_KEYS) == {v.zone_key for v in ZONE_VIOLATIONS if v.auto}
+def test_the_rules_that_need_no_drawing_are_exactly_these():
+    assert {v.key for v in ZONE_VIOLATIONS if v.whole_frame} == WHOLE_FRAME_KEYS
+    assert set(WHOLE_FRAME_ZONE_KEYS) == {v.zone_key for v in ZONE_VIOLATIONS if v.whole_frame}
 
 
-def test_auto_mode_gives_every_automatic_rule_the_whole_frame_and_leaves_the_others_alone():
-    scaled = pipeline_with({})._get_scaled_rois(FW, FH)
-    for v in ZONE_VIOLATIONS:
-        if v.auto:
-            assert scaled[v.zone_key][0]["auto"] and scaled[v.zone_key][0]["polygon"] == WHOLE, v.key
-        else:
-            assert scaled[v.zone_key] == [], v.key              # pedestrian lane, red light, signs ... still need a drawing
+def test_every_rule_that_is_on_gets_the_whole_frame_whatever_the_flow_mode_and_the_others_are_left_alone():
+    for mode in ("zones", "auto"):
+        scaled = pipeline_with({}, active=[v.key for v in ZONE_VIOLATIONS], flow_mode=mode)._get_scaled_rois(FW, FH)
+        for v in ZONE_VIOLATIONS:
+            if v.whole_frame:
+                assert scaled[v.zone_key][0]["whole_frame"] and scaled[v.zone_key][0]["polygon"] == WHOLE, v.key
+            else:
+                assert scaled[v.zone_key] == [], v.key          # pedestrian lane, red light, signs ... still need a drawing
+
+
+def test_a_rule_that_is_off_gets_no_zone():
+    scaled = pipeline_with({}, active=["truck_ban"])._get_scaled_rois(FW, FH)
+    assert scaled["truck_ban_zones"][0]["whole_frame"] and scaled["illegal_turn_zones"] == []
 
 
 def test_the_zone_carries_the_settings_the_enforcer_chose():
@@ -97,10 +105,10 @@ def test_without_settings_the_rules_use_their_own_defaults():
     assert zone_of("illegal_turn", {"banned_turns": ["up"]})["banned_turns"] == ["left"]     # nonsense is ignored
 
 
-def test_a_drawn_zone_always_wins_over_the_automatic_one():
+def test_a_drawn_zone_always_wins_over_the_whole_frame():
     drawn = {"truck_ban_zones": [{"polygon": [[0, 0], [100, 0], [100, 100]], "banned_classes": ["truck"]}]}
     scaled = pipeline_with(drawn)._get_scaled_rois(FW, FH)
-    assert len(scaled["truck_ban_zones"]) == 1 and not scaled["truck_ban_zones"][0].get("auto")
+    assert len(scaled["truck_ban_zones"]) == 1 and not scaled["truck_ban_zones"][0].get("whole_frame")
 
 
 # ─── U-turn and turns: no zone, no arrow ─────────────────────────────────────
@@ -237,5 +245,5 @@ def test_auto_signal_light_judges_a_turn_anywhere_in_the_picture():
 
 def test_auto_double_parking_runs_without_a_drawn_zone():
     zone = zone_of("double_parking", {"time_limit": 5}, learned_road())
-    assert zone["auto"] and zone["time_limit"] == 5.0
+    assert zone["whole_frame"] and zone["time_limit"] == 5.0
     assert not run_scene({1: ("car", parked), 2: ("car", passing)}, 120, REGISTRY["double_parking"], zone)   # nobody beside it

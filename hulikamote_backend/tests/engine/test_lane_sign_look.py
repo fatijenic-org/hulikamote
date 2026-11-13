@@ -156,7 +156,7 @@ def test_a_zones_signs_keep_their_look_and_the_realism_switch():
 
 def test_the_whole_picture_zone_draws_its_signs_with_their_look():
     cfg = {"signs": [{"type": "bus_only", "x": 960, "y": 540, "angle": 90}], "signs_realistic": False}
-    zone = LANE.auto_zone(cfg, [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], (1920, 1080), None)
+    zone = LANE.whole_frame_zone(cfg, [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], (1920, 1080), None)
     assert zone["signs"][0]["look"] == {"scale": 1.0, "angle": 90.0, "tilt": 0.0} and zone["sign_realistic"] is False
     img, base = frame(), frame()
     LANE.draw_zone(None, img, 0, zone)

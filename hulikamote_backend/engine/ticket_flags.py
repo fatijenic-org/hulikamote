@@ -15,6 +15,8 @@ Flag shape: {"type", "detail", "other_uid"?, "frame_index"?}
 import math
 from typing import Callable
 
+from engine.video_clock import retime
+
 # Operator-adjustable sensitivity, 1 (strict, fewest flags) .. 7 (sensitive, most flags).
 # (jump_factor, gap_s, min_iou):
 #   jump_factor  centre displacement > jump_factor * previous box's longer side = identity_jump
@@ -119,11 +121,22 @@ def find_duplicates(tickets: list[dict], distance: Callable[[str, str], int], se
     return out
 
 
+def find_time_flags(ticket: dict) -> list[dict]:
+    """A ticket of a rule that only holds at certain hours, from a video whose time is not known: a human must check the time."""
+    time = ticket.get("time") or {}
+    if not time.get("needs_check"):
+        return []
+    return [{"type": "time_unconfirmed",
+             "detail": f"{time.get('note') or 'The time of this video is not known.'} "
+                       "This rule only holds at certain hours: check the time before confirming."}]
+
+
 def annotate_tickets(tickets: list[dict], distance: Callable[[str, str], int], sensitivity=DEFAULT_SENSITIVITY) -> None:
-    """Give every ticket a `ticket_uid` and a `flags` list (in place)."""
+    """Give every ticket a `ticket_uid` and a `flags` list (in place). A ticket's time follows its first photo."""
     import uuid
     for t in tickets:
         t.setdefault("ticket_uid", uuid.uuid4().hex[:12])
+        retime(t)
     dupes = find_duplicates(tickets, distance, sensitivity)
     for t in tickets:
-        t["flags"] = find_identity_jumps(t, sensitivity) + dupes[t["ticket_uid"]]
+        t["flags"] = find_identity_jumps(t, sensitivity) + dupes[t["ticket_uid"]] + find_time_flags(t)

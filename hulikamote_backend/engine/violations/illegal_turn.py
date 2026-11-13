@@ -7,7 +7,7 @@ since it entered, now points along the arrow (within 45 deg), and did NOT alread
 entry (driving straight along the arrow is not a turn). Headings need half a box width (at least
 15 px) of travel, so a stopped car's box jitter never counts. See geometry.turned_into.
 
-Automatic (flow_mode "auto", nothing drawn): the whole picture is the zone and the enforcer sets which turns are
+Whole picture (nothing drawn): the whole picture is the zone and the enforcer sets which turns are
 banned at this camera (banned_turns: "left" and / or "right", default left). A vehicle is flagged when its heading
 swings 45 to 150 deg (wider is a U-turn) toward a banned side since it first appeared. See geometry.turned_side.
 """
@@ -19,13 +19,13 @@ class IllegalTurn(Violation):
     key = "illegal_turn"
     zone_key = "illegal_turn_zones"
     color = (0, 128, 255)
-    auto = True
+    whole_frame = True
 
     MIN_PATH_POINTS = 4
 
-    def auto_zone(self, cfg, polygon, frame_size, flow):
+    def whole_frame_zone(self, cfg, polygon, frame_size, flow):
         banned = [s for s in (cfg.get("banned_turns") or ["left"]) if s in ("left", "right")]
-        return {"polygon": polygon, "auto": True, "banned_turns": banned or ["left"]}
+        return {"polygon": polygon, "whole_frame": True, "banned_turns": banned or ["left"]}
 
     def parse_zone(self, raw):
         if not raw.get("coordinates"):
@@ -50,7 +50,7 @@ class IllegalTurn(Violation):
             if not point_in_polygon(cx, cy, zone["polygon"]):
                 continue
             key = (self.key, i)
-            if zone.get("auto"):
+            if zone.get("whole_frame"):
                 hit = turned_side(ledger, key) in zone["banned_turns"]
             else:
                 hit = turned_into(ledger, key, zone.get("vector"))

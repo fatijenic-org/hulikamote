@@ -12,7 +12,7 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 import shutil
 from engine.ticket_photos import photo_names
 from engine.video_window import frame_window, number_or_none
@@ -150,7 +150,11 @@ def _plate_stop(task_id: str) -> str | None:
 
 def _ticket_from_ledger(lt: dict, config: dict) -> dict:
     """The report's ticket for one vehicle the ledger finished."""
-    return {
+    from engine.video_clock import hours_matter, ticket_time
+    metas = list(lt.get("evidence_meta", []))
+    first = min((m["t"] for m in metas if m.get("t") is not None), default=None)
+    when = ticket_time(config.get("video_clock"), first, hours_matter(config, lt["violations"]))
+    ticket = {
         "track_id": lt["track_id"],
         "violations": lt["violations"],
         "plate_text": lt["plate_text"],
@@ -169,6 +173,9 @@ def _ticket_from_ledger(lt: dict, config: dict) -> dict:
             "violation_settings": {v: config.get("per_violation_configs", {}).get(v) for v in lt["violations"]},
         },
     }
+    if when:        # when it happened, and where that time came from (or: the hour matters and it is not known)
+        ticket["time"] = when
+    return ticket
 
 
 def _read_ticket_plate(task_id: str, t: dict, config: dict, written: list, on_crop=None) -> None:
@@ -530,8 +537,22 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         trim_start = number_or_none(config.get("trim_start")) or 0.0
         trim_end = number_or_none(config.get("trim_end"))
 
-        # flow_mode "auto": learn which way traffic goes from the first seconds of the clip (no zones or arrows needed)
-        if pipeline.flow_mode == "auto" and float(config.get("flow_prescan_seconds", 60)) > 0:
+        # Rules that only hold at certain hours (truck ban hours), or a start time typed by the operator: find the time of the
+        # video (typed > clock in the picture > the file's own information > file name; engine/video_clock.py)
+        from engine.video_clock import clock_wanted, resolve_clock
+        if clock_wanted(config):
+            forensic_tasks[task_id]["message"] = "Finding the time of the video..."
+            clock = resolve_clock(video_path, start_text=config.get("video_start"), name=config.get("video_name"),
+                                  trim_start=trim_start)
+            pipeline.clock = clock                       # the rules read it frame by frame
+            config["video_clock"] = clock.to_dict()      # the tickets read it
+            forensic_tasks[task_id]["clock"] = clock.to_dict()
+            log.info(f"[Forensic] Time of the video: {clock.to_dict()}")
+            forensic_tasks[task_id]["message"] = ""
+
+        # A rule that needs the traffic flow (counterflow, parking, loading) is on with nothing drawn, or flow_mode is "auto":
+        # learn which way traffic goes from the first seconds of the clip (no zones or arrows needed)
+        if pipeline.learns_flow and float(config.get("flow_prescan_seconds", 60)) > 0:
             from engine.flow_prescan import prescan_flow
             forensic_tasks[task_id]["message"] = "Learning the traffic flow..."
             prescan_seconds = float(config.get("flow_prescan_seconds", 60))
@@ -846,6 +867,8 @@ async def use_wizard_for_live(config: dict):
         if key in existing:
             config[key] = existing[key]
     config.setdefault("camera_id", existing.get("camera_id", "live"))
+    if str(config.get("video_start") or "").strip():          # "pretend it is 7:30": rules with hours use it live
+        config["clock_start"] = config["video_start"]
     with open(stream.CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
@@ -918,6 +941,53 @@ async def road_markings(file_path: str):
         "found": {"stop_lines": len(found["stop_lines"]), "crosswalks": len(found["crosswalks"]),
                   "solid_lines": len(solid), "dashed_lines": len(found["lane_lines"]) - len(solid)},
     }
+
+
+@router.get('/overlay-object', dependencies=[Depends(local_only)])
+def overlay_object(kind: str = "sign", scale: float = 1.0, angle: float = 0.0, tilt: float = 0.0, stand: str = "",
+                   realistic: bool = True, frame_width: int = 1920):
+    """An overlay object (hydrant, sign on a pole ...) as a PNG with see-through parts, for the wizard to draw on the first frame. The
+    headers X-Offset-X / X-Offset-Y say where its top-left pixel sits relative to the spot it stands on, in pixels of a picture
+    `frame_width` wide. Same drawing as the photos (engine/overlay_objects.py)."""
+    from engine import overlay_objects
+    png, ox, oy = overlay_objects.preview(kind, scale, angle, tilt, stand or None, realistic, min(max(frame_width, 320), 4096))
+    return Response(content=png, media_type="image/png", headers={
+        "X-Offset-X": str(ox), "X-Offset-Y": str(oy), "Access-Control-Expose-Headers": "X-Offset-X, X-Offset-Y", "Cache-Control": "max-age=3600"})
+
+
+class OverlayLineRequest(BaseModel):
+    points: list[list[float]]
+    look: dict = {}
+    realistic: bool = True
+
+
+@router.post('/overlay-line', dependencies=[Depends(local_only)])
+def overlay_line(request: OverlayLineRequest):
+    """Road paint along a line (points in the 1920x1080 reference space) as a PNG with see-through parts, for the wizard to draw on the first
+    frame. The headers X-Offset-X / X-Offset-Y say where its top-left pixel sits on the picture. Same drawing as the photos (engine/line_paint.py)."""
+    from engine import line_paint
+    png, ox, oy = line_paint.preview(request.points, request.look, request.realistic)
+    if not png:
+        raise HTTPException(status_code=422, detail="A line needs two or more points")
+    return Response(content=png, media_type="image/png", headers={
+        "X-Offset-X": str(ox), "X-Offset-Y": str(oy), "Access-Control-Expose-Headers": "X-Offset-X, X-Offset-Y"})
+
+
+@router.get('/video-clock', dependencies=[Depends(local_only)])
+async def video_clock(file_path: str, video_start: str = "", trim_start: float = 0.0):
+    """What time of day is this video (a file on this laptop, found by its path)? The same search the analysis does, so the
+    operator sees the answer - and where it came from - before starting, and can type the right time if it is wrong or missing.
+    {start, source, label, confirmed, note, daylight}; `start` is null when no real time was found."""
+    from clip_cutter import VIDEO_EXTENSIONS
+    from engine.video_clock import resolve_clock
+
+    source = Path(file_path)
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="That video was not found")
+    if source.suffix.lower() not in VIDEO_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="That does not look like a video file")
+    clock = await asyncio.to_thread(resolve_clock, source, start_text=video_start, trim_start=max(trim_start, 0.0))
+    return clock.to_dict()
 
 
 @router.get('/video-frame', dependencies=[Depends(local_only)])

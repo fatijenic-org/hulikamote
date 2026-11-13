@@ -42,7 +42,7 @@ def pipeline(active, cfg=None, drawn=None, flow_mode="zones"):
     return pipe
 
 
-def test_with_nothing_drawn_the_whole_picture_is_the_lane_in_any_flow_mode():
+def test_with_nothing_drawn_the_whole_picture_is_the_lane():
     for mode in ("zones", "auto"):
         scaled = pipeline(["restricted_lane"], {"allowed_classes": ["bus"]}, flow_mode=mode)._get_scaled_rois(960, 540)
         (zone,) = scaled["restricted_lane_zones"]

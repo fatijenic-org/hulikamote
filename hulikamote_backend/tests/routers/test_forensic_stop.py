@@ -40,6 +40,7 @@ class FakePipeline:
 
     def __init__(self, config_path):
         self.flow_mode = "zones"
+        self.learns_flow = False
         self.ledger_manager = FakeLedgerManager(list(type(self).tickets), dict(type(self).ledgers))
 
     def process_frame(self, frame, idx, timestamp=None):

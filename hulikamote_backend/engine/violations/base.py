@@ -27,7 +27,9 @@ class Violation:
     zone_key: str | None = None            # list name in camera_config's regions_of_interest (zone rules only)
     color: tuple = (255, 255, 255)         # BGR colour of the zone outline
     job: str | None = None                 # specialist job it is judged from: "helmet" | "plate" | "cabin"
-    auto: bool = False                     # True: in flow_mode "auto" it needs no drawn zone (the whole picture is its zone)
+    whole_frame: bool = False              # True: needs no drawing; with nothing drawn the whole picture is its zone
+    needs_flow: bool = False               # True: that whole-picture zone also needs the learned traffic flow (counterflow direction,
+                                           #   the "traffic keeps driving past" check of parking / loading)
 
     # ── zone setup ───────────────────────────────────────────────────────────
     def parse_zone(self, raw: dict) -> dict | None:
@@ -40,10 +42,11 @@ class Violation:
         format (what parse_zone reads). Keeps every wizard detail inside the violation that owns it."""
         return [{"coordinates": z["polygon"]} for z in cfg.get("rois", []) if z.get("polygon")]
 
-    def auto_zone(self, cfg: dict, polygon: list, frame_size: tuple, flow) -> dict:
-        """The implicit whole-frame zone of flow_mode "auto" (nothing drawn). `cfg` is this violation's wizard
-        settings (time limit, vehicle types, banned turns ...); `flow` is the FlowField learned from the traffic."""
-        return {"polygon": polygon, "auto": True, "field": flow, "frame_size": frame_size}
+    def whole_frame_zone(self, cfg: dict, polygon: list, frame_size: tuple, flow) -> dict:
+        """The implicit zone of a rule that needs no drawing (nothing drawn): the whole picture. `cfg` is this violation's
+        wizard settings (time limit, vehicle types, banned turns ...); `flow` is the FlowField learned from the traffic
+        (only the rules with `needs_flow` read it)."""
+        return {"polygon": polygon, "whole_frame": True, "field": flow, "frame_size": frame_size}
 
     def settings_from_wizard(self, cfg: dict) -> dict:
         """Top-level camera_config settings this violation takes from the wizard (e.g. max_riders)."""
@@ -83,7 +86,7 @@ class Violation:
         """Anything else this violation shows on the picture (e.g. the simulated traffic light)."""
 
     def draw_zone(self, pipe, frame: np.ndarray, index: int, zone: dict) -> None:
-        if zone.get("auto"):      # the implicit whole-frame zone of auto flow mode: nothing to outline
+        if zone.get("whole_frame"):      # the implicit whole-picture zone: nothing to outline
             return
         cv2.polylines(frame, [np.array(zone["polygon"], dtype=np.int32)], isClosed=True, color=self.color, thickness=2)
         colour = self.line_colour(pipe, index)
