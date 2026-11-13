@@ -60,7 +60,8 @@ class ViolationCatalog {
       icon: Icons.u_turn_left,
       needsZone: true,
       zoneHint:
-          'Cover the lane, then draw an arrow in the LEGAL direction of travel.',
+          'A zone is optional: with none drawn the whole picture is watched and the legal direction is learned from the traffic. '
+          'To set it yourself, cover the lane, then draw an arrow in the LEGAL direction of travel.',
     ),
     ViolationInfo(
       key: 'restricted_lane',
@@ -82,7 +83,9 @@ class ViolationCatalog {
       icon: Icons.local_parking,
       needsZone: true,
       zoneHint:
-          'Cover the no-parking area, then set how long a vehicle may stop there.',
+          'Mark where parking is banned: place a box on the picture (a no-parking sign, a fire hydrant, a fire station driveway, a corner, '
+          'a private driveway; move it, resize it: its box is the area) or cover the area. Then set how long a vehicle may stop there. '
+          'Crosswalk, junction and double parking have their own rules.',
     ),
     ViolationInfo(
       key: 'pedestrian_lane',
@@ -112,7 +115,8 @@ class ViolationCatalog {
       icon: Icons.turn_slight_left,
       needsZone: true,
       zoneHint:
-          'Cover the approach AND the turn area, then draw an arrow toward the turn that is NOT allowed.',
+          'A zone is optional: with none drawn the whole picture is watched for the turns you ban (set them below). '
+          'To limit the rule, cover the approach AND the turn area, then draw an arrow toward the turn that is NOT allowed.',
     ),
     ViolationInfo(
       key: 'illegal_u_turn',
@@ -122,7 +126,8 @@ class ViolationCatalog {
       icon: Icons.u_turn_right,
       needsZone: true,
       zoneHint:
-          'Draw over the road area where U-turns are NOT allowed. A vehicle that turns right round inside it is flagged.',
+          'A zone is optional: with none drawn the whole picture is watched. To limit the rule, draw over the road area where U-turns '
+          'are NOT allowed. A vehicle that turns right round inside it is flagged.',
     ),
     ViolationInfo(
       key: 'swerving',
@@ -131,7 +136,7 @@ class ViolationCatalog {
       group: ViolationGroup.movement,
       icon: Icons.waves,
       needsZone: true,
-      zoneHint: 'Draw over the road section to watch for side-to-side weaving.',
+      zoneHint: 'A zone is optional: with none drawn the whole picture is watched. To limit the rule, draw over the road section to watch for side-to-side weaving.',
     ),
     ViolationInfo(
       key: 'crossing_solid_line',
@@ -152,7 +157,8 @@ class ViolationCatalog {
       icon: Icons.no_transfer,
       needsZone: true,
       zoneHint:
-          'Draw over the no-loading area (e.g. a closed bus stop), then set how long a vehicle may stop and which types are judged.',
+          'Place a no-loading sign on the picture (move it, resize it: its box is the no-loading area) or draw the area, '
+          'then set how long a vehicle may stop and which types are judged.',
     ),
     ViolationInfo(
       key: 'truck_ban',
@@ -162,7 +168,8 @@ class ViolationCatalog {
       icon: Icons.local_shipping_outlined,
       needsZone: true,
       zoneHint:
-          'Draw over the road or lane closed to trucks. For a ban that only applies at certain hours, analyse footage from those hours.',
+          'A zone is optional: with none drawn the whole picture counts as a road closed to trucks. To limit the ban, draw over the road or lane '
+          'closed to trucks. For a ban that only applies at certain hours, analyse footage from those hours.',
     ),
     ViolationInfo(
       key: 'tricycle_on_highway',
@@ -194,7 +201,8 @@ class ViolationCatalog {
       icon: Icons.local_taxi,
       needsZone: true,
       zoneHint:
-          'Draw over the one travel lane next to the kerb (not the whole road). Needs moving traffic in that lane to tell it from a queue.',
+          'A zone is optional: with none drawn the whole picture is watched. To limit the rule, draw over the one travel lane next to the kerb '
+          '(not the whole road). Needs moving traffic in that lane to tell it from a queue.',
     ),
     ViolationInfo(
       key: 'red_light',
@@ -225,7 +233,8 @@ class ViolationCatalog {
       icon: Icons.flare,
       needsZone: true,
       zoneHint:
-          'Cover the approach AND the turn area. A turn here with no blinking indicator is flagged.',
+          'A zone is optional: with none drawn the whole picture is watched. To limit the rule, cover the approach AND the turn area. '
+          'A turn here with no blinking indicator is flagged.',
     ),
     ViolationInfo(
       key: 'overloading',

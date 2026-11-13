@@ -407,7 +407,7 @@ class _AnalysisWizardState extends State<AnalysisWizard> {
         onPick: (k) => setState(() => _rulesKey = k),
         api: widget.api,
       ),
-      3 => SettingsStep(draft: draft, models: widget.models),
+      3 => SettingsStep(draft: draft, models: widget.models, api: widget.api),
       _ => RunStep(
         draft: draft,
         runner: widget.runner,
@@ -624,7 +624,7 @@ class _SummaryRail extends StatelessWidget {
                       if (ViolationCatalog.of(k).needsZone)
                         Tooltip(
                           message: draft.zonesReady(k)
-                              ? '${draft.zones(k).length} zone(s) saved'
+                              ? '${draft.zones(k).length} zone(s) saved${AnalysisDraft.signZoneKeys.contains(k) && draft.signCount(k) > 0 ? ', ${draft.signCount(k)} sign(s) placed' : ''}'
                               : 'Needs a zone',
                           child: Icon(
                             draft.zonesReady(k)

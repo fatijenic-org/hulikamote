@@ -8,6 +8,7 @@ import '../../domain/violation_catalog.dart';
 import '../../../trimmer/presentation/widgets/trim_player.dart';
 import 'fx.dart';
 import 'solid_line_editor.dart';
+import 'video_time_card.dart';
 import 'video_trim_panel.dart';
 import 'violation_params.dart';
 import 'crosswalk_editor.dart';
@@ -228,7 +229,9 @@ class _PickCard extends StatelessWidget {
                   StatusPill(
                     label: info.key == 'crossing_solid_line'
                         ? 'Nothing to draw'
-                        : (AnalysisDraft.zoneOptionalKeys.contains(info.key) ? 'Zone optional' : 'Draw a zone'),
+                        : (AnalysisDraft.wholeFrameKeys.contains(info.key)
+                              ? (AnalysisDraft.signZoneKeys.contains(info.key) ? 'Whole picture (or zone, sign)' : 'Whole picture (zone optional)')
+                              : 'Draw a zone'),
                     color: Fx.muted(context),
                     icon: Icons.crop_free,
                     dense: true,
@@ -278,10 +281,6 @@ class RulesStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keys = draft.selection;
-    // This step does not let the user go on without zones, so the "skip the drawing" switch has to be here too.
-    final autoCard = AnalysisDraft.autoFlowKeys.contains(current)
-        ? _AutoFlowCard(draft: draft)
-        : null;
     return LayoutBuilder(
       builder: (context, box) {
         final rail = Column(
@@ -328,10 +327,6 @@ class RulesStep extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: Fx.s16),
-              if (autoCard != null) ...[
-                autoCard,
-                const SizedBox(height: Fx.s12),
-              ],
               editor,
             ],
           );
@@ -342,17 +337,7 @@ class RulesStep extends StatelessWidget {
             SizedBox(width: 230, child: ListView(children: [rail])),
             const SizedBox(width: Fx.s16),
             Expanded(
-              child: _scrollsItself(current)
-                  ? (autoCard == null
-                        ? editor
-                        : Column(
-                            children: [
-                              autoCard,
-                              const SizedBox(height: Fx.s12),
-                              Expanded(child: editor),
-                            ],
-                          ))
-                  : ListView(children: [editor]),
+              child: _scrollsItself(current) ? editor : ListView(children: [editor]),
             ),
           ],
         );
@@ -368,9 +353,10 @@ class RulesStep extends StatelessWidget {
     final info = ViolationCatalog.of(key);
     final selected = key == current;
     final zones = draft.zones(key).length;
+    final signs = AnalysisDraft.signZoneKeys.contains(key) ? draft.signCount(key) : 0;
     final ready = draft.zonesReady(key);
     final overlays = draft.crosswalkCount(key); // painted test crosswalks count as zones
-    final automatic = zones == 0 && overlays == 0 && ready && info.needsZone;
+    final automatic = zones == 0 && signs == 0 && overlays == 0 && ready && info.needsZone;
     final subtitle = !info.needsZone
         ? 'No zone needed'
         : zones == 0 && overlays > 0
@@ -378,8 +364,10 @@ class RulesStep extends StatelessWidget {
         : automatic
         ? (key == 'crossing_solid_line'
               ? 'Automatic: finds the painted line'
-              : (AnalysisDraft.zoneOptionalKeys.contains(key) ? 'Whole picture (zone optional)' : 'Automatic: learns the flow'))
-        : (zones == 0
+              : (key == 'counterflow' ? 'Whole picture: learns the direction' : 'Whole picture (zone optional)'))
+        : (zones == 0 && signs > 0
+              ? '$signs sign${signs == 1 ? '' : 's'} placed'
+              : zones == 0
               ? 'Needs a zone'
               : '$zones zone${zones == 1 ? '' : 's'} saved');
     return Padding(
@@ -466,89 +454,6 @@ class RulesStep extends StatelessWidget {
   }
 }
 
-/// The same switch as in Settings (one shared value), shown above the zone editor of every rule in AnalysisDraft.autoFlowKeys.
-class _AutoFlowCard extends StatelessWidget {
-  const _AutoFlowCard({required this.draft});
-
-  final AnalysisDraft draft;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = draft.settings;
-    return FxCard(
-      padding: const EdgeInsets.symmetric(horizontal: Fx.s16, vertical: Fx.s8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.alt_route, size: 18, color: Fx.accent),
-              const SizedBox(width: Fx.s12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Detect traffic flow automatically',
-                      style: Fx.body(
-                        context,
-                      ).copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      'Skip the drawing: the system learns which way traffic goes from the first minute of the video '
-                      '(fixed camera and some traffic needed). A zone you do draw still takes priority.',
-                      style: Fx.caption(context),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: s.autoFlow,
-                onChanged: (v) {
-                  s.autoFlow = v;
-                  draft.touch();
-                },
-              ),
-            ],
-          ),
-          if (_flowSwitchApplies(draft)) ...[
-            const Divider(height: Fx.s16),
-            Row(
-              children: [
-                const Icon(
-                  Icons.visibility_outlined,
-                  size: 18,
-                  color: Fx.accent,
-                ),
-                const SizedBox(width: Fx.s12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _flowTitle,
-                        style: Fx.body(
-                          context,
-                        ).copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      Text(_flowHelp, style: Fx.caption(context)),
-                    ],
-                  ),
-                ),
-                Switch(
-                  key: const ValueKey('show-flow-switch'),
-                  value: _flowShown(draft),
-                  onChanged: (v) => _showFlow(draft, v),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 // The "show the learned flow" switch. It only means something when the flow is learned automatically and Counterflow, the
 // rule that draws it, is among the selected ones, so it is only offered then. One value: the same as the switch in
 // Counterflow's own editor (violation_params.dart), so the two never disagree.
@@ -557,7 +462,7 @@ const _flowHelp =
     'Draws the flow the system learned (the arrows) on the saved photos and the result video. Turn it off for a clean picture.';
 
 bool _flowSwitchApplies(AnalysisDraft d) =>
-    d.settings.autoFlow && d.selection.contains('counterflow');
+    d.selection.contains('counterflow') && d.watchesWholePicture('counterflow');
 
 bool _flowShown(AnalysisDraft d) =>
     (d.config('counterflow')['show_flow'] as bool?) ?? true;
@@ -569,10 +474,13 @@ void _showFlow(AnalysisDraft d, bool on) {
 
 /// Step 4: pipeline options, grouped, with plain explanations and recommended defaults.
 class SettingsStep extends StatelessWidget {
-  const SettingsStep({super.key, required this.draft, required this.models});
+  const SettingsStep({super.key, required this.draft, required this.models, this.api});
 
   final AnalysisDraft draft;
   final ModelChoices models;
+
+  /// Lets the "Time of the video" card look for the time of the video (shown when the truck ban is selected).
+  final ForensicApi? api;
 
   PipelineSettings get s => draft.settings;
 
@@ -582,6 +490,10 @@ class SettingsStep extends StatelessWidget {
       listenable: draft,
       builder: (context, _) => ListView(
         children: [
+          if (api != null && draft.hasVideoPath && draft.selection.contains('truck_ban')) ...[
+            VideoTimeCard(draft: draft, api: api!),
+            const SizedBox(height: Fx.s16),
+          ],
           _group(context, 'Detection', Icons.radar, [
             _row(
               context,
@@ -680,21 +592,6 @@ class SettingsStep extends StatelessWidget {
               1,
               5,
               (v) => s.evidenceGap = v.round(),
-            ),
-            _row(
-              context,
-              'Detect traffic flow automatically',
-              'Counterflow, swerving, illegal turn, illegal U-turn, signal light, truck ban, tricycle on highway, '
-                  'illegal loading, double parking and illegal parking then need no zone or arrow: the system learns '
-                  'which way traffic goes from the first minute of the video (needs a fixed camera and some traffic). '
-                  'Zones you do draw still take priority.',
-              Switch(
-                value: s.autoFlow,
-                onChanged: (v) {
-                  s.autoFlow = v;
-                  draft.touch();
-                },
-              ),
             ),
             if (_flowSwitchApplies(draft))
               _row(
@@ -981,7 +878,7 @@ class RunStep extends StatelessWidget {
                 context,
                 Icons.crop_free,
                 'Zones',
-                '${[for (final k in sel) draft.zones(k).length].fold<int>(0, (a, b) => a + b)} drawn',
+                '${[for (final k in sel) draft.zones(k).length + (AnalysisDraft.signZoneKeys.contains(k) ? draft.signCount(k) : 0)].fold<int>(0, (a, b) => a + b)} drawn',
               ),
               _line(
                 context,

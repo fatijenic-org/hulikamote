@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -8,6 +9,16 @@ import '../domain/forensic_gateway.dart';
 import '../domain/forensic_models.dart';
 import '../domain/holding_models.dart';
 import '../domain/plate_tools_models.dart';
+
+/// An overlay object drawn by the backend (PNG with see-through parts) and where its top-left pixel sits relative to the spot it stands on,
+/// in pixels of a picture 1920 wide.
+class OverlayObjectImage {
+  const OverlayObjectImage({required this.bytes, required this.dx, required this.dy});
+
+  final Uint8List bytes;
+  final double dx;
+  final double dy;
+}
 
 /// Thrown when the backend answers with an error; [message] is safe to show.
 class ForensicApiException implements Exception {
@@ -30,6 +41,36 @@ class FrameInfo {
 
   /// Seconds (0 when the backend did not say).
   final double duration;
+}
+
+/// What time of day a video was recorded, and where that time came from (the backend's engine/video_clock.py).
+class VideoClock {
+  const VideoClock({this.start, this.source = 'none', this.label = '', this.confirmed = false, this.note = '', this.daylight});
+
+  /// The time of the first analysed frame, or null when no real time was found.
+  final DateTime? start;
+
+  /// operator | screen | metadata | filename | estimate | none
+  final String source;
+
+  /// The source in words: "read from the clock in the picture".
+  final String label;
+
+  /// A real time from a real source (not only a guess from the brightness).
+  final bool confirmed;
+  final String note;
+
+  /// "day", "twilight" or "night" from the picture; only said when no real time was found.
+  final String? daylight;
+
+  factory VideoClock.fromJson(Map<String, dynamic> j) => VideoClock(
+    start: DateTime.tryParse('${j['start'] ?? ''}'),
+    source: '${j['source'] ?? 'none'}',
+    label: '${j['label'] ?? ''}',
+    confirmed: j['confirmed'] == true,
+    note: '${j['note'] ?? ''}',
+    daylight: j['daylight'] as String?,
+  );
 }
 
 /// The model files per job (`vehicles`, `helmet`, `plate`, `cabin`) and which one is active.
@@ -156,6 +197,66 @@ class ForensicApi implements ReviewGateway {
       frames: (j['frame_count'] as num?)?.toInt() ?? 0,
       duration: (j['duration'] as num?)?.toDouble() ?? 0,
     );
+  }
+
+  /// The time of day of a video (found by its path): typed > the clock in its picture > its own information > its file name.
+  /// [videoStart] is what the operator typed (it wins), [trimStart] the seconds skipped at the start. Null when this backend is
+  /// too old to know the call.
+  /// A realistic overlay object (hydrant, sign on a pole ...) as the evidence photos will show it. Null when the backend cannot make it.
+  Future<OverlayObjectImage?> overlayObject(
+    String kind, {
+    double scale = 1,
+    double angle = 0,
+    double tilt = 0,
+    String stand = '',
+    bool realistic = true,
+  }) async {
+    final query = {
+      'kind': kind,
+      'scale': '$scale',
+      'angle': '$angle',
+      'tilt': '$tilt',
+      if (stand.isNotEmpty) 'stand': stand,
+      'realistic': '$realistic',
+      'frame_width': '1920',
+    };
+    final r = await _client.get(_u('/api/forensic/overlay-object').replace(queryParameters: query)).timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) return null;
+    return OverlayObjectImage(
+      bytes: r.bodyBytes,
+      dx: double.tryParse(r.headers['x-offset-x'] ?? '') ?? 0,
+      dy: double.tryParse(r.headers['x-offset-y'] ?? '') ?? 0,
+    );
+  }
+
+  /// A solid line painted like road paint along [points] (1920x1080 reference space), as the evidence photos will show it. Null when the
+  /// backend cannot make it.
+  Future<OverlayObjectImage?> overlayLine(List<List<double>> points, Map<String, dynamic> look, {bool realistic = true}) async {
+    final r = await _client
+        .post(
+          _u('/api/forensic/overlay-line'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'points': points, 'look': look, 'realistic': realistic}),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) return null;
+    return OverlayObjectImage(
+      bytes: r.bodyBytes,
+      dx: double.tryParse(r.headers['x-offset-x'] ?? '') ?? 0,
+      dy: double.tryParse(r.headers['x-offset-y'] ?? '') ?? 0,
+    );
+  }
+
+  Future<VideoClock?> videoClock(String videoPath, {String videoStart = '', double trimStart = 0}) async {
+    final query = {
+      'file_path': videoPath,
+      if (videoStart.trim().isNotEmpty) 'video_start': videoStart.trim(),
+      if (trimStart > 0) 'trim_start': '$trimStart',
+    };
+    final r = await _client.get(_u('/api/forensic/video-clock').replace(queryParameters: query)).timeout(const Duration(seconds: 120));
+    if (r.statusCode == 404 && (jsonDecode(r.body) as Map)['detail'] == 'Not Found') return null;
+    if (r.statusCode != 200) _fail(r, 'Looking for the time of the video');
+    return VideoClock.fromJson(Map<String, dynamic>.from(jsonDecode(r.body) as Map));
   }
 
   /// Zone suggestions found from the painted lines of the video (stop line, crosswalk, solid line), by its path:

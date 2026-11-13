@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/forensic_api.dart';
+import '../../data/object_previews.dart';
 import '../../domain/analysis_draft.dart';
+import '../../domain/line_paint.dart';
 import '../../domain/violation_catalog.dart';
 import '../../domain/zone_geometry.dart';
 import 'fx.dart';
@@ -51,6 +53,9 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
   double _aspect = 16 / 9;
   String? _notice;
   bool _finding = false;
+  int? _selLine; // the saved line whose paint is being set
+  late final ObjectPreviews _previews;
+  final Map<int, ObjectPreview> _lastPaint = {}; // the last picture of each line's paint, kept while a new one is on its way
   ImageStream? _stream;
   ImageStreamListener? _listener;
 
@@ -73,7 +78,12 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
   @override
   void initState() {
     super.initState();
+    _previews = ObjectPreviews(widget.api)..addListener(_previewReady);
     _resolveAspect();
+  }
+
+  void _previewReady() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -85,6 +95,7 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
   @override
   void dispose() {
     if (_stream != null && _listener != null) _stream!.removeListener(_listener!);
+    _previews.dispose();
     super.dispose();
   }
 
@@ -187,7 +198,111 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
   void _deleteLine(int i) {
     widget.draft.zones(key).removeAt(i);
     widget.draft.touch();
-    setState(() => _notice = null);
+    setState(() {
+      _notice = null;
+      _lastPaint.clear();
+      final s = _selLine;
+      if (s != null) _selLine = s == i ? null : (s > i ? s - 1 : s);
+    });
+  }
+
+  /// The paint of each saved line (null for a line that is not painted), as the backend draws it. While the line is being dragged the last
+  /// picture stays where it was.
+  List<ObjectPreview?> _paints() {
+    final realistic = (_cfg['lines_realistic'] as bool?) ?? true;
+    final out = <ObjectPreview?>[];
+    for (var i = 0; i < _saved.length; i++) {
+      final zone = _saved[i];
+      final look = zone['look'];
+      if (look is! Map) {
+        out.add(null);
+        continue;
+      }
+      final raw = (zone['line'] ?? zone['ui_vector'] ?? const []) as List;
+      final points = [for (final p in raw) [(p[0] as num).toDouble(), (p[1] as num).toDouble()]];
+      final fresh = _drag == null && points.length >= 2 ? _previews.peekLine(points, Map<String, dynamic>.from(look), realistic) : null;
+      if (fresh != null) _lastPaint[i] = fresh;
+      out.add(fresh ?? _lastPaint[i]);
+    }
+    return out;
+  }
+
+  /// Style, width, wear, perspective, turn and filmed look of the selected painted line.
+  Widget _paintLook(BuildContext context) {
+    final i = _selLine!;
+    final zone = _saved[i];
+    final look = zone['look'] as Map<String, dynamic>;
+    void set(String k, Object v) {
+      look[k] = v;
+      widget.draft.touch();
+      setState(() {});
+    }
+
+    void turn(double degrees) {
+      _write(zone, LinePaint.rotated(_pointsOf(zone), degrees));
+      widget.draft.touch();
+      setState(() {});
+    }
+
+    Widget slider(String k, String label, double value, double min, double max, String shown, String field) => Row(
+      children: [
+        SizedBox(width: 74, child: Text(label, style: Fx.caption(context))),
+        Expanded(child: Slider(key: ValueKey(k), value: value.clamp(min, max).toDouble(), min: min, max: max, onChanged: (v) => set(field, v))),
+        SizedBox(width: 46, child: Text(shown, key: ValueKey('$k-value'), textAlign: TextAlign.end, style: Fx.caption(context))),
+      ],
+    );
+    final width = LinePaint.widthOf(look), wear = LinePaint.wearOf(look), taper = LinePaint.taperOf(look);
+    return Column(
+      key: const ValueKey('solid-paint-look'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: Fx.s8),
+        Text('PAINT OF LINE ${i + 1}', style: Fx.label(context)),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final s in LinePaint.styles)
+              ChoiceChip(
+                key: ValueKey('solid-style-${s.$1}'),
+                label: Text(s.$2),
+                selected: LinePaint.styleOf(look) == s.$1,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) => set('style', s.$1),
+              ),
+          ],
+        ),
+        slider('solid-width', 'Width', width, LinePaint.minWidth, LinePaint.maxWidth, '${(width * 100).round()}%', 'width'),
+        slider('solid-wear', 'Worn', wear, 0, 1, '${(wear * 100).round()}%', 'wear'),
+        slider('solid-taper', 'Perspective', taper, 0, 1, '${(taper * 100).round()}%', 'taper'),
+        Row(
+          children: [
+            SizedBox(width: 74, child: Text('Turn line', style: Fx.caption(context))),
+            IconButton(key: const ValueKey('solid-rotate-left'), tooltip: 'Turn 5 degrees counter-clockwise', icon: const Icon(Icons.rotate_left, size: 20), onPressed: () => turn(-5)),
+            IconButton(key: const ValueKey('solid-rotate-right'), tooltip: 'Turn 5 degrees clockwise', icon: const Icon(Icons.rotate_right, size: 20), onPressed: () => turn(5)),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(child: Text('Realistic look', style: Fx.body(context))),
+            Switch(
+              key: const ValueKey('solid-realistic'),
+              value: (_cfg['lines_realistic'] as bool?) ?? true,
+              onChanged: (v) {
+                _cfg['lines_realistic'] = v;
+                widget.draft.touch();
+                setState(() {});
+              },
+            ),
+          ],
+        ),
+        Text(
+          'The paint is only a picture of the line. The rule uses the line itself, and vehicles drive over the paint.',
+          style: Fx.caption(context),
+        ),
+      ],
+    );
   }
 
   void _setAuto(bool on) {
@@ -260,6 +375,7 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
 
   Widget _canvasCard(BuildContext context) {
     final saved = [for (final z in _saved) _pointsOf(z)];
+    final paints = _paints();
     return Focus(
       autofocus: true,
       onKeyEvent: (node, e) {
@@ -315,7 +431,7 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
                             fit: StackFit.expand,
                             children: [
                               Image(image: widget.frame, fit: BoxFit.fill, gaplessPlayback: true),
-                              CustomPaint(painter: _LinesPainter(saved: saved, current: List.of(_line))),
+                              CustomPaint(painter: _LinesPainter(saved: saved, current: List.of(_line), paints: paints)),
                               if (_line.isEmpty && saved.isEmpty)
                                 Align(
                                   alignment: Alignment.bottomCenter,
@@ -496,21 +612,50 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
                 )
               else
                 for (var i = 0; i < saved.length; i++)
-                  Row(
-                    key: ValueKey('solid-saved-$i'),
-                    children: [
-                      const Icon(Icons.check_circle, size: 16, color: Fx.success),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text('Line ${i + 1}  ·  ${_pointsOf(saved[i]).length} points', style: Fx.body(context), overflow: TextOverflow.ellipsis)),
-                      IconButton(
-                        key: ValueKey('solid-delete-$i'),
-                        tooltip: 'Delete line ${i + 1}',
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => _deleteLine(i),
+                  InkWell(
+                    key: ValueKey('solid-select-$i'),
+                    borderRadius: BorderRadius.circular(Fx.radiusSm),
+                    onTap: () => setState(() => _selLine = i),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _selLine == i ? Fx.accent.withValues(alpha: 0.12) : null,
+                        borderRadius: BorderRadius.circular(Fx.radiusSm),
                       ),
-                    ],
+                      child: Row(
+                        key: ValueKey('solid-saved-$i'),
+                        children: [
+                          const Icon(Icons.check_circle, size: 16, color: Fx.success),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text('Line ${i + 1}  ·  ${_pointsOf(saved[i]).length} points', style: Fx.body(context), overflow: TextOverflow.ellipsis)),
+                          Tooltip(
+                            message: 'Paint this line on the picture (for testing)',
+                            child: Switch(
+                              key: ValueKey('solid-paint-$i'),
+                              value: saved[i]['look'] is Map,
+                              onChanged: (on) => setState(() {
+                                if (on) {
+                                  saved[i]['look'] = LinePaint.newLook();
+                                  _selLine = i;
+                                } else {
+                                  saved[i].remove('look');
+                                  _lastPaint.remove(i);
+                                }
+                                widget.draft.touch();
+                              }),
+                            ),
+                          ),
+                          IconButton(
+                            key: ValueKey('solid-delete-$i'),
+                            tooltip: 'Delete line ${i + 1}',
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _deleteLine(i),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+              if (_selLine != null && _selLine! < saved.length && saved[_selLine!]['look'] is Map) _paintLook(context),
             ],
           ),
         ),
@@ -522,10 +667,13 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
 }
 
 class _LinesPainter extends CustomPainter {
-  _LinesPainter({required this.saved, required this.current});
+  _LinesPainter({required this.saved, required this.current, this.paints = const []});
 
   final List<List<Offset>> saved;
   final List<Offset> current;
+
+  /// The paint of each saved line as the backend drew it (null: not painted, or still on its way).
+  final List<ObjectPreview?> paints;
 
   Offset _px(Offset n, Size s) => Offset(n.dx * s.width, n.dy * s.height);
 
@@ -574,6 +722,16 @@ class _LinesPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final k = size.width / ZoneGeometry.refWidth; // the paint was made for a frame 1920 wide
+    for (final p in paints) {
+      if (p == null) continue;
+      canvas.drawImageRect(
+        p.image,
+        Rect.fromLTWH(0, 0, p.image.width.toDouble(), p.image.height.toDouble()),
+        Rect.fromLTWH(p.dx * k, p.dy * k, p.image.width * k, p.image.height * k),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    }
     for (var i = 0; i < saved.length; i++) {
       _draw(canvas, saved[i], size, Fx.success, label: 'Line ${i + 1}');
     }

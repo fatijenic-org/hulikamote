@@ -2,6 +2,8 @@
 /// The raw maps stay available (`raw`) because the backend's ticket endpoints want them back.
 library;
 
+import 'ban_hours.dart';
+
 /// What the reviewer decided about a ticket's violation.
 enum ReviewStatus {
   pending,
@@ -156,8 +158,35 @@ class TicketFlag {
   String get title => switch (type) {
     'possible_duplicate' => 'Possibly the same car as another ticket',
     'identity_jump' => 'The tracker may have switched cars',
+    'time_unconfirmed' => 'Time not confirmed',
     _ => 'Needs a look',
   };
+}
+
+/// When a ticket happened, worked out from the clock of the video (the report's `time`): the moment, where it came from, and
+/// whether a human must check it (a rule that only holds at certain hours, in a video whose time is not known).
+class TicketTime {
+  const TicketTime({this.at, this.label = '', this.confirmed = false, this.needsCheck = false, this.note = ''});
+
+  final DateTime? at;
+  final String label;
+  final bool confirmed;
+  final bool needsCheck;
+  final String note;
+
+  factory TicketTime.fromJson(Map<String, dynamic> j) => TicketTime(
+    at: DateTime.tryParse('${j['at'] ?? ''}'),
+    label: '${j['label'] ?? ''}',
+    confirmed: j['confirmed'] == true,
+    needsCheck: j['needs_check'] == true,
+    note: '${j['note'] ?? ''}',
+  );
+
+  /// "7:42 AM", or "time not confirmed" when it is not known.
+  String get short => at == null ? 'time not confirmed' : BanHours.clock(at!);
+
+  /// "7:42 AM (read from the clock in the picture)", or "Time not confirmed".
+  String get long => at == null ? 'Time not confirmed' : '${BanHours.clock(at!)}${label.isEmpty ? '' : ' ($label)'}';
 }
 
 /// One flagged vehicle: what it did, the evidence, and what was read from its plate.
@@ -184,6 +213,9 @@ class ForensicTicket {
   final Map<String, double> voteTally;
   final String? winningCropFile;
 
+  /// When it happened, if the video's time was looked for (a rule with ban hours, or a start time typed by the operator).
+  final TicketTime? time;
+
   /// The map exactly as the backend sent it.
   final Map<String, dynamic> raw;
 
@@ -205,6 +237,7 @@ class ForensicTicket {
     required this.voteTally,
     required this.winningCropFile,
     required this.raw,
+    this.time,
   });
 
   factory ForensicTicket.fromJson(Map<String, dynamic> j) {
@@ -283,6 +316,7 @@ class ForensicTicket {
       voteTally: tally,
       winningCropFile: j['winning_crop'] as String?,
       raw: Map<String, dynamic>.from(j),
+      time: j['time'] is Map ? TicketTime.fromJson(Map<String, dynamic>.from(j['time'] as Map)) : null,
     );
   }
 

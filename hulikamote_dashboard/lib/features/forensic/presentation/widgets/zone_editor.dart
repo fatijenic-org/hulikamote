@@ -7,8 +7,12 @@ import 'package:flutter/services.dart';
 import '../../data/forensic_api.dart';
 import '../../domain/analysis_draft.dart';
 import '../../domain/lane_signs.dart';
+import '../../domain/loading_signs.dart';
+import '../../domain/parking_reasons.dart';
+import '../../data/object_previews.dart';
 import '../../domain/violation_catalog.dart';
 import '../../domain/zone_geometry.dart';
+import 'box_object.dart';
 import 'fx.dart';
 import 'violation_params.dart';
 
@@ -64,11 +68,30 @@ class _ZoneEditorState extends State<ZoneEditor> {
   /// "Restricted lane": the zone is optional and overlay signs can be placed on the roads.
   bool get _isLane => key == 'restricted_lane';
 
-  /// The zone is optional for this rule (nothing drawn = the whole picture), see AnalysisDraft.zoneOptionalKeys.
-  bool get _zoneOptional => AnalysisDraft.zoneOptionalKeys.contains(key);
+  /// "Illegal loading / unloading" and "Illegal parking": a no-loading / no-parking sign (a box) can be placed anywhere on the picture,
+  /// moved and resized; it is a zone.
+  bool get _boxSigns => AnalysisDraft.signZoneKeys.contains(key);
+
+  /// The no-parking signs also say WHY parking is banned there (RA 4136 Section 46).
+  bool get _isParking => key == LoadingSigns.parkingRuleKey;
+
+  /// "no-loading" or "no-parking": what the sign of this rule bans (and the same as a verb: "loading" / "parking").
+  String get _ban => LoadingSigns.banFor(key);
+  String get _banned => key == LoadingSigns.parkingRuleKey ? 'parking' : 'loading';
+
+  /// The zone is optional for this rule (nothing drawn = the whole picture), see AnalysisDraft.wholeFrameKeys.
+  bool get _zoneOptional => AnalysisDraft.wholeFrameKeys.contains(key);
 
   /// What the whole picture counts as when no zone is drawn.
-  String get _wholePictureIs => _isLane ? 'the lane' : 'a road where the ban applies';
+  String get _wholePictureIs => switch (key) {
+    'restricted_lane' => 'the lane',
+    'tricycle_on_highway' || 'truck_ban' => 'a road where the ban applies',
+    _ => 'the zone',
+  };
+
+  /// What the rule does when nothing is drawn.
+  String get _nothingDrawn =>
+      key == 'counterflow' ? 'the direction of traffic is learned from the video' : 'the whole picture is $_wholePictureIs';
   Map<String, dynamic> get _cfg => widget.draft.config(key);
 
   /// The zone also needs an arrow (or stop line).
@@ -95,7 +118,15 @@ class _ZoneEditorState extends State<ZoneEditor> {
   @override
   void initState() {
     super.initState();
+    _previews = ObjectPreviews(widget.api)..addListener(_previewReady);
     _resolveAspect();
+  }
+
+  /// The pictures of the overlay objects, drawn by the backend like the evidence photos (see ObjectPreviews).
+  late final ObjectPreviews _previews;
+
+  void _previewReady() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -110,6 +141,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
     if (_stream != null && _listener != null) {
       _stream!.removeListener(_listener!);
     }
+    _previews.dispose();
     super.dispose();
   }
 
@@ -170,6 +202,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
     _light.clear();
     _tool = ZoneTool.zone;
     _drag = null;
+    _loadDrag = null;
     _notice = null;
   }
 
@@ -290,6 +323,33 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   bool get _realistic => (widget.draft.config(key)['signs_realistic'] as bool?) ?? true;
 
+  // ── overlay signs (Illegal loading): a box placed anywhere, moved by its body and resized by its corners ──
+  ({int i, bool resize, Offset grab, Offset anchor})? _loadDrag;
+
+  /// Illegal parking: what the next placed sign marks (a hydrant, a corner ...), see parking_reasons.dart.
+  String _kind = ParkingReasons.defaultKind;
+
+  void _placeLoadingSign(Offset local, Size size) {
+    _signs.add(LoadingSigns.make(_norm(local, size), kind: _isParking ? _kind : null));
+    widget.draft.touch();
+    setState(() {
+      _notice = null;
+      _selSign = _signs.length - 1; // the box just placed is the one whose look is set
+    });
+  }
+
+  void _dragLoadingSign(Offset local, Size size) {
+    final grab = _loadDrag;
+    if (grab == null) return;
+    final to = _norm(local, size);
+    if (grab.resize) {
+      LoadingSigns.resizeTo(_signs[grab.i], to, grab.anchor);
+    } else {
+      LoadingSigns.moveBy(_signs[grab.i], to, grab.grab);
+    }
+    setState(() {});
+  }
+
   /// Which saved zone a sign stands in (0-based), or -1.
   int _zoneOfSign(int i) {
     final at = _signPoints[i];
@@ -313,6 +373,15 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   void _tap(Offset local, Size size) {
     if (_tool == ZoneTool.sign) {
+      if (_boxSigns) {
+        final hit = LoadingSigns.grab(_signs, local, size);
+        if (hit == null) {
+          _placeLoadingSign(local, size); // a click on a sign is not a new sign
+        } else {
+          setState(() => _selSign = hit.i); // it selects it
+        }
+        return;
+      }
       if (_handleAt(local, size) != _SignGrab.none) return; // a tap on a handle is not a new sign
       final hit = _signAt(local, size);
       if (hit != null) {
@@ -343,7 +412,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   void _removeAt(Offset local, Size size) {
     if (_tool == ZoneTool.sign) {
-      final i = _signAt(local, size);
+      final i = _boxSigns ? LoadingSigns.bodyAt(_signs, local, size) : _signAt(local, size);
       if (i != null) _removeSign(i);
       return;
     }
@@ -355,8 +424,9 @@ class _ZoneEditorState extends State<ZoneEditor> {
   }
 
   void _endDrag() {
-    if (_tool == ZoneTool.sign && _drag != null) widget.draft.touch(); // a moved, sized or turned sign is saved
+    if (_tool == ZoneTool.sign && (_drag != null || _loadDrag != null)) widget.draft.touch(); // a moved, sized or turned sign is saved
     _drag = null;
+    _loadDrag = null;
     _grab = _SignGrab.none;
   }
 
@@ -490,10 +560,21 @@ class _ZoneEditorState extends State<ZoneEditor> {
                           onTapUp: (d) => _tap(d.localPosition, size),
                           onSecondaryTapUp: (d) =>
                               _removeAt(d.localPosition, size),
-                          onPanStart: (d) => _drag = _tool == ZoneTool.sign
-                              ? _grabSign(d.localPosition, size)
-                              : ZoneGeometry.hit(_pointsOf(_tool), d.localPosition, size),
+                          onPanStart: (d) {
+                            if (_boxSigns && _tool == ZoneTool.sign) {
+                              _loadDrag = LoadingSigns.grab(_signs, d.localPosition, size); // a corner resizes, the body moves
+                              if (_loadDrag != null) setState(() => _selSign = _loadDrag!.i);
+                              return;
+                            }
+                            _drag = _tool == ZoneTool.sign
+                                ? _grabSign(d.localPosition, size)
+                                : ZoneGeometry.hit(_pointsOf(_tool), d.localPosition, size);
+                          },
                           onPanUpdate: (d) {
+                            if (_boxSigns && _tool == ZoneTool.sign) {
+                              _dragLoadingSign(d.localPosition, size);
+                              return;
+                            }
                             final i = _drag;
                             if (i == null) return;
                             if (_tool == ZoneTool.sign) {
@@ -532,9 +613,11 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                         ]
                                       : const [],
                                   selectedSign: _tool == ZoneTool.sign ? _selSign : null,
+                                  boxSigns: _boxSigns ? _boxObjects() : const [],
+                                  loadingHandles: _boxSigns && _tool == ZoneTool.sign,
                                 ),
                               ),
-                              if (_poly.isEmpty && saved.isEmpty && (!_isLane || _signs.isEmpty))
+                              if (_poly.isEmpty && saved.isEmpty && (!(_isLane || _boxSigns) || _signs.isEmpty))
                                 Center(
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
@@ -548,8 +631,10 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                       ),
                                     ),
                                     child: Text(
-                                      _zoneOptional
-                                          ? 'Optional: click the corners of one road area to limit the rule to it.\nNothing drawn = the whole picture is $_wholePictureIs.'
+                                      _boxSigns
+                                          ? 'Place a $_ban sign (card on the right), or click the corners of the area to draw a zone.\nNothing placed = the whole picture is watched.'
+                                          : _zoneOptional
+                                          ? 'Optional: click the corners of one road area to limit the rule to it.\nNothing drawn = $_nothingDrawn.'
                                           : 'Click the corners of the area to draw the zone',
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
@@ -658,7 +743,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                 context,
                 ZoneTool.zone,
                 '1',
-                _zoneOptional ? 'Zone (optional)' : 'Zone',
+                _boxSigns ? 'Zone (or place a sign)' : (_zoneOptional ? 'Zone (optional)' : 'Zone'),
                 _poly.length >= 3,
                 '${_poly.length} point${_poly.length == 1 ? '' : 's'}, at least 3',
               ),
@@ -742,6 +827,14 @@ class _ZoneEditorState extends State<ZoneEditor> {
           _signsCard(context),
           const SizedBox(height: Fx.s12),
         ],
+        if (_boxSigns) ...[
+          _loadingSignsCard(context),
+          const SizedBox(height: Fx.s12),
+        ],
+        if (_isParking) ...[
+          _parkingConditionsCard(context),
+          const SizedBox(height: Fx.s12),
+        ],
         FxCard(
           padding: const EdgeInsets.all(Fx.s12),
           child: Column(
@@ -753,15 +846,19 @@ class _ZoneEditorState extends State<ZoneEditor> {
                 Row(
                   children: [
                     Icon(
-                      _zoneOptional ? Icons.crop_free : Icons.error_outline,
+                      _boxSigns && _signs.isNotEmpty ? Icons.check_circle : (_zoneOptional ? Icons.crop_free : Icons.error_outline),
                       size: 16,
-                      color: _zoneOptional ? Fx.success : Fx.warning,
+                      color: _zoneOptional || (_boxSigns && _signs.isNotEmpty) ? Fx.success : Fx.warning,
                     ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        _zoneOptional
-                            ? 'No zone drawn: the whole picture is $_wholePictureIs. Draw a zone to limit the rule to one area.'
+                        _boxSigns
+                            ? (_signs.isNotEmpty
+                                  ? 'No zone drawn: the placed signs mark where $_banned is banned.'
+                                  : 'No zone and no sign: the whole picture is watched. Place a sign or save a zone to limit the rule.')
+                            : _zoneOptional
+                            ? 'No zone drawn: $_nothingDrawn. Draw a zone to limit the rule to one area.'
                             : 'Save at least one zone to continue.',
                         key: const ValueKey('lane-no-zone'),
                         style: Fx.caption(context),
@@ -977,6 +1074,302 @@ class _ZoneEditorState extends State<ZoneEditor> {
     );
   }
 
+  /// The boxes as the painter draws them: the area, the object in it, and the picture of the object when the backend has made it.
+  List<BoxObject> _boxObjects() {
+    final realistic = _realistic;
+    return [
+      for (var i = 0; i < _signs.length; i++)
+        () {
+          final s = _signs[i];
+          final kind = LoadingSigns.objectKind(key, s);
+          final rect = LoadingSigns.rectOf(s);
+          return BoxObject(
+            box: rect,
+            kind: kind,
+            at: rect.center,
+            selected: _tool == ZoneTool.sign && _selSign == i,
+            preview: _previews.peek(
+              kind,
+              scale: LoadingSigns.scaleOf(s),
+              angle: LoadingSigns.angleOf(s),
+              tilt: LoadingSigns.tiltOf(s),
+              stand: LoadingSigns.standOf(s, kind),
+              realistic: realistic,
+            ),
+          );
+        }(),
+    ];
+  }
+
+  /// Size, angle, turn-away, stand and filmed look of the selected box's object (the object is drawn by the backend, so the photos match).
+  Widget _boxLook(BuildContext context) {
+    final i = _selSign!;
+    final sign = _signs[i];
+    final kind = LoadingSigns.objectKind(key, sign);
+    final scale = LoadingSigns.scaleOf(sign), angle = LoadingSigns.angleOf(sign), tilt = LoadingSigns.tiltOf(sign);
+    return Column(
+      key: const ValueKey('box-look'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('LOOK OF SIGN ${i + 1}', style: Fx.label(context)),
+        _lookSlider('box-look-size', 'Size', scale, LoadingSigns.minScale, LoadingSigns.maxScale, '${(scale * 100).round()}%', 'scale'),
+        _lookSlider('box-look-angle', 'Rotate', angle, -LoadingSigns.maxAngle, LoadingSigns.maxAngle, '${angle.round()}°', 'angle'),
+        _lookSlider('box-look-tilt', 'Turn away', tilt, -LoadingSigns.maxTilt, LoadingSigns.maxTilt, '${tilt.round()}°', 'tilt'),
+        if (LoadingSigns.standable(kind)) ...[
+          const SizedBox(height: 4),
+          SegmentedButton<String>(
+            key: const ValueKey('box-look-stand'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: 'none', label: Text('Ground')),
+              ButtonSegment(value: 'post', label: Text('Pole')),
+              ButtonSegment(value: 'tripod', label: Text('Tripod')),
+            ],
+            selected: {LoadingSigns.standOf(sign, kind)},
+            onSelectionChanged: (v) {
+              sign['stand'] = v.first;
+              widget.draft.touch();
+              setState(() {});
+            },
+          ),
+        ],
+        Row(
+          children: [
+            Expanded(child: Text('Realistic look', style: Fx.body(context))),
+            Switch(
+              key: const ValueKey('box-look-realistic'),
+              value: _realistic,
+              onChanged: (v) {
+                widget.draft.config(key)['signs_realistic'] = v;
+                widget.draft.touch();
+                setState(() {});
+              },
+            ),
+          ],
+        ),
+        TextButton(
+          key: const ValueKey('box-look-reset'),
+          onPressed: () {
+            LoadingSigns.resetLook(sign);
+            widget.draft.touch();
+            setState(() {});
+          },
+          child: const Text('Reset look'),
+        ),
+      ],
+    );
+  }
+
+  /// How the rule will work with what is drawn and placed now, in one sentence.
+  String _loadingSummary() {
+    final zones = widget.draft.zones(key).length;
+    final signs = _signs.length;
+    if (zones == 0 && signs == 0) {
+      return 'Nothing marked: the whole picture is watched. Place a sign, or draw a zone, to limit the rule.';
+    }
+    final parts = [
+      if (signs > 0) '$signs sign${signs == 1 ? '' : 's'}',
+      if (zones > 0) '$zones zone${zones == 1 ? '' : 's'}',
+    ];
+    final who = key == LoadingSigns.parkingRuleKey ? 'A vehicle' : 'A bus, jeepney, tricycle or truck';
+    return '${_cap(_banned)} is banned in the ${parts.join(' and ')}. $who that stands still there too long is flagged.';
+  }
+
+  Widget _loadingSignsCard(BuildContext context) {
+    final placing = _tool == ZoneTool.sign;
+    return FxCard(
+      key: const ValueKey('loading-signs'),
+      padding: const EdgeInsets.all(Fx.s12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${_ban.toUpperCase()} SIGNS (TEMPORARY)', style: Fx.label(context)),
+          const SizedBox(height: 4),
+          Text(
+            'A sign marks a $_ban area. Place it anywhere on the picture, then move it and resize it: its box is the area. '
+            'It is only drawn on the photos and the video of this analysis: nothing is written into your video, and it goes when you '
+            'start a new analysis.',
+            style: Fx.caption(context),
+          ),
+          if (_isParking) ...[
+            const SizedBox(height: Fx.s8),
+            Text('What marks the area?', style: Fx.label(context)),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final r in ParkingReasons.all)
+                  ChoiceChip(
+                    key: ValueKey('parking-kind-${r.key}'),
+                    label: Text(r.short),
+                    selected: _kind == r.key,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => setState(() => _kind = r.key),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(ParkingReasons.of(_kind).hint, key: const ValueKey('parking-kind-hint'), style: Fx.caption(context)),
+          ],
+          const SizedBox(height: Fx.s8),
+          FilledButton.tonalIcon(
+            key: const ValueKey('sign-place'),
+            onPressed: () => setState(() => _tool = placing ? ZoneTool.zone : ZoneTool.sign),
+            icon: Icon(placing ? Icons.check : Icons.add_location_alt_outlined, size: 18),
+            label: Text(placing ? 'Done placing signs' : (_isParking && _kind != ParkingReasons.defaultKind ? 'Place: ${ParkingReasons.of(_kind).short}' : 'Place a $_ban sign')),
+          ),
+          if (placing) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Click the picture to place a sign. Drag it to move it. Drag a corner to resize it. Right-click removes it.',
+              key: const ValueKey('sign-help'),
+              style: Fx.caption(context),
+            ),
+          ],
+          if (_signs.isNotEmpty) ...[
+            const SizedBox(height: Fx.s8),
+            for (var i = 0; i < _signs.length; i++)
+              InkWell(
+                key: ValueKey('loading-sign-select-$i'),
+                borderRadius: BorderRadius.circular(Fx.radiusSm),
+                onTap: () => setState(() {
+                  _selSign = i;
+                  _tool = ZoneTool.sign; // so its handles can be dragged on the picture
+                }),
+                child: Row(
+                key: ValueKey('loading-sign-row-$i'),
+                children: [
+                  Icon(key == LoadingSigns.parkingRuleKey ? Icons.local_parking : Icons.no_transfer, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _isParking
+                          ? 'Sign ${i + 1}  ·  ${ParkingReasons.of(_signs[i]['kind'] as String?).label}  ·  ${LoadingSigns.sizeText(_signs[i])}'
+                          : 'Sign ${i + 1}  ·  ${LoadingSigns.sizeText(_signs[i])}',
+                      key: ValueKey('loading-sign-text-$i'),
+                      style: Fx.body(context),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_isParking)
+                    PopupMenuButton<String>(
+                      key: ValueKey('parking-sign-kind-$i'),
+                      tooltip: 'Change what this sign marks',
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      padding: EdgeInsets.zero,
+                      onSelected: (v) {
+                        _signs[i]['kind'] = v;
+                        widget.draft.touch();
+                        setState(() {});
+                      },
+                      itemBuilder: (_) => [
+                        for (final r in ParkingReasons.all) PopupMenuItem<String>(value: r.key, child: Text(r.label)),
+                      ],
+                    ),
+                  IconButton(
+                    key: ValueKey('loading-sign-delete-$i'),
+                    tooltip: 'Remove this sign',
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _removeSign(i),
+                  ),
+                ],
+              ),
+              ),
+          ],
+          if (_selSign != null && _selSign! < _signs.length) ...[
+            const SizedBox(height: Fx.s8),
+            _boxLook(context),
+          ],
+          const SizedBox(height: Fx.s8),
+          Text(_loadingSummary(), key: const ValueKey('loading-summary'), style: Fx.caption(context).copyWith(color: Fx.accent)),
+        ],
+      ),
+    );
+  }
+
+  /// "What counts as illegal parking": the eight places of RA 4136 Section 46 and where each one is handled in this analysis.
+  /// A place that is marked on the picture has a Place button; a place that another rule judges shows whether that rule is on.
+  Widget _parkingConditionsCard(BuildContext context) {
+    final rows = <Widget>[];
+    for (final item in const ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
+      final reason = ParkingReasons.all.where((r) => r.item == item).firstOrNull;
+      final other = ParkingReasons.others.where((o) => o.item == item).firstOrNull;
+      final String text, note;
+      final Widget action;
+      if (reason != null) {
+        final placed = _signs.where((s) => ParkingReasons.of(s['kind'] as String?).key == reason.key).length;
+        text = reason.text;
+        note = placed == 0 ? 'Marked with a box on the picture' : '$placed placed on the picture';
+        action = TextButton(
+          key: ValueKey('parking-item-$item-action'),
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+          onPressed: () => setState(() {
+            _kind = reason.key;
+            _tool = ZoneTool.sign;
+          }),
+          child: const Text('Place'),
+        );
+      } else {
+        final rule = other!.ruleKey;
+        final on = widget.draft.isSelected(rule);
+        text = other.text;
+        note = 'Judged by the rule "${ViolationCatalog.of(rule).label}": ${on ? 'on' : 'off'}';
+        action = on
+            ? const Icon(Icons.check_circle, size: 18, color: Fx.success)
+            : TextButton(
+                key: ValueKey('parking-item-$item-action'),
+                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                onPressed: () => widget.draft.toggle(rule, on: true),
+                child: const Text('Add rule'),
+              );
+      }
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            key: ValueKey('parking-item-$item'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 26, child: Text('($item)', style: Fx.caption(context))),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(text, style: Fx.body(context)),
+                    Text(note, key: ValueKey('parking-item-$item-note'), style: Fx.caption(context)),
+                  ],
+                ),
+              ),
+              action,
+            ],
+          ),
+        ),
+      );
+    }
+    return FxCard(
+      key: const ValueKey('parking-conditions'),
+      padding: const EdgeInsets.all(Fx.s12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('WHAT COUNTS AS ILLEGAL PARKING', style: Fx.label(context)),
+          const SizedBox(height: 4),
+          Text(
+            '${ParkingReasons.source}: no driver may park a vehicle, or leave it standing, in these places. Each one is marked on the picture or '
+            'judged by its own rule.',
+            style: Fx.caption(context),
+          ),
+          const SizedBox(height: Fx.s8),
+          ...rows,
+          const SizedBox(height: 4),
+          Text(ParkingReasons.fireCodeNote, key: const ValueKey('parking-source-note'), style: Fx.caption(context)),
+        ],
+      ),
+    );
+  }
+
   static String _cap(String s) =>
       s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 
@@ -1053,10 +1446,17 @@ class _ZonePainter extends CustomPainter {
     required this.stopLine,
     this.signs = const [],
     this.selectedSign,
+    this.boxSigns = const [],
+    this.loadingHandles = false,
   });
 
   final List<({Offset at, String type, double scale, double angle, double tilt})> signs;
   final int? selectedSign;
+
+  /// The boxes of Illegal parking / Illegal loading: the banned area (0..1), what stands in it (a hydrant, a plate on a pole ...) and where.
+  /// The corner handles show while boxes are being placed.
+  final List<BoxObject> boxSigns;
+  final bool loadingHandles;
   final List<Map<String, dynamic>> saved;
   final List<Offset> poly;
   final List<Offset> arrow;
@@ -1205,6 +1605,57 @@ class _ZonePainter extends CustomPainter {
     return Offset(p.dx * math.cos(a) - p.dy * math.sin(a), p.dx * math.sin(a) + p.dy * math.cos(a));
   }
 
+  static const _loadingRed = Color(0xFFD72828); // the same red as the backend's sign (engine/loading_signs.py)
+
+  /// A box of Illegal parking / Illegal loading: the banned area as a faint tinted patch with a dashed edge, and the object that stands in it
+  /// (a picture made by the backend, so it is the one the evidence photos show). While the picture is on its way, a dot marks the spot.
+  void _boxObject(Canvas canvas, BoxObject s, Size size) {
+    final box = Rect.fromLTRB(s.box.left * size.width, s.box.top * size.height, s.box.right * size.width, s.box.bottom * size.height);
+    final tint = LoadingSigns.tintOf(s.kind);
+    canvas.drawRect(box, Paint()..color = tint.withValues(alpha: 0.14));
+    final dash = Paint()
+      ..color = Colors.white.withValues(alpha: 0.9)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    final corners = [box.topLeft, box.topRight, box.bottomRight, box.bottomLeft, box.topLeft];
+    for (var i = 0; i < 4; i++) {
+      final a = corners[i], b = corners[i + 1];
+      final length = (b - a).distance;
+      for (var d = 0.0; d < length; d += 16) {
+        canvas.drawLine(a + (b - a) * (d / length), a + (b - a) * (math.min(d + 8, length) / length), dash);
+      }
+    }
+    final at = Offset(s.at.dx * size.width, s.at.dy * size.height);
+    final p = s.preview;
+    if (p != null) {
+      final k = size.width / ZoneGeometry.refWidth; // the picture was made for a frame 1920 wide
+      canvas.drawImageRect(
+        p.image,
+        Rect.fromLTWH(0, 0, p.image.width.toDouble(), p.image.height.toDouble()),
+        Rect.fromLTWH(at.dx + p.dx * k, at.dy + p.dy * k, p.image.width * k, p.image.height * k),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    } else {
+      canvas.drawCircle(at, 6, Paint()..color = tint);
+    }
+    if (s.selected) {
+      canvas.drawRect(
+        box,
+        Paint()
+          ..color = Colors.cyanAccent
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
+    if (loadingHandles) {
+      for (final corner in [box.topLeft, box.topRight, box.bottomRight, box.bottomLeft]) {
+        final handle = Rect.fromCenter(center: corner, width: 12, height: 12);
+        canvas.drawRect(handle.inflate(1.5), Paint()..color = _loadingRed);
+        canvas.drawRect(handle, Paint()..color = Colors.white);
+      }
+    }
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     // Saved zones: calm green, with their own arrows / light boxes and a number.
@@ -1253,6 +1704,9 @@ class _ZonePainter extends CustomPainter {
 
     for (var i = 0; i < signs.length; i++) {
       _sign(canvas, signs[i], selectedSign == i, size);
+    }
+    for (final sign in boxSigns) {
+      _boxObject(canvas, sign, size);
     }
 
     // The zone being drawn.
