@@ -28,6 +28,16 @@ MODEL_OUTPUT_NAMES = {
 }
 
 
+def write_class_names(model, dest: Path) -> Path:
+    """Write "<file>.onnx.classes.txt", one class name per line in class-number order, next to the deployed model.
+    The app reads it to name what the detector finds. Without it a custom model is read with the stock 80-name list, and
+    every label is wrong (class 1 "car" shows as "bicycle")."""
+    names = model.names
+    out = dest.with_name(dest.name + ".classes.txt")
+    out.write_text("\n".join(str(names[i]) for i in sorted(names)) + "\n", encoding="utf-8")
+    return out
+
+
 def latest_run(model_name: str) -> str:
     """Newest run folder that has weights (training makes train, train2, train3 ...)."""
     runs = [p.parent.parent for p in (ROOT / "runs" / model_name).glob("*/weights/best.pt")]
@@ -89,6 +99,7 @@ def export(model_name: str, run: str | None, deploy: bool = True):
     
     dest = target_dir / unique_name
     shutil.copy2(exported_onnx, dest)
+    print(f"   class names: {write_class_names(model, dest).name}")
 
     # Update manifest
     manifest_path = BACKEND_MODELS / "model_manifest.json"
