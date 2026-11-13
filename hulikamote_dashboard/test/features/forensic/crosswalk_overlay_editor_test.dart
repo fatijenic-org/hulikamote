@@ -268,5 +268,45 @@ void main() {
       expect(find.byKey(const ValueKey('crosswalk-card')), findsNothing);
       expect(d.crosswalks(_rule).length, 1);
     });
+
+    testWidgets('“Move the corners” frees the four corners: a corner drag reshapes it, a side drag stretches it, the simple shape comes back', (tester) async {
+      final d = _draft();
+      await _pump(tester, d);
+      await _overlayMode(tester);
+      await _place(tester, 0.5, 0.6);
+      final c = d.crosswalks(_rule)[0];
+      final before = CrosswalkOverlay.corners(c);
+      await _tapKey(tester, 'cw-free');
+      expect(CrosswalkOverlay.isFree(c), true);
+      expect((CrosswalkOverlay.corners(c)[2] - before[2]).distance, lessThan(0.01)); // freeing changes nothing yet
+      expect(find.byKey(const ValueKey('cw-slider-scale')), findsNothing); // size, depth, angle, perspective are replaced by the handles
+      final size = tester.getSize(find.byKey(const ValueKey('cw-canvas')));
+      final corner = CrosswalkOverlay.cornerHandle(c, 2, size);
+      final canvas = tester.getRect(find.byKey(const ValueKey('cw-canvas'))).topLeft;
+      await _drag(tester, canvas + corner, canvas + corner + const Offset(60, 40));
+      final moved = CrosswalkOverlay.corners(c);
+      expect(moved[2].dx, greaterThan(before[2].dx + 50)); // only that corner moved
+      expect((moved[0] - before[0]).distance, lessThan(0.01));
+      expect((moved[3] - before[3]).distance, lessThan(0.01));
+      final side = CrosswalkOverlay.sideHandle(c, 1, size); // the right side: corners 1 and 2
+      await _drag(tester, canvas + side, canvas + side + const Offset(50, 0));
+      expect(CrosswalkOverlay.corners(c)[1].dx, greaterThan(before[1].dx + 40));
+      expect(CrosswalkOverlay.corners(c)[2].dx, greaterThan(moved[2].dx + 40));
+      await _tapKey(tester, 'cw-free');
+      expect(CrosswalkOverlay.isFree(c), false);
+      expect(find.byKey(const ValueKey('cw-slider-scale')), findsOneWidget);
+    });
+
+    test('loose corners are kept inside the picture area and sent to the backend', () {
+      final c = CrosswalkOverlay.make(const Offset(0.5, 0.5));
+      CrosswalkOverlay.freeze(c);
+      CrosswalkOverlay.moveCorner(c, 0, const Size(1000, 500), const Offset(-900, -900));
+      final a = CrosswalkOverlay.corners(c)[0];
+      expect(c['x'] + a.dx, closeTo(-0.1 * ZoneGeometry.refWidth, 0.01));
+      expect(c['y'] + a.dy, closeTo(-0.1 * ZoneGeometry.refHeight, 0.01));
+      expect((c['pts'] as List).length, 4);
+      CrosswalkOverlay.unfreeze(c);
+      expect(c.containsKey('pts'), false);
+    });
   });
 }

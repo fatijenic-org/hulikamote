@@ -439,10 +439,11 @@ void main() {
     });
 
     test('rules that cannot work without a drawing are not offered as whole-picture rules', () {
-      for (final k in ['pedestrian_lane', 'red_light', 'blocking_intersection',
+      for (final k in ['pedestrian_lane', 'red_light',
         'sidewalk_driving', 'disregarding_signs', 'crossing_solid_line']) {
         expect(AnalysisDraft.wholeFrameKeys.contains(k), isFalse, reason: k);
       }
+      expect(AnalysisDraft.wholeFrameKeys.contains('blocking_intersection'), isTrue); // the junction is found from the traffic flow
     });
 
     test('choosing a new video forgets the old choices', () {

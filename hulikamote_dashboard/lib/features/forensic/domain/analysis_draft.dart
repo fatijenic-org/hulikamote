@@ -218,12 +218,13 @@ class AnalysisDraft extends ChangeNotifier {
     'illegal_loading',
     'double_parking',
     'illegal_parking',
+    'blocking_intersection', // the junction is found from the traffic flow (engine/intersection_finder.py)
   };
 
   /// The rules among them that also need the traffic flow when they watch the whole picture: counterflow (which way is legal)
   /// and parking / loading (a stopped vehicle counts only while other traffic drives past). The backend learns the flow by itself
   /// then (Violation.needs_flow); no other rule has anything to do with it.
-  static const flowKeys = {'counterflow', 'illegal_loading', 'illegal_parking'};
+  static const flowKeys = {'counterflow', 'illegal_loading', 'illegal_parking', 'blocking_intersection'};
 
   /// The rule watches the whole picture: it needs no drawing and nothing is drawn or placed for it.
   bool watchesWholePicture(String key) => wholeFrameKeys.contains(key) && zones(key).isEmpty && signCount(key) == 0;
@@ -242,7 +243,15 @@ class AnalysisDraft extends ChangeNotifier {
 
   /// Rules where a placed overlay sign is a zone too ("Illegal loading / unloading", "Illegal parking": the sign's box is the banned
   /// area, so a sign is enough and nothing needs drawing). Their signs are [{x, y, w, h}] in the same reference space.
-  static const signZoneKeys = {'illegal_loading', 'illegal_parking'};
+  static const signZoneKeys = {
+    'illegal_loading',
+    'illegal_parking',
+    'double_parking',
+    'blocking_intersection',
+    'truck_ban',
+    'tricycle_on_highway',
+    'sidewalk_driving',
+  };
 
   /// How many overlay signs are placed for [key] (without creating the list).
   int signCount(String key) => ((config(key)['signs'] as List?) ?? const []).length;

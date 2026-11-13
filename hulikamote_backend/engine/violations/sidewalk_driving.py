@@ -6,11 +6,13 @@ tricycle). The operator draws the sidewalk; a MOVING vehicle that stays inside f
 only crossing it to reach a driveway is shorter than that, and one left standing there is illegal_parking.
 Legal basis: not confirmed (no source found yet): check the LGU ordinance before it is quoted on a ticket.
 """
+from engine.violations.box_signs import BoxSigns
 from engine.violations.banned_in_zone import BannedInZone
 from engine.violations.base import VEHICLE_CLASSES
 
 
-class SidewalkDriving(BannedInZone):
+class SidewalkDriving(BoxSigns, BannedInZone):
+    sign_kind = "sidewalk"                       # the object placed for it (engine/overlay_objects.py)
     key = "sidewalk_driving"
     zone_key = "sidewalk_zones"
     color = (255, 0, 160)

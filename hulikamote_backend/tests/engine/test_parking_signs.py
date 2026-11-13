@@ -158,6 +158,30 @@ def test_a_zone_without_a_reason_flags_without_a_label():
     assert "illegal_parking" not in mgr.ledgers[1].marks
 
 
+# ─── a free-shaped area, the object anywhere ────────────────────────────────
+
+def test_a_free_shape_is_the_zone_not_its_box_and_the_object_stands_where_it_was_put():
+    area = [[100, 100], [500, 120], [450, 400], [90, 380], [60, 250]]
+    zones = sign_zones([{**sign(280, 250, 440, 300), "kind": "hydrant", "area": area, "ax": 150, "ay": 380}])
+    assert zones[0]["polygon"] == [[float(x), float(y)] for x, y in area]
+    assert zones[0]["sign_points"] == [[150.0, 380.0]]
+    assert stands_at(zones, 300, 300)                                       # inside the shape
+    assert not stands_at(zones, 480, 390)                                   # inside the box that holds it, outside the shape
+
+
+def test_without_a_usable_area_or_anchor_the_box_and_its_middle_are_used():
+    for bad in (None, [], [[1, 1], [2, 2]], [[1, 1], [2, "x"], [3, 3]], [[1, 1], [2, 2], [float("nan"), 3]], "junk"):
+        (zone,) = sign_zones([{**sign(500, 400, 200, 100), "area": bad, "ax": "x", "ay": None}])
+        assert zone["polygon"] == loading_signs.polygon(sign(500, 400, 200, 100)) and zone["sign_points"] == [[500.0, 400.0]]
+
+
+def test_the_free_shape_reaches_the_saved_rules():
+    area = [[100, 100], [500, 120], [300, 400]]
+    config = prepare_pipeline_config({"per_violation_configs": {"illegal_parking": {"rois": [], "signs": [{**sign(300, 200, 400, 300), "area": area}]}}})
+    (raw,) = config["regions_of_interest"]["illegal_parking_zones"]
+    assert raw["coordinates"] == [[100.0, 100.0], [500.0, 120.0], [300.0, 400.0]]
+
+
 # ─── in the pipeline ────────────────────────────────────────────────────────
 
 def pipeline(zones, flow_mode="zones", cfg=None):

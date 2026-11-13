@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:http/http.dart' as http;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../domain/forensic_models.dart';
 import '../../domain/review_controller.dart';
 import 'fx.dart';
+import 'replay_boxes.dart';
 
 /// Builds the result-video panel. The default uses media_kit; tests pass a stand-in
 /// because media_kit needs native libraries.
@@ -28,6 +32,8 @@ Widget defaultVideoPanel(
 
 /// The annotated result video, with a timeline that shows where every ticket happens.
 /// Selecting a ticket (or pressing "show this moment" on a photo) seeks the video.
+/// The video can be zoomed (mouse wheel, drag to move, or the buttons below it). The boxes are drawn over it from boxes.json,
+/// so their lines stay thin at any zoom; a replay made before that file existed still plays, with its boxes burned in.
 class ForensicVideoPanel extends StatefulWidget {
   const ForensicVideoPanel({
     super.key,
@@ -44,13 +50,20 @@ class ForensicVideoPanel extends StatefulWidget {
   State<ForensicVideoPanel> createState() => _ForensicVideoPanelState();
 }
 
-class _ForensicVideoPanelState extends State<ForensicVideoPanel> {
+class _ForensicVideoPanelState extends State<ForensicVideoPanel> with SingleTickerProviderStateMixin {
   late final Player _player = Player();
   late final VideoController _video = VideoController(_player);
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
   double? _pendingSeek; // asked for before the video was ready
   final List<StreamSubscription<dynamic>> _subs = [];
+  final TransformationController _zoom = TransformationController();
+  final GlobalKey _viewKey = GlobalKey();
+  final ValueNotifier<double> _seconds = ValueNotifier(0); // the video's time, followed every screen frame so the boxes keep up
+  late final Ticker _ticker;
+  ReplayBoxes? _boxes;
+  bool _playing = false;
+  static const double _maxZoom = 10;
 
   @override
   void initState() {
@@ -72,13 +85,53 @@ class _ForensicVideoPanelState extends State<ForensicVideoPanel> {
         if (mounted) setState(() => _position = p);
       }),
     );
+    _subs.add(_player.stream.playing.listen((v) {
+      if (mounted) setState(() => _playing = v);
+    }));
+    _ticker = createTicker((_) {
+      final t = _player.state.position.inMilliseconds / 1000.0;
+      if (t != _seconds.value) _seconds.value = t;
+    })..start();
+    _loadBoxes();
     widget.seekRequest.addListener(_onSeek);
     _onSeek(); // a moment may already have been asked for (the tab opens on "show this moment")
+  }
+
+  /// boxes.json sits next to the video. Older replays have none (404): they keep their burned-in boxes.
+  Future<void> _loadBoxes() async {
+    try {
+      final uri = Uri.parse(widget.url);
+      final path = [...uri.pathSegments.take(uri.pathSegments.length - 1), 'boxes.json'];
+      final res = await http.get(uri.replace(pathSegments: path));
+      if (res.statusCode != 200 || !mounted) return;
+      final boxes = ReplayBoxes.fromJson(jsonDecode(res.body));
+      if (mounted) setState(() => _boxes = boxes);
+    } catch (_) {
+      // no boxes file: the video is shown as it is
+    }
+  }
+
+  /// Zoom the video by [factor] about the middle of the picture (1 = whole picture).
+  void _zoomBy(double factor) {
+    final size = _viewKey.currentContext?.size;
+    if (size == null) return;
+    final now = _zoom.value.getMaxScaleOnAxis();
+    final target = (now * factor).clamp(1.0, _maxZoom);
+    if (target <= 1.001) {
+      _zoom.value = Matrix4.identity();
+      return;
+    }
+    final k = target / now;
+    final c = Offset(size.width / 2, size.height / 2);
+    _zoom.value = Matrix4.translationValues(c.dx, c.dy, 0) * Matrix4.diagonal3Values(k, k, 1) * Matrix4.translationValues(-c.dx, -c.dy, 0) * _zoom.value;
   }
 
   @override
   void dispose() {
     widget.seekRequest.removeListener(_onSeek);
+    _ticker.dispose();
+    _zoom.dispose();
+    _seconds.dispose();
     for (final s in _subs) {
       s.cancel();
     }
@@ -106,11 +159,27 @@ class _ForensicVideoPanelState extends State<ForensicVideoPanel> {
             borderRadius: BorderRadius.circular(Fx.radius),
             child: Container(
               color: Colors.black,
-              child: Video(controller: _video),
+              child: InteractiveViewer(
+                key: _viewKey,
+                transformationController: _zoom,
+                minScale: 1,
+                maxScale: _maxZoom,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Video(controller: _video, controls: NoVideoControls),
+                    if (_boxes != null)
+                      IgnorePointer(
+                        child: CustomPaint(painter: ReplayBoxesPainter(boxes: _boxes!, seconds: _seconds, zoom: _zoom)),
+                      ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-        const SizedBox(height: Fx.s12),
+        _transport(context),
+        const SizedBox(height: Fx.s8),
         ListenableBuilder(
           listenable: widget.controller,
           builder: (context, _) => TicketTimeline(
@@ -120,6 +189,50 @@ class _ForensicVideoPanelState extends State<ForensicVideoPanel> {
             onSeek: (s) =>
                 _player.seek(Duration(milliseconds: (s * 1000).round())),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Play / pause, the time, and the zoom buttons (the wheel and dragging work on the picture itself).
+extension on _ForensicVideoPanelState {
+  Widget _transport(BuildContext context) {
+    String clock(Duration d) => formatVideoTime(d.inMilliseconds / 1000.0);
+    return Row(
+      children: [
+        IconButton(
+          tooltip: _playing ? 'Pause' : 'Play',
+          onPressed: _player.playOrPause,
+          icon: Icon(_playing ? Icons.pause : Icons.play_arrow),
+        ),
+        Text('${clock(_position)} / ${clock(_duration)}', style: Fx.caption(context)),
+        const Spacer(),
+        ListenableBuilder(
+          listenable: _zoom,
+          builder: (context, _) {
+            final z = _zoom.value.getMaxScaleOnAxis();
+            return Row(
+              children: [
+                IconButton(
+                  tooltip: 'Zoom out',
+                  onPressed: z > 1.001 ? () => _zoomBy(1 / 1.5) : null,
+                  icon: const Icon(Icons.zoom_out),
+                ),
+                SizedBox(width: 46, child: Text('${(z * 100).round()}%', textAlign: TextAlign.center, style: Fx.caption(context))),
+                IconButton(
+                  tooltip: 'Zoom in',
+                  onPressed: z < _ForensicVideoPanelState._maxZoom - 0.001 ? () => _zoomBy(1.5) : null,
+                  icon: const Icon(Icons.zoom_in),
+                ),
+                IconButton(
+                  tooltip: 'Whole picture',
+                  onPressed: z > 1.001 ? () => _zoom.value = Matrix4.identity() : null,
+                  icon: const Icon(Icons.fit_screen),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );

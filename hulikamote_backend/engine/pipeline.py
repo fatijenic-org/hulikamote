@@ -406,9 +406,8 @@ class DecoupledPipeline:
             settings = getattr(self, "violation_cfg", None) or {}
             for violation in ZONE_VIOLATIONS:
                 if violation.whole_frame and violation.key in active and not scaled[violation.zone_key]:
-                    scaled[violation.zone_key] = [
-                        violation.whole_frame_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), getattr(self, "flow", None))
-                    ]
+                    zone = violation.whole_frame_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), getattr(self, "flow", None))
+                    scaled[violation.zone_key] = [zone] if zone else []       # None: nothing to judge yet (the junction is not found)
         for violation in self._learned_in_use():
             scaled[violation.zone_key] = [self._scale_learned(z, frame_w, frame_h) for z in self.learned_rois[violation.zone_key]]
         return scaled
@@ -553,21 +552,37 @@ class DecoupledPipeline:
             "marks": [{"bbox": b, "label": label} for b, label, _ in marks.current_marks(ledger, det.bbox) if b],
         })
 
-    def annotate_frame_fast(self, frame: np.ndarray, detections: list) -> np.ndarray:
+    def annotate_frame_fast(self, frame: np.ndarray, detections: list, boxes: bool = True) -> np.ndarray:
         """
         Fast frame annotation for skipped frames: burns last known detections
         and active ROI polygons onto the current video frame without running
         costly neural network inference. Takes ~2-3ms instead of ~90ms.
+        `boxes=False` burns only the zones: the replay video keeps its boxes in a separate file (see box_specs),
+        so the dashboard can draw them thin when the video is zoomed.
         """
         from yolo_inference import get_inference
-        yolo = get_inference()
-        out_frame = yolo.draw_detections(frame, detections)
-        for det in detections:   # boxes showing why each flagged vehicle was flagged
-            ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
-            if ledger is not None:
-                marks.draw_marks(out_frame, ledger, det.bbox)
+        out_frame = frame
+        if boxes:
+            out_frame = get_inference().draw_detections(frame, detections)
+            for det in detections:   # boxes showing why each flagged vehicle was flagged
+                ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
+                if ledger is not None:
+                    marks.draw_marks(out_frame, ledger, det.bbox)
         self._draw_dets = detections
         return self._draw_rois(out_frame)
+
+    def box_specs(self, detections: list) -> list[dict]:
+        """What annotate_frame_fast would draw as boxes, as plain data with RGB colours (the replay's box file)."""
+        from yolo_inference import box_specs
+        specs = box_specs(detections)
+        for det in detections:
+            ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
+            if ledger is not None:
+                specs += marks.mark_specs(ledger, det.bbox)
+        for spec in specs:
+            if "color" in spec:
+                spec["color"] = spec["color"][::-1]     # BGR (OpenCV) -> RGB
+        return specs
 
     # ── ROI parsing ──────────────────────────────────────────────────────────
 

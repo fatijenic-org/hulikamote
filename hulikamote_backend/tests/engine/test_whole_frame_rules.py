@@ -15,7 +15,7 @@ from tests.helpers import FPS, H, W, Det, go_up_then
 WHOLE = [[0, 0], [FW, 0], [FW, FH], [0, FH]]
 BIG = (2000, 2000)                    # the picture the go_up_then / U-turn paths live in
 WHOLE_FRAME_KEYS = {"counterflow", "swerving", "illegal_u_turn", "illegal_turn", "signal_light", "truck_ban",
-                    "tricycle_on_highway", "restricted_lane", "illegal_loading", "double_parking", "illegal_parking"}
+                    "tricycle_on_highway", "restricted_lane", "illegal_loading", "double_parking", "illegal_parking", "blocking_intersection"}
 
 
 def zone_of(key, cfg=None, field=None, size=(FW, FH)):
@@ -74,7 +74,9 @@ def test_every_rule_that_is_on_gets_the_whole_frame_whatever_the_flow_mode_and_t
     for mode in ("zones", "auto"):
         scaled = pipeline_with({}, active=[v.key for v in ZONE_VIOLATIONS], flow_mode=mode)._get_scaled_rois(FW, FH)
         for v in ZONE_VIOLATIONS:
-            if v.whole_frame:
+            if v.key == "blocking_intersection":
+                assert scaled[v.zone_key] == []                  # the junction is found from the traffic: none learned yet, nothing to judge
+            elif v.whole_frame:
                 assert scaled[v.zone_key][0]["whole_frame"] and scaled[v.zone_key][0]["polygon"] == WHOLE, v.key
             else:
                 assert scaled[v.zone_key] == [], v.key          # pedestrian lane, red light, signs ... still need a drawing

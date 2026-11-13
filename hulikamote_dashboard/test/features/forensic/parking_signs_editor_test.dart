@@ -197,6 +197,80 @@ void main() {
     });
   });
 
+  group('a free-shaped area', () {
+    Future<Map<String, dynamic>> placed(WidgetTester tester, AnalysisDraft d) async {
+      await _pump(tester, d);
+      await _tapKey(tester, 'sign-place');
+      await _click(tester, 0.5, 0.5);
+      await _tapKey(tester, 'box-shape-edit');
+      return d.signs(_rule).single;
+    }
+
+    test('geometry: a shape keeps three corners, adds one on an edge, moves with its object, and the box follows it', () {
+      final s = LoadingSigns.make(const Offset(0.5, 0.5), kind: 'hydrant');
+      expect(LoadingSigns.hasArea(s), isFalse);
+      LoadingSigns.startArea(s);
+      expect(LoadingSigns.areaOf(s), hasLength(4));
+      expect(LoadingSigns.insertVertex(s, 0), 1);
+      expect(LoadingSigns.areaOf(s), hasLength(5));
+      expect(LoadingSigns.removeVertex(s, 1), isTrue);
+      expect(LoadingSigns.removeVertex(s, 0), isTrue);
+      expect(LoadingSigns.areaOf(s), hasLength(3));
+      expect(LoadingSigns.removeVertex(s, 0), isFalse, reason: 'three corners stay');
+      LoadingSigns.moveVertex(s, 0, const Offset(0.1, 0.1));
+      expect(LoadingSigns.rectOf(s).left, closeTo(0.1, 1e-9), reason: 'the box holds the shape');
+      LoadingSigns.setAnchor(s, const Offset(0.2, 0.3));
+      final before = LoadingSigns.anchorOf(s);
+      LoadingSigns.moveBy(s, const Offset(0.6, 0.6), Offset.zero);
+      expect(LoadingSigns.anchorOf(s).dx, greaterThan(before.dx), reason: 'the object goes with the shape');
+      LoadingSigns.clearArea(s);
+      expect(LoadingSigns.hasArea(s), isFalse);
+      expect(s.containsKey('ax'), isFalse);
+    });
+
+    testWidgets('Edit shape makes a free shape; a corner drags, an edge middle adds a corner, right-click takes one away', (tester) async {
+      final d = _draft();
+      final sign = await placed(tester, d);
+      expect(LoadingSigns.hasArea(sign), isTrue);
+      expect(find.byKey(const ValueKey('box-shape-help')), findsOneWidget);
+      final corners = LoadingSigns.areaOf(sign);
+      await _drag(tester, _atN(tester, corners[0]), _at(tester, 0.30, 0.20));
+      expect(LoadingSigns.areaOf(sign)[0].dx, closeTo(0.30, 0.01));
+      expect(LoadingSigns.areaOf(sign), hasLength(4));
+      final now = LoadingSigns.areaOf(sign);
+      await _drag(tester, _atN(tester, Offset.lerp(now[1], now[2], 0.5)!), _at(tester, 0.80, 0.55));
+      expect(LoadingSigns.areaOf(sign), hasLength(5));
+      await tester.tapAt(_atN(tester, LoadingSigns.areaOf(sign)[2]), buttons: kSecondaryMouseButton);
+      await tester.pump();
+      expect(LoadingSigns.areaOf(sign), hasLength(4));
+      expect(d.signs(_rule), hasLength(1), reason: 'a corner was taken away, not the sign');
+    });
+
+    testWidgets('the diamond moves the object alone, and the shape reaches the payload', (tester) async {
+      final d = _draft();
+      final sign = await placed(tester, d);
+      final centre = LoadingSigns.anchorOf(sign);
+      await _drag(tester, _atN(tester, centre), _at(tester, 0.62, 0.62));
+      expect(sign['ax'], closeTo(0.62 * 1920, 14));
+      expect(sign['ay'], closeTo(0.62 * 1080, 14));
+      expect(LoadingSigns.areaOf(sign), hasLength(4), reason: 'the area did not move');
+      final sent = (((d.buildConfig()['per_violation_configs'] as Map)[_rule] as Map)['signs'] as List).single as Map;
+      expect(sent['area'], hasLength(4));
+      expect(sent, containsPair('ax', sign['ax']));
+    });
+
+    testWidgets('turn, move inside, and back to a box', (tester) async {
+      final d = _draft();
+      final sign = await placed(tester, d);
+      final before = LoadingSigns.areaOf(sign);
+      await _tapKey(tester, 'box-shape-rotate-right');
+      expect(LoadingSigns.areaOf(sign)[0], isNot(before[0]));
+      await _tapKey(tester, 'box-shape-reset');
+      expect(LoadingSigns.hasArea(sign), isFalse);
+      expect(find.byKey(const ValueKey('box-shape-edit')), findsOneWidget);
+    });
+  });
+
   group('the look of the object in a box', () {
     Slider slider(WidgetTester tester, String key) => tester.widget<Slider>(find.byKey(ValueKey(key)));
 

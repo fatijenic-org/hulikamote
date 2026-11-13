@@ -95,15 +95,21 @@ class IllegalParking(Violation):
 
         if zone is None:
             ledger.stationary_start_time = None
+            marks.clear_timer(ledger, self.key)
             return False
         if self.signalling(ledger, t):
             ledger.stationary_start_time = None     # lights are blinking: not parked yet, the stopwatch starts again when they stop
+            marks.clear_timer(ledger, self.key)
             return False
         if ledger.stationary_start_time is None:
             ledger.stationary_start_time = t
             return False
         flowing = recently_flowing(mgr, ledger, zone, self.key) if zone.get("whole_frame") else True
-        if t - ledger.stationary_start_time >= zone.get("time_limit", 180.0) and flowing:
+        limit = zone.get("time_limit", 180.0)
+        elapsed = t - ledger.stationary_start_time
+        if flowing:     # the stopwatch on the vehicle's box runs from the first still frame until it moves off or leaves
+            marks.set_timer(ledger, self.key, f"PARKED {marks.clock(elapsed)} / {marks.clock(limit)}", elapsed >= limit, t)
+        if elapsed >= limit and flowing:
             ledger.violations.add(self.key)
             if zone.get("reason"):                   # say why on the evidence photos: "Within 4 m of fire hydrant"
                 box = ledger.history[-1][3]

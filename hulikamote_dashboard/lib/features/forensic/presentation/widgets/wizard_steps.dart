@@ -230,7 +230,9 @@ class _PickCard extends StatelessWidget {
                     label: info.key == 'crossing_solid_line'
                         ? 'Nothing to draw'
                         : (AnalysisDraft.wholeFrameKeys.contains(info.key)
-                              ? (AnalysisDraft.signZoneKeys.contains(info.key) ? 'Whole picture (or zone, sign)' : 'Whole picture (zone optional)')
+                              ? (info.key == 'blocking_intersection'
+                                    ? 'Found by itself (or zone, sign)'
+                                    : (AnalysisDraft.signZoneKeys.contains(info.key) ? 'Whole picture (or zone, sign)' : 'Whole picture (zone optional)'))
                               : 'Draw a zone'),
                     color: Fx.muted(context),
                     icon: Icons.crop_free,

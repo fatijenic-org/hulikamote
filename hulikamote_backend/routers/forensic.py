@@ -584,6 +584,7 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         out = cv2.VideoWriter(str(raw_video_path), cv2.CAP_ANY, fourcc, fps, (width, height))
 
         releaser = _TicketReleaser(task_id, config, output_dir, written, save_violation)
+        frame_boxes: list = []        # per video frame: the boxes to draw over the replay
         frame_idx = 0
         stop_asked = None
         while cap.isOpened():
@@ -602,8 +603,14 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
             current_timestamp = frame_idx / fps if fps > 0 else frame_idx / 30.0
             _, detections = pipeline.process_frame(frame, frame_idx, timestamp=current_timestamp)
 
-            # 4. Burn bounding boxes permanently into the frame
-            annotated_frame = pipeline.annotate_frame_fast(frame.copy(), detections)
+            # 4. Burn the zones into the frame. The boxes go to boxes.json instead: the dashboard draws them over the video,
+            # so their lines stay thin when the video is zoomed.
+            annotated_frame = pipeline.annotate_frame_fast(frame.copy(), detections, boxes=False)
+            try:
+                frame_boxes.append(pipeline.box_specs(detections))
+            except Exception:
+                log.exception("[Forensic] Boxes of frame %s not saved", frame_idx)
+                frame_boxes.append([])
 
             # 5. Write to raw video file
             out.write(annotated_frame)
@@ -619,6 +626,11 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
 
         cap.release()
         out.release()
+        try:
+            (output_dir / "boxes.json").write_text(
+                json.dumps({"w": width, "h": height, "fps": fps, "frames": frame_boxes}, separators=(",", ":")), encoding="utf-8")
+        except Exception:
+            log.exception("[Forensic] boxes.json not written: the replay shows no boxes")
         if stop_asked == "finish" and frame_idx == 0:
             stop_asked = "cancel"      # nothing was analyzed yet: there is nothing to keep
         if stop_asked == "cancel":

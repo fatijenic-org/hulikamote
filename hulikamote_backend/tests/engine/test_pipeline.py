@@ -86,9 +86,9 @@ def test_simulated_light_drawn_on_frames():
     REGISTRY["red_light"].prepare(pipe, frame, [], pipe._get_scaled_rois(640, 480)["red_light_zones"], 3.0)
     out = pipe._draw_rois(frame.copy())
 
-    corner = out[:120, 560:]
-    red_lamp = (corner[..., 2] == 255) & (corner[..., 1] == 0) & (corner[..., 0] == 0)
-    assert red_lamp.sum() > 50                       # lit red lamp in the top-right corner
+    corner = out[:120, 560:].astype(int)               # the light is a real-looking object now: its lit lamp is red, not pure (0, 0, 255)
+    red_lamp = (corner[..., 2] > 90) & (corner[..., 2] > 2 * corner[..., 1]) & (corner[..., 2] > 2 * corner[..., 0])
+    assert red_lamp.sum() > 20                       # lit red lamp in the top-right corner
     assert tuple(out[400, 300]) == (0, 0, 255)       # stop line drawn red
 
     REGISTRY["red_light"].prepare(pipe, frame, [], pipe._get_scaled_rois(640, 480)["red_light_zones"], 12.0)

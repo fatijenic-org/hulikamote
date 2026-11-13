@@ -105,7 +105,7 @@ class ViolationCatalog {
       icon: Icons.block,
       needsZone: true,
       zoneHint:
-          'Draw over the junction box. A vehicle that stands still inside it past the limit is flagged.',
+          'Optional. With nothing drawn, the junction is found by itself from how the traffic flows. A vehicle that stands still inside it past the limit is flagged.',
     ),
     ViolationInfo(
       key: 'illegal_turn',
