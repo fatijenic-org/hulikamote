@@ -23,9 +23,9 @@ NEEDS: list[Need] = [
          "A vehicle drives against the legal direction for 2 s or more.",
          "Normal traffic on the same road; a vehicle crossing the road sideways.",
          "Any fixed view where the road direction is clear.",
-         "Zones mode: draw the zone and the legal-flow arrow. Auto mode (flow_mode auto): no drawing, but the clip needs "
+         "Draw the zone and the legal-flow arrow, or draw nothing (whole picture): then the clip needs "
          "about 60 s of normal traffic first, because the legal direction is learned from it.",
-         "Two-way roads are never judged in auto mode (both directions are normal there). Needs a fixed camera."),
+         "Two-way roads are never judged when the direction is learned (both directions are normal there). Needs a fixed camera."),
     Need("illegal_parking", "Illegal parking", "zone rule",
          "A vehicle stands in the no-parking zone longer than the zone's time limit.",
          "A vehicle that stops in the zone for less than the limit; moving traffic.",
@@ -58,7 +58,7 @@ NEEDS: list[Need] = [
          "A vehicle weaves left-right-left within 6 s (swings of at least half its width).",
          "A single lane change; a steady straight path.",
          "Rear or front view along the road; the vehicle visible for 6 s or more and travelling at least 2 box widths.",
-         "Draw the monitored zone (auto flow mode gives it the whole frame).", ""),
+         "Draw the monitored zone, or draw nothing: then the whole frame is watched.", ""),
     Need("red_light", "Red light running", "zone rule",
          "A vehicle crosses the stop line while the light is red.",
          "A vehicle crossing on green; a vehicle still in the junction when the light turns red.",
