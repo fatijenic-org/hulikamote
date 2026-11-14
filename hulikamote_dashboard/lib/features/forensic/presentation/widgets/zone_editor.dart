@@ -49,6 +49,8 @@ class ZoneEditor extends StatefulWidget {
 class _ZoneEditorState extends State<ZoneEditor> {
   final List<Offset> _poly = [];
   final List<Offset> _arrow = [];
+  /// Arrows already finished in the zone being drawn, for a rule that can ban several turns (the one being drawn is [_arrow]).
+  final List<List<Offset>> _arrows = [];
   final List<Offset> _light = [];
   ZoneTool _tool = ZoneTool.zone;
   String _sign = 'no_entry';
@@ -101,6 +103,12 @@ class _ZoneEditorState extends State<ZoneEditor> {
   bool get needsArrow =>
       ViolationCatalog.arrowViolations.contains(key) ||
       (_isSigns && (ViolationCatalog.signs[_sign]?.arrow ?? false));
+  /// A junction can ban more than one turn: the zone may hold several prohibited-turn arrows (click again to start the next one).
+  bool get _multiArrow => key == 'illegal_turn' || (_isSigns && _sign == 'no_turn');
+
+  /// Every finished arrow of the zone being drawn: the earlier ones and the one on the picture, when it has both points.
+  List<List<Offset>> get _drawnArrows => [..._arrows, if (_arrow.length == 2) List.of(_arrow)];
+
   bool get needsLight => key == 'red_light' && _cfg['light_mode'] == 'camera';
 
   /// The two points are a LINE (stop line, solid line), not an arrow.
@@ -202,6 +210,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
   void _resetDrawing() {
     _poly.clear();
     _arrow.clear();
+    _arrows.clear();
     _light.clear();
     _tool = ZoneTool.zone;
     _drag = null;
@@ -369,7 +378,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   bool get _complete =>
       _poly.length >= 3 &&
-      (!needsArrow || _arrow.length == 2) &&
+      (!needsArrow || _drawnArrows.isNotEmpty) &&
       (!needsLight || _light.length == 2);
 
   // ── canvas input ──
@@ -405,6 +414,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
     setState(() {
       _notice = null;
       if (_tool != ZoneTool.zone && pts.length >= 2) {
+        if (_tool == ZoneTool.arrow && _multiArrow) _arrows.add(List.of(pts)); // the next prohibited turn: keep this arrow, start another
         pts.clear(); // a third click restarts the arrow / box
       }
       pts.add(_norm(local, size));
@@ -456,6 +466,10 @@ class _ZoneEditorState extends State<ZoneEditor> {
       return;
     }
     final pts = _pointsOf(_tool);
+    if (pts.isEmpty && _tool == ZoneTool.arrow && _arrows.isNotEmpty) {
+      setState(() => pts.addAll(_arrows.removeLast())); // undo goes back into the last finished arrow
+      return;
+    }
     if (pts.isNotEmpty) setState(pts.removeLast);
   }
 
@@ -471,6 +485,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
     }
     setState(() {
       _pointsOf(_tool).clear();
+      if (_tool == ZoneTool.arrow) _arrows.clear();
       _notice = null;
     });
   }
@@ -479,8 +494,13 @@ class _ZoneEditorState extends State<ZoneEditor> {
     if (!_complete) return;
     final zone = <String, dynamic>{'polygon': ZoneGeometry.toReference(_poly)};
     if (needsArrow) {
-      zone['vector'] = ZoneGeometry.vectorOf(_arrow[0], _arrow[1]);
-      zone['ui_vector'] = ZoneGeometry.toReference(_arrow);
+      final arrows = _drawnArrows;
+      zone['vector'] = ZoneGeometry.vectorOf(arrows.first[0], arrows.first[1]); // the first arrow, as before
+      zone['ui_vector'] = ZoneGeometry.toReference(arrows.first);
+      if (_multiArrow && arrows.length > 1) {
+        zone['vectors'] = [for (final a in arrows) ZoneGeometry.vectorOf(a[0], a[1])];
+        zone['ui_vectors'] = [for (final a in arrows) ZoneGeometry.toReference(a)];
+      }
     }
     if (needsLight) zone['ui_light_box'] = ZoneGeometry.toReference(_light);
     if (_isSigns) zone['sign'] = _sign;
@@ -631,6 +651,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                   saved: saved,
                                   poly: List.of(_poly),
                                   arrow: List.of(_arrow),
+                                  moreArrows: [for (final a in _arrows) List.of(a)],
                                   light: List.of(_light),
                                   tool: _tool,
                                   stopLine: _drawsLine,
@@ -723,6 +744,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                   onChanged: (v) => setState(() {
                     _sign = v!;
                     _arrow.clear();
+                    _arrows.clear();
                     if (_tool == ZoneTool.arrow && !needsArrow) {
                       _tool = ZoneTool.zone;
                     }
@@ -781,8 +803,10 @@ class _ZoneEditorState extends State<ZoneEditor> {
                   ZoneTool.arrow,
                   '2',
                   _cap(arrowName),
-                  _arrow.length == 2,
-                  'click start, then end',
+                  _drawnArrows.isNotEmpty,
+                  _multiArrow
+                      ? 'click start, then end; click again for one more turn${_drawnArrows.isEmpty ? '' : '  (${_drawnArrows.length} drawn)'}'
+                      : 'click start, then end',
                 ),
               if (needsLight)
                 _step(
@@ -909,7 +933,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                       Expanded(
                         child: Text(
                           'Zone ${i + 1}  ·  ${((saved[i] as Map)['polygon'] as List).length} points'
-                          '${(saved[i] as Map).containsKey('vector') ? '  ·  $arrowName' : ''}'
+                          '${(saved[i] as Map).containsKey('vector') ? '  ·  ${(((saved[i] as Map)['vectors'] as List?)?.length ?? 1) > 1 ? '${((saved[i] as Map)['vectors'] as List).length} ${arrowName}s' : arrowName}' : ''}'
                           '${(saved[i] as Map)['sign'] != null ? '  ·  ${ViolationCatalog.signs[(saved[i] as Map)['sign']]?.label ?? ''}' : ''}',
                           style: Fx.body(context),
                           overflow: TextOverflow.ellipsis,
@@ -1550,6 +1574,7 @@ class _ZonePainter extends CustomPainter {
     required this.saved,
     required this.poly,
     required this.arrow,
+    this.moreArrows = const [],
     required this.light,
     required this.tool,
     required this.stopLine,
@@ -1569,6 +1594,7 @@ class _ZonePainter extends CustomPainter {
   final List<Map<String, dynamic>> saved;
   final List<Offset> poly;
   final List<Offset> arrow;
+  final List<List<Offset>> moreArrows; // earlier arrows of the zone being drawn (several banned turns)
   final List<Offset> light;
   final ZoneTool tool;
   final bool stopLine;
@@ -1827,8 +1853,13 @@ class _ZonePainter extends CustomPainter {
           pts.fold<Offset>(Offset.zero, (a, b) => a + b) /
           pts.length.toDouble();
       _label(canvas, 'Zone ${i + 1}', _px(c, size), Colors.white);
-      if (z['ui_vector'] is List && (z['ui_vector'] as List).length == 2) {
-        final v = ZoneGeometry.fromReference(z['ui_vector'] as List);
+      // a zone with several banned turns keeps them all in `ui_vectors`; older ones only have `ui_vector`
+      final shown = (z['ui_vectors'] is List && (z['ui_vectors'] as List).isNotEmpty)
+          ? (z['ui_vectors'] as List)
+          : [if (z['ui_vector'] != null) z['ui_vector']];
+      for (final raw in shown) {
+        if (raw is! List || raw.length != 2) continue;
+        final v = ZoneGeometry.fromReference(raw);
         _arrowShape(
           canvas,
           _px(v[0], size),
@@ -1883,6 +1914,9 @@ class _ZonePainter extends CustomPainter {
     }
     _handles(canvas, poly, size, Fx.danger, numbered: edit);
 
+    for (final earlier in moreArrows) {
+      _arrowShape(canvas, _px(earlier[0], size), _px(earlier[1], size), Fx.accent, line: stopLine);
+    }
     if (arrow.length == 2) {
       _arrowShape(
         canvas,

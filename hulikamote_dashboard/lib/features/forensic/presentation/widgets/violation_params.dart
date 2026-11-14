@@ -42,7 +42,7 @@ class ViolationParams extends StatelessWidget {
             options: const ['left', 'right']),
       if (violationKey == 'double_parking')
         _slider(context, 'How long may a vehicle stand in the lane?', 'time_limit', 3, 120, suffix: 'seconds'),
-      if (violationKey == 'truck_ban' || violationKey == 'tricycle_on_highway' || violationKey == 'sidewalk_driving')
+      if (violationKey == 'truck_ban' || violationKey == 'sidewalk_driving')   // the tricycle rule bans tricycles only: nothing to pick
         _chips(context, 'Vehicle types NOT allowed here', 'banned_classes'),
       // The truck ban only holds at certain hours in most cities (Zamboanga's are in its ordinance).
       if (violationKey == 'truck_ban') BanHoursEditor(draft: draft, violationKey: violationKey, onChanged: onChanged),
