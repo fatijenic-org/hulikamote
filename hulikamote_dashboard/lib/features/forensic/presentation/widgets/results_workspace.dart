@@ -10,6 +10,7 @@ import 'evidence_viewer.dart';
 import 'fx.dart';
 import 'harvest_categories_view.dart';
 import 'holding_view.dart';
+import 'live_preview_panel.dart';
 import 'merge_dialog.dart';
 import 'plate_reads_panel.dart';
 import 'queue_panel.dart';
@@ -29,6 +30,7 @@ class ResultsWorkspace extends StatefulWidget {
     this.subtitle,
     this.videoUrl,
     this.videoBuilder = defaultVideoPanel,
+    this.previewBuilder = defaultPreviewPanel,
     required this.onBack,
     required this.onNewAnalysis,
     this.onSendToLive,
@@ -41,6 +43,7 @@ class ResultsWorkspace extends StatefulWidget {
   final String? subtitle;
   final String? videoUrl;
   final VideoPanelBuilder videoBuilder;
+  final PreviewPanelBuilder previewBuilder; // the Video tab of an analysis that is still running
   final VoidCallback onBack;
   final VoidCallback onNewAnalysis;
   final Future<void> Function()? onSendToLive;
@@ -762,17 +765,19 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
                             _seek,
                             c,
                           )
-                        : EmptyState(
-                            icon: Icons.videocam_off_outlined,
-                            title: _videoUrl == null
-                                ? (c.analyzing ? 'The video is not ready yet' : 'No result video')
-                                : 'Video',
-                            message: _videoUrl == null
-                                ? (c.analyzing
-                                    ? 'The evidence video appears when the analysis has read the whole video.'
-                                    : 'This analysis has no result video on disk.')
-                                : 'Opens the first time you visit this tab.',
-                          ),
+                        : _videoOpened && _videoUrl == null && c.analyzing
+                            ? widget.previewBuilder(context, c.taskId, widget.media)
+                            : EmptyState(
+                                icon: Icons.videocam_off_outlined,
+                                title: _videoUrl == null
+                                    ? (c.analyzing ? 'The video is not ready yet' : 'No result video')
+                                    : 'Video',
+                                message: _videoUrl == null
+                                    ? (c.analyzing
+                                        ? 'The full replay appears when the analysis has read the whole video.'
+                                        : 'This analysis has no result video on disk.')
+                                    : 'Opens the first time you visit this tab.',
+                              ),
                   ],
                 ),
               ),

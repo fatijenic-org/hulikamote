@@ -10,7 +10,7 @@ disregarding_signs - breaking a traffic sign. One zone per sign; each sign type 
 from engine import line_paint, overlay_objects
 from engine.violations.base import Violation
 from engine.violations.geometry import (
-    STOP_SPEED, crossed_line, moving_along, point_in_polygon, recent_speed, stopped_too_long, turned_into,
+    STOP_SPEED, crossed_line, moving_along, point_in_polygon, recent_speed, stopped_too_long, turned_into_any, vectors_of,
 )
 
 SIGN_TYPES = ("no_entry", "no_turn", "no_stopping", "vehicle_ban", "stop")
@@ -26,11 +26,12 @@ class DisregardingSigns(Violation):
     def parse_zone(self, raw):
         if not (raw.get("coordinates") and raw.get("sign")):
             return None
-        vec = raw.get("prohibited_vector") or {}
+        vectors = vectors_of(raw) or [(0.0, 0.0)]
         return {
             "polygon": raw["coordinates"],
             "sign": raw["sign"],
-            "vector": (float(vec.get("x_dir", 0.0)), float(vec.get("y_dir", 0.0))),
+            "vector": vectors[0],
+            "vectors": vectors,
             "stop_line": raw.get("stop_line"),
             "time_limit": float(raw.get("time_limit", 5.0)),
             "banned_classes": raw.get("banned_classes", []),
@@ -43,6 +44,7 @@ class DisregardingSigns(Violation):
                 "sign": z["sign"],
                 # Arrow signs (no entry / no turn) use the arrow; the stop sign uses its points as the stop line
                 "prohibited_vector": z.get("vector"),
+                **({"prohibited_vectors": z["vectors"]} if z.get("vectors") else {}),
                 "stop_line": z.get("ui_vector") if z["sign"] == "stop" else None,
                 "time_limit": float(cfg.get("time_limit", 5.0)),
                 "banned_classes": cfg.get("banned_classes", []),
@@ -83,7 +85,7 @@ class DisregardingSigns(Violation):
             elif sign == "no_entry":
                 broken = moving_along(ledger, zone.get("vector"))
             elif sign == "no_turn":
-                broken = turned_into(ledger, key, zone.get("vector"))
+                broken = turned_into_any(ledger, key, zone.get("vectors") or [zone.get("vector")])
             elif sign == "vehicle_ban":
                 broken = ledger.vclass in zone.get("banned_classes", [])
             elif sign == "stop":

@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import cv2
@@ -56,7 +57,11 @@ class FakePipeline:
 
 
 def _fake_ffmpeg(cmd, **_kwargs):
-    shutil.copy(cmd[cmd.index("-i") + 1], cmd[-1])
+    source = cmd[cmd.index("-i") + 1]
+    if "concat" in cmd:                       # the raw video comes as a list of pieces: the fake keeps the first piece
+        listing = Path(source)
+        source = listing.parent / listing.read_text(encoding="utf-8").splitlines()[0].split("'")[1]
+    shutil.copy(source, cmd[-1])
     return subprocess.CompletedProcess(cmd, 0, "", "")
 
 

@@ -277,6 +277,43 @@ and honest limitations and scope set by the researchers along with the consultat
 
 ---
 
+## ABOUT THE LIVE DEMO AND CLOUD GPU
+
+**Q: The scope says you do not test live. Why do you demo "live"?**
+- **We decided:** Show a live demonstration with **simulated** camera input: a phone, or a second laptop that plays a clip as an RTSP camera. The teachers asked for it.
+- **Defense:** The general objective is a prototype "designed with an architecture to support live camera implementation" (FINAL-PROPOSAL). A live demo proves that architecture works. The scope only says we do not test a camera **on a real road**. It does not forbid a live-style demo from simulated input. The system reads a camera as an **address**, so a real CCTV, a phone and a laptop look the same to it. Only the address changes.
+- **If they push ("so it is not a real live test"):** Correct. We call it **simulated live**. Real CCTV is future work.
+- **Say honestly:** The live screen shows the lag and the frames per second. **[CHECK: measured live fps on the demo laptop.]**
+
+**Q: Is "live" a different system from your forensic analysis?**
+- **We decided:** No. The final output is the **forensic pipeline running on a live feed**: the same detector, tracker, rules, plate reading, evidence and human review.
+- **Defense:** One pipeline with two inputs (a file, a camera). We defend one system, not two. What we score offline on clips is the same code the live demo runs. **[CHECK: tickets appear while the feed runs.]**
+- **Say honestly:** Live reading keeps only the newest frame, so it may see fewer frames than an offline run. Offline scores are therefore the better case for live accuracy.
+
+**Q: If the live demo is too slow, can you rent a cloud GPU? Isn't that a privacy risk?**
+- **We decided:** Local first. A cloud GPU is **plan B**, for the demo only, with demo data only.
+- **Defense:**
+  - Order of steps: (1) measure fps on the demo laptop. (2) Try cheap fixes: a smaller picture, skip more frames, use a GPU run option, borrow a laptop with a GPU. (3) Use a cloud GPU only if it is still too slow.
+  - If we use the cloud: only demo footage goes up (public clips and our own staged clips, **never barangay footage**), and only the demo database with made-up plates (`demo.db`). No real motorist, plate-owner or email data goes up.
+  - The machine is created for the session and deleted after. The link is an encrypted tunnel, with no open ports and an encrypted disk. No footage is kept.
+  - So the risk is limited by **what we send**, not by trusting the provider.
+- **If they push ("encrypted data is still read in plain by the GPU"):** Correct. A GPU must see frames in plain form. Encryption protects the link and the stored files. It does not protect data while it is being processed. That is why nothing sensitive goes up. (Special "confidential" cloud machines exist. They cost too much for this study and we do not use them.)
+- **Say honestly:** The blur cannot run before the upload, because the blur needs the detections made on the GPU. So the cloud sees **unblurred** frames. Real barangay footage and real people never go to the cloud.
+
+**Q: Doesn't the cloud break "tested offline using local computing resources"?**
+- **We decided:** Yes, it does if you read the sentence literally. We change the text. We do not hide it.
+- **Proposed wording for the scope:** "The system runs offline on local computing resources. For the live demonstration only, the researchers may use a temporary cloud GPU that processes demonstration footage only (no barangay footage and no real motorist data). The cloud machine is deleted after the session."
+- **Also change:** The consent form says the demonstration is "strictly within a controlled, offline simulation setting". If the demo uses the cloud, edit that sentence and tell the evaluator. Ask the Research Ethics Office first.
+- **Defense:** The offline promise exists to protect real people and to keep the system away from government databases. Both stay true: the cloud holds only demo data, and there is no link to any government system.
+- **Say honestly:** If we cannot get the approval in time, we run local at lower fps and say so. A slower honest demo is better than an unapproved cloud demo.
+
+**Q: Your goal is a light system a barangay can run. Why show a cloud GPU?**
+- **We decided:** Report the speed for **local and cloud separately**, each labelled.
+- **Defense:** A barangay will not have a cloud GPU. The cloud run only shows what extra hardware would give. The claim about the barangay stays tied to the local laptop number.
+- **Say honestly:** Never present the cloud fps as the barangay laptop's fps. **[CHECK: fps on the demo laptop, and on the rented GPU if used.]**
+
+---
+
 ## ABOUT EVALUATION
 
 **Q: Why LOAR and not only mAP?**
@@ -347,6 +384,8 @@ and honest limitations and scope set by the researchers along with the consultat
 6. **Barangay footage status and the signed agreement** must be stated plainly.
 7. **Benchmark results.** The defense depends on the latest benchmark report. Rerun and replace every number marked [CHECK].
 8. **Plate quality** (the biggest factor in LOAR) needs local training data.
+9. **Cloud GPU decision.** Measure fps on the demo laptop first. Use the cloud only if it is still too slow.
+10. **If the cloud is used,** change two texts: the scope sentence "tested offline using local computing resources" and the consent sentence "strictly within a controlled, offline simulation setting". Add the change to the Revision Log, and ask the adviser and the Research Ethics Office.
 9. **Fix the paper's illegal parking citation.** The proposal cites RA 4136 **Sec. 51** (hitching to a vehicle) and "Local Ordinance SP-1160" (not verified) for illegal parking. The correct source is **Sec. 46, items (a) to (h)**. The same Chapter 3 passage calls flags "reliable and legally credible"; change it to "decision support".
 10. **One stop, two tickets.** Illegal parking (automatic mode) and Pedestrian lane, Blocking the intersection or Double parking can fire for the same stop. No automatic merge exists; only the operator's manual "Same car" merge. Decide the rule: the specific rule wins.
 11. **Distance in meters is approximate.** Decide whether to build ground calibration and the uncertain band before the defense, or to state it as future work.

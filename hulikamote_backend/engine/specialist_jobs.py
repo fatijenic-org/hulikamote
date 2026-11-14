@@ -17,6 +17,7 @@ import cv2
 from engine import privacy, specialists
 from engine.slicer import NumpySlicer
 from engine.violations.base import VEHICLE_CLASSES
+from engine.violations.no_seatbelt import NoSeatbelt
 from engine.violations.geometry import rider_boxes
 
 log = logging.getLogger(__name__)
@@ -72,7 +73,10 @@ class CabinJob:
     violations = ("no_seatbelt", "distracted_driving", "missing_side_mirror")
 
     def wanted(self, active, det) -> bool:
-        return det.cls in VEHICLE_CLASSES and any(v in active for v in self.violations)
+        if det.cls not in VEHICLE_CLASSES:
+            return False
+        # no_seatbelt judges only cars and trucks: when it is the only cabin rule on, other vehicles are not looked at
+        return any(v in active and (v != "no_seatbelt" or det.cls in NoSeatbelt.JUDGED_CLASSES) for v in self.violations)
 
     def look(self, pipe, frame, det, detections):
         session = pipe.registry.get_model(self.model)

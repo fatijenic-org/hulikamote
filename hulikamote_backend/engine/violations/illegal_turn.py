@@ -12,7 +12,7 @@ banned at this camera (banned_turns: "left" and / or "right", default left). A v
 swings 45 to 150 deg (wider is a U-turn) toward a banned side since it first appeared. See geometry.turned_side.
 """
 from engine.violations.base import Violation
-from engine.violations.geometry import point_in_polygon, turned_into, turned_side
+from engine.violations.geometry import point_in_polygon, turned_into_any, turned_side, vectors_of
 
 
 class IllegalTurn(Violation):
@@ -30,16 +30,17 @@ class IllegalTurn(Violation):
     def parse_zone(self, raw):
         if not raw.get("coordinates"):
             return None
-        vec = raw.get("prohibited_vector", {})
-        return {"polygon": raw["coordinates"], "vector": (float(vec.get("x_dir", 0.0)), float(vec.get("y_dir", 0.0)))}
+        vectors = vectors_of(raw) or [(0.0, 0.0)]
+        return {"polygon": raw["coordinates"], "vector": vectors[0], "vectors": vectors}
 
     def from_wizard(self, cfg):
-        # The arrow is the PROHIBITED turn direction; zones without one are skipped
-        return [{"coordinates": z["polygon"], "prohibited_vector": z["vector"]}
+        # The arrows are the PROHIBITED turn directions (one zone can ban several turns); zones without one are skipped
+        return [{"coordinates": z["polygon"], "prohibited_vector": z["vector"],
+                 **({"prohibited_vectors": z["vectors"]} if z.get("vectors") else {})}
                 for z in cfg.get("rois", []) if z.get("polygon") and z.get("vector")]
 
     def evaluate(self, mgr, track_id, zones):
-        """Each zone: {"polygon": [...], "vector": (x, y)} - the arrow of the forbidden turn (automatic: "banned_turns")."""
+        """Each zone: {"polygon": [...], "vectors": [(x, y), ...]} - the arrows of the forbidden turns (automatic: "banned_turns")."""
         if track_id not in mgr.ledgers or not zones:
             return False
         ledger = mgr.ledgers[track_id]
@@ -53,7 +54,7 @@ class IllegalTurn(Violation):
             if zone.get("whole_frame"):
                 hit = turned_side(ledger, key) in zone["banned_turns"]
             else:
-                hit = turned_into(ledger, key, zone.get("vector"))
+                hit = turned_into_any(ledger, key, zone.get("vectors") or [zone.get("vector")])
             if hit:
                 ledger.violations.add(self.key)
                 return True
