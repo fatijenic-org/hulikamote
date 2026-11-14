@@ -116,6 +116,17 @@ def turned_into(ledger, key, arrow) -> bool:
     )
 
 
+def turned_into_any(ledger, key, arrows) -> bool:
+    """`turned_into` for a zone with several prohibited-turn arrows (a junction can ban more than one turn): True when any of them is hit."""
+    return any(turned_into(ledger, key, arrow) for arrow in arrows or ())
+
+
+def vectors_of(raw: dict, many_key: str = "prohibited_vectors", one_key: str = "prohibited_vector") -> list:
+    """The prohibited-turn arrows of a saved zone as [(x, y), ...]: the list when there is one, else the single older arrow."""
+    items = raw.get(many_key) or ([raw[one_key]] if raw.get(one_key) else [])
+    return [(float(v.get("x_dir", 0.0)), float(v.get("y_dir", 0.0))) for v in items if v]
+
+
 def turned_side(ledger, key) -> str | None:
     """
     'left' or 'right' once the heading has swung 45 to 150 deg since the vehicle entered the zone (a wider swing

@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import JSONResponse, Response
 import shutil
+from engine.segment_writer import SegmentedVideoWriter
 from engine.ticket_photos import photo_names
 from engine.video_window import frame_window, number_or_none
 from routers.trimmer import local_only
@@ -577,14 +578,22 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         if first_frame:
             cap.set(cv2.CAP_PROP_POS_FRAMES, first_frame)
             log.info(f"[Forensic] Task {task_id}: analyzing from frame {first_frame}" + (f" for {window} frames" if window else " to the end"))
-        raw_video_path = output_dir / "evidence_raw.mp4"
         out_video_path = output_dir / "evidence_replay.mp4"
 
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(str(raw_video_path), cv2.CAP_ANY, fourcc, fps, (width, height))
+        frame_boxes: list = []        # per video frame: the boxes to draw over the replay
+
+        def _save_boxes_part(part: int, first: int, last: int) -> None:
+            # Every closed video piece also saves its boxes, so a crash does not lose the boxes of the finished pieces.
+            try:
+                (output_dir / f"boxes_part{part:04d}.json").write_text(
+                    json.dumps(frame_boxes[first - 1:last], separators=(",", ":")), encoding="utf-8")
+            except Exception:
+                log.exception("[Forensic] boxes of video piece %s not saved", part)
+
+        # The raw video is written in short pieces (see engine/segment_writer.py): a crash loses at most the open piece.
+        out = SegmentedVideoWriter(output_dir, fps, (width, height), on_part_closed=_save_boxes_part)
 
         releaser = _TicketReleaser(task_id, config, output_dir, written, save_violation)
-        frame_boxes: list = []        # per video frame: the boxes to draw over the replay
         frame_idx = 0
         stop_asked = None
         while cap.isOpened():
@@ -650,16 +659,17 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         # 6. Compress and convert to web-safe H.264 using FFmpeg
         import subprocess
         _say(task_id, "Preparing the evidence video...")
-        log.info(f"[Forensic] Converting {raw_video_path} to H.264...")
+        log.info(f"[Forensic] Converting {len(out.parts)} raw video pieces to H.264...")
+        raw_input = out.ffmpeg_input()
         # NVENC might fail if NVIDIA drivers are older than v610 (FFmpeg 9.0+ requirement).
         # We try hardware acceleration first, and gracefully fallback to libx264 CPU encoding if it fails.
         nvenc_cmd = [
-            "ffmpeg", "-y", "-i", str(raw_video_path),
+            "ffmpeg", "-y", *raw_input,
             "-c:v", "h264_nvenc", "-preset", "p6", "-b:v", "5M",
             "-movflags", "+faststart", str(out_video_path)
         ]
         cpu_cmd = [
-            "ffmpeg", "-y", "-i", str(raw_video_path),
+            "ffmpeg", "-y", *raw_input,
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-movflags", "+faststart", str(out_video_path)
         ]
@@ -674,8 +684,10 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
                 log.error(f"[Forensic] FATAL: CPU FFmpeg also failed! Error: {e_cpu.stderr}")
                 raise RuntimeError(f"FFmpeg failed completely. CPU Error: {e_cpu.stderr}") from None
 
-        # Clean up the massive raw file
-        raw_video_path.unlink(missing_ok=True)
+        # Clean up the massive raw pieces (and the per-piece box files: boxes.json holds them all)
+        out.remove_parts()
+        for part_file in output_dir.glob("boxes_part*.json"):
+            part_file.unlink(missing_ok=True)
         if _stop_mode(task_id) == "cancel":
             raise _ForensicCancelled()
         forensic_tasks[task_id]["progress"] = 92.0
