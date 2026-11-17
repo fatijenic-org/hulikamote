@@ -97,6 +97,7 @@ def _build_pipeline():
     return DecoupledPipeline(str(CONFIG_PATH))
 
 _pipeline = None
+_pipeline_source = None      # the camera the current pipeline was built for (a learned traffic flow only fits the same camera)
 
 # The Live Monitor learns the painted road lines of its camera from the stream by itself (engine/live_calibrator.py) and
 # remembers them per camera in camera_config.json. One for the whole app: a reconnect or a new pipeline keeps what is learned.
@@ -109,15 +110,86 @@ def road_status() -> dict:
 
 
 def _get_pipeline():
-    global _pipeline
+    global _pipeline, _pipeline_source
     if _pipeline is None:
         _pipeline = _build_pipeline()
+        _pipeline_source = VIDEO_SOURCE
     return _pipeline
 
 def reload_pipeline():
-    global _pipeline
+    global _pipeline, _pipeline_source
+    old, old_source = _pipeline, _pipeline_source
     _pipeline = _build_pipeline()
+    _pipeline_source = VIDEO_SOURCE
+    # New rules for the SAME camera keep what the traffic already taught (the learned flow): learning it again takes minutes.
+    # Another camera starts from nothing.
+    if old is not None and old_source == VIDEO_SOURCE and getattr(old, "flow", None) is not None:
+        _pipeline.flow = old.flow
     return _pipeline
+
+
+# ── Traffic flow on the live picture ─────────────────────────────────────────────
+# Counterflow (and the rules that need the traffic flow) learn which way traffic goes by watching the camera. The live picture
+# can show the learned arrows, and Counterflow can be reversed for a demo: ordinary traffic is then flagged, so it can be shown
+# without waiting for a real wrong-way car. Both only change what is shown / tested; the learned flow itself is kept.
+_last_size = (0, 0)      # (width, height) of the processed picture the live loop works on
+
+
+def _flow_state(pipeline) -> dict | None:
+    """{"learning", "counterflow", "reversed", "cells"} for the controls of the live picture, or None when no rule uses the flow."""
+    counterflow_on = "counterflow" in pipeline.registry.active_violations
+    learning = bool(pipeline.learns_flow)
+    if not counterflow_on and not learning:
+        return None
+    settings = (getattr(pipeline, "violation_cfg", None) or {}).get("counterflow") or {}
+    width, height = _last_size
+    return {
+        "learning": learning,
+        "counterflow": counterflow_on,
+        "reversed": counterflow_on and bool(settings.get("invert_flow")),
+        "cells": len(pipeline.flow.learned_cells(width, height)) if learning and width else 0,
+    }
+
+
+def flow_status() -> dict | None:
+    """The flow state for the status endpoint (no arrows). Never raises: it is only a help for the dashboard."""
+    try:
+        return None if _pipeline is None else _flow_state(_pipeline)
+    except Exception:
+        return None
+
+
+def _flow_message(pipeline, w: int, h: int) -> dict | None:
+    """The flow state plus the learned arrows (pixels of the w x h picture) for one live frame."""
+    try:
+        state = _flow_state(pipeline)
+        if state is None:
+            return None
+        arrows = pipeline.flow.arrows(w, h, invert=state["reversed"]) if state["learning"] else []
+        return {**state, "arrows": [{k: round(v, 1) for k, v in arrow.items()} for arrow in arrows]}
+    except Exception:
+        return None
+
+
+def set_flow_reversed(on: bool) -> dict:
+    """Demo of Counterflow: the opposite of the legal direction counts as legal (on), or normal again (off). Takes effect on the
+    next frame. Temporary: a new pipeline (other rules saved from the setup, another camera) starts normal."""
+    pipeline = _pipeline
+    if pipeline is None or "counterflow" not in pipeline.registry.active_violations:
+        return {"ok": False, "reason": "Counterflow is not switched on. Press Set up violations and pick Counterflow first."}
+    from engine.violations import ALL
+    next(v for v in ALL if v.key == "counterflow").set_test_reversed(pipeline, bool(on))
+    return {"ok": True, "reversed": bool(on)}
+
+
+def relearn_flow() -> dict:
+    """Forget the learned traffic flow and learn it again from the traffic (e.g. the camera was moved)."""
+    pipeline = _pipeline
+    if pipeline is None:
+        return {"ok": False, "reason": "The live monitor has not been started yet."}
+    from engine.flow_field import FlowField
+    pipeline.flow = FlowField()
+    return {"ok": True}
 
 
 # ── HLS Broadcaster (Phase B) ─────────────────────────────────────────────────
@@ -193,8 +265,70 @@ async def _process_ocr_background(violation_id: str, snap_path: str, plate_bbox:
 _stream_generation = 0
 _current_ws_id = None
 
+# ── Setup picture ─────────────────────────────────────────────────────────────
+# The Live Monitor's "Set up violations" is drawn on ONE frozen picture of the running camera. The loop keeps a copy of the
+# camera's newest picture once a second; capture_reference() freezes it (full size, at most 1920 wide) for the dashboard.
+_latest_picture = None
+_latest_picture_at = 0.0
+_reference: dict | None = None
+REFERENCE_MAX_WIDTH = 1920
+
+
+def capture_reference() -> dict:
+    """Freeze the newest picture of the running camera. {"ok": True, "version", "width", "height", "fps"} or {"ok": False, "reason"}."""
+    global _reference
+    picture = _latest_picture
+    if picture is None or time.time() - _latest_picture_at > 5.0:
+        return {"ok": False, "reason": "No picture from the camera yet. Wait for the live picture, then try again."}
+    h, w = picture.shape[:2]
+    if w > REFERENCE_MAX_WIDTH:
+        picture = cv2.resize(picture, (REFERENCE_MAX_WIDTH, max(1, round(h * REFERENCE_MAX_WIDTH / w))), interpolation=cv2.INTER_AREA)
+        h, w = picture.shape[:2]
+    ok, buf = cv2.imencode(".jpg", picture, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    if not ok:
+        return {"ok": False, "reason": "The picture could not be saved. Try again."}
+    version = _reference["version"] + 1 if _reference else 1
+    _reference = {"jpeg": buf.tobytes(), "width": w, "height": h, "version": version}
+    fps = round(_active_source.source_fps, 1) if _active_source is not None else 25.0
+    return {"ok": True, "version": version, "width": w, "height": h, "fps": fps}
+
+
+def reference_jpeg() -> bytes | None:
+    """The frozen setup picture (JPEG), or None before the first capture."""
+    return _reference["jpeg"] if _reference else None
+
+
+# The zones the operator set up, for the live picture ("what did I set up?"). Rebuilt only when the pipeline or the picture size changes.
+_setup_overlay_cache: tuple = (None, 0, 0, [])
+
+
+def _setup_overlay(pipeline, w: int, h: int) -> list:
+    """The DRAWN zones of the switched-on violations on the processed frame: [{"violation", "polygon", "line", "drawn": True}].
+    A rule that watches the whole picture has nothing drawn and so nothing here. Never raises: the overlay is only a help."""
+    global _setup_overlay_cache
+    cached_pipeline, cached_w, cached_h, items = _setup_overlay_cache
+    if cached_pipeline is pipeline and (cached_w, cached_h) == (w, h):
+        return items
+    items = []
+    try:
+        from engine.violations import ZONE_VIOLATIONS
+        active = set(pipeline.registry.active_violations)
+        for violation in ZONE_VIOLATIONS:
+            if violation.key not in active:
+                continue
+            for zone in pipeline.rois.get(violation.zone_key) or []:
+                polygon = pipeline._scale_polygon(zone.get("polygon") or [], w, h)
+                line = pipeline._scale_polygon(zone["stop_line"], w, h) if zone.get("stop_line") else []
+                if len(polygon) >= 3 or len(line) >= 2:
+                    items.append({"violation": violation.key, "polygon": polygon, "line": line, "best_effort": False, "drawn": True})
+    except Exception:
+        items = []
+    _setup_overlay_cache = (pipeline, w, h, items)
+    return items
+
+
 async def _real_loop(websocket: WebSocket):
-    global _current_ws_id, _stream_generation, _active_source
+    global _current_ws_id, _stream_generation, _active_source, _latest_picture, _latest_picture_at, _last_size
     import uuid
     my_ws_id = str(uuid.uuid4())
     _current_ws_id = my_ws_id
@@ -251,6 +385,8 @@ async def _real_loop(websocket: WebSocket):
                 continue
             frame = item.image
             frame_time = item.captured_at if source.live else None   # live: when the camera delivered it
+            if start_time - _latest_picture_at >= 1.0:               # for "Set up violations": a copy, as the frame is worked on below
+                _latest_picture, _latest_picture_at = frame.copy(), start_time
 
             # The road learner gets the camera's own picture, before the cap below: thin paint and pavement tiles are told
             # apart far better at 1080p than at 720p (at 720p a tiled pavement strip can pass for a crosswalk).
@@ -271,6 +407,8 @@ async def _real_loop(websocket: WebSocket):
                     (int(fw * scale_down), MAX_PROCESSING_HEIGHT),
                     interpolation=cv2.INTER_LINEAR,
                 )
+
+            _last_size = (frame.shape[1], frame.shape[0])          # the size the pipeline (and its flow cells) works in
 
             if road.version != road_version:                       # learned, forgotten or the view changed: swap the zones
                 road_version = road.version
@@ -402,7 +540,8 @@ async def _real_loop(websocket: WebSocket):
                 "detections": display_results,
                 "camera": source.status(),
                 "road": road.status(),                              # learning progress / what was learned / why it could not
-                "road_zones": pipeline.learned_overlay(w, h) + road.hint_overlay(w, h) + road.region_overlay(w, h),   # learned zones in use + line hints
+                "road_zones": _setup_overlay(pipeline, w, h) + pipeline.learned_overlay(w, h) + road.hint_overlay(w, h) + road.region_overlay(w, h),   # set-up zones + learned zones in use + line hints
+                "flow": _flow_message(pipeline, w, h),              # the learned traffic-flow arrows + whether the demo reversal is on (None: no rule uses the flow)
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
@@ -422,6 +561,7 @@ async def _real_loop(websocket: WebSocket):
         source.stop()
         if _active_source is source:
             _active_source = None
+            _latest_picture = None                                 # a picture of a camera that is gone must not become the setup picture
         if _current_ws_id == my_ws_id:
             road.detach()                                          # (a newer loop for the same camera keeps its own buffers)
             broadcaster = _get_broadcaster()

@@ -166,3 +166,34 @@ def test_relearn_and_forget_act_on_the_connected_camera(tmp_path, monkeypatch):
     assert again["ok"] is True and again["road"]["state"] == "learning"
     gone = client.post("/settings/video/road/forget").json()
     assert gone["ok"] is True and gone["road"]["state"] == "off"
+
+
+def test_a_video_file_upload_answers_with_what_the_video_is(camera_env, tmp_path, monkeypatch):
+    """The Live Monitor's "ready" card shows the size, speed and length of the uploaded video."""
+    import cv2
+    import numpy as np
+
+    monkeypatch.setattr(settings_router, "UPLOAD_DIR", tmp_path / "uploads")
+    clip = tmp_path / "clip.mp4"
+    writer = cv2.VideoWriter(str(clip), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, (64, 48))
+    for i in range(20):
+        writer.write(np.full((48, 64, 3), i * 10, np.uint8))
+    writer.release()
+
+    with open(clip, "rb") as f:
+        response = client.post("/settings/video/upload", files={"file": ("clip.mp4", f, "video/mp4")})
+
+    assert response.status_code == 200
+    video = response.json()["video"]
+    assert (video["width"], video["height"]) == (64, 48)
+    assert video["fps"] == 10.0 and video["frames"] == 20 and video["duration"] == 2.0
+    assert video["size_mb"] >= 0
+    assert len(camera_env) == 1                          # the uploaded file became the live source
+
+
+def test_an_upload_that_is_not_a_video_is_refused_with_a_reason(camera_env, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_router, "UPLOAD_DIR", tmp_path / "uploads")
+    response = client.post("/settings/video/upload", files={"file": ("clip.mp4", b"this is not a video", "video/mp4")})
+    assert response.status_code == 400
+    assert "Cannot open uploaded video" in response.json()["detail"]
+    assert camera_env == []                              # the source did not change

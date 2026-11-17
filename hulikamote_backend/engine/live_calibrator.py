@@ -57,7 +57,11 @@ MIN_STOP_LENGTH = 0.30        # a stop line must be at least this share of the t
 MIN_SOLID_COVERAGE = 0.90     # a solid lane line must be painted along at least this share of its length
 MIN_SOLID_REACH = 0.30        # ... and reach at least this share of the top view's depth
 REFERENCE = (1920, 1080)      # the wizard's zone space (engine/road_lines.reference_zones)
-ZONE_KINDS = ("crosswalk", "road", "sidewalk")                 # what the operator may correct after a detection
+ZONE_KINDS = ("crosswalk", "road", "sidewalk", "solid_line", "stop_line")   # what the operator may correct or add after a detection
+LINE_KINDS = ("solid_line", "stop_line")                       # a line of 2 or more points; every other kind is a closed area of 3 or more
+LINE_STYLES = ("solid_white", "solid_yellow", "double_yellow")  # the paint of a solid line (the forensic road markings' own names)
+FLOWS = ("in", "out")                                          # a road area where traffic comes toward the camera / goes away from it
+MAX_SHAPES, MAX_POINTS = 40, 64
 LEARNABLE = ("pedestrian_lane", "red_light", "crossing_solid_line")
 BEST_EFFORT = ("red_light", "crossing_solid_line")        # hints only unless camera_config.json says "learned_lines_as_rules": true
 RULE_FLAG = "learned_lines_as_rules"
@@ -192,10 +196,13 @@ def _make_detector():
 
 
 def editable_zones(result: dict, size: tuple[int, int]) -> list[dict]:
-    """What the operator can correct, in the pixels of the frozen picture: the crosswalks that will be used, the road and the sidewalks."""
+    """What the operator can correct, in the pixels of the frozen picture: the crosswalks that will be used, the road (split into an
+    incoming and an outgoing side when the traffic showed it) and the sidewalks, and the solid and stop lines that were found.
+    Areas have a "polygon", lines a "line" (any number of points). A found line starts as a hint ("rule": False); the operator may
+    turn a solid line into a rule."""
     vw, vh = result["video_size"]
     sx, sy = size[0] / vw, size[1] / vh
-    tw = result["rectifier"]["top_size"][0]
+    tw, th = result["rectifier"]["top_size"]
 
     def pts(points):
         return [[round(x * sx, 1), round(y * sy, 1)] for x, y in points]
@@ -204,33 +211,73 @@ def editable_zones(result: dict, size: tuple[int, int]) -> list[dict]:
         if len(c.get("polygon") or []) >= 3 and crosswalk_verdict(c, tw) is None:
             n += 1
             out.append({"id": f"crosswalk-{n}", "kind": "crosswalk", "polygon": pts(c["polygon"])})
+    bands = (result.get("flow") or {}).get("bands") or []
     for k, region in enumerate(result.get("regions") or [], 1):
+        if region["kind"] == "road" and bands:
+            continue                                                   # the road comes as its incoming / outgoing sides below
         out.append({"id": f"{region['kind']}-{k}", "kind": region["kind"], "polygon": pts(region["polygon"]),
                     **({"side": region["side"]} if region.get("side") else {})})
+    for k, band in enumerate(bands, 1):
+        out.append({"id": f"road-{k}", "kind": "road", "polygon": pts(band["polygon"]), "flow": band["flow"], "arrow": pts(band["arrow"])})
+    n = 0
+    for ln in result.get("lane_lines") or []:
+        if solid_line_ok(ln, th):
+            n += 1
+            style = "solid_yellow" if ln.get("colour") == "yellow" else "solid_white"
+            out.append({"id": f"solid-{n}", "kind": "solid_line", "line": pts(ln.get("points") or [ln["p0"], ln["p1"]]), "style": style, "rule": False})
+    n = 0
+    for stop in result.get("stop_lines") or []:
+        if stop_line_ok(stop, tw):
+            n += 1
+            out.append({"id": f"stop-{n}", "kind": "stop_line", "line": pts(stop.get("points") or [stop["p0"], stop["p1"]])})
     return out
 
 
 def clean_zones(zones, size: tuple[int, int]) -> list[dict] | None:
-    """The operator's corrected areas, checked and kept inside the picture. None when something is not valid."""
-    if not isinstance(zones, list) or len(zones) > 24:
+    """The operator's corrected shapes, checked and kept inside the picture. None when something is not valid. An area needs 3 or more
+    points, a line 2 or more (up to MAX_POINTS: a curve is many points)."""
+    if not isinstance(zones, list) or len(zones) > MAX_SHAPES:
         return None
     w, h = size
+
+    def clamp(points, least):
+        if not isinstance(points, list) or not least <= len(points) <= MAX_POINTS:
+            return None
+        try:
+            return [[round(min(max(float(x), 0.0), w - 1.0), 1), round(min(max(float(y), 0.0), h - 1.0), 1)] for x, y in points]
+        except (TypeError, ValueError):
+            return None
     out, seen = [], set()
     for i, z in enumerate(zones):
         if not isinstance(z, dict) or z.get("kind") not in ZONE_KINDS:
             return None
-        points = z.get("polygon")
-        if not isinstance(points, list) or not 3 <= len(points) <= 16:
-            return None
-        try:
-            poly = [[round(min(max(float(x), 0.0), w - 1.0), 1), round(min(max(float(y), 0.0), h - 1.0), 1)] for x, y in points]
-        except (TypeError, ValueError):
-            return None
-        zid = str(z.get("id") or f"{z['kind']}-{i + 1}")[:40]
+        kind = z["kind"]
+        zid = str(z.get("id") or f"{kind}-{i + 1}")[:40]
         if zid in seen:
             zid = f"{zid}-{i + 1}"
         seen.add(zid)
-        out.append({"id": zid, "kind": z["kind"], "polygon": poly, **({"side": z["side"]} if z.get("side") in ("left", "right") else {})})
+        if kind in LINE_KINDS:
+            line = clamp(z.get("line"), 2)
+            if line is None:
+                return None
+            item = {"id": zid, "kind": kind, "line": line}
+            if kind == "solid_line":
+                item["style"] = z["style"] if z.get("style") in LINE_STYLES else "solid_white"
+                item["rule"] = bool(z.get("rule", False))
+            out.append(item)
+            continue
+        poly = clamp(z.get("polygon"), 3)
+        if poly is None:
+            return None
+        item = {"id": zid, "kind": kind, "polygon": poly}
+        if z.get("side") in ("left", "right"):
+            item["side"] = z["side"]
+        if kind == "road" and z.get("flow") in FLOWS:
+            item["flow"] = z["flow"]
+            arrow = clamp(z.get("arrow"), 2) if z.get("arrow") is not None else None
+            if arrow is not None and len(arrow) == 2:
+                item["arrow"] = arrow
+        out.append(item)
     return out
 
 
@@ -255,15 +302,25 @@ def marks_overlay(result: dict, colour_size: tuple[int, int], lines_are_rules: b
     def pts(points):
         return np.array([[x * sx, y * sy] for x, y in points], np.int32)
     cyan, amber, red, grey = (255, 255, 0, 255), (0, 170, 255, 255), (70, 70, 255, 255), (190, 190, 190, 255)
-    blue, green = (255, 140, 30, 255), (60, 220, 60, 255)
+    blue, green, violet = (255, 140, 30, 255), (60, 220, 60, 255), (230, 90, 190, 255)
+    bands = (result.get("flow") or {}).get("bands") or []
     for region in result.get("regions") or []:                          # the road and the sidewalks, under everything else
-        if len(region.get("polygon") or []) < 3:
-            continue
+        if len(region.get("polygon") or []) < 3 or (region["kind"] == "road" and bands):
+            continue                                                    # (the road is drawn below as its incoming / outgoing sides)
         poly, colour = pts(region["polygon"]), (blue if region["kind"] == "road" else green)
         cv2.fillPoly(out, [poly], colour[:3] + (60,))
         cv2.polylines(out, [poly], True, colour, 4, cv2.LINE_AA)
         _label(out, "Road" if region["kind"] == "road" else "Sidewalk", (int(poly[:, 0].min()) + 8, int(poly[:, 1].min()) + 34), colour)
         marks.append({"kind": region["kind"], "status": "draft"})
+    for band in bands:                                                  # which way the traffic goes: an arrow along each side of the road
+        poly, colour = pts(band["polygon"]), (blue if band["flow"] == "in" else violet)
+        cv2.fillPoly(out, [poly], colour[:3] + (60,))
+        cv2.polylines(out, [poly], True, colour, 4, cv2.LINE_AA)
+        a, b = (tuple(int(v) for v in pts(band["arrow"])[i]) for i in (0, 1))
+        cv2.arrowedLine(out, a, b, colour, 10, cv2.LINE_AA, tipLength=0.22)
+        _label(out, "Incoming (toward the camera)" if band["flow"] == "in" else "Outgoing (away from the camera)",
+               (int(poly[:, 0].min()) + 8, int(poly[:, 1].min()) + 34), colour)
+        marks.append({"kind": "road", "flow": band["flow"], "status": "draft"})
     for c in result["crosswalks"]:
         if len(c.get("polygon") or []) < 3:
             continue                                                  # no outline to draw
@@ -296,6 +353,13 @@ def marks_overlay(result: dict, colour_size: tuple[int, int], lines_are_rules: b
             cv2.line(out, a, b, grey, 2, cv2.LINE_AA)
             marks.append({"kind": "lane_line", "status": "ignored", "why": line["style"] if line["style"] != "solid" else "faint"})
     return out, marks
+
+
+def _unit(arrow: list[list[float]]) -> dict:
+    """The way an arrow points, as the wizard's unit "vector" ({"x_dir", "y_dir"}); straight down the picture when it has no length."""
+    dx, dy = arrow[-1][0] - arrow[0][0], arrow[-1][1] - arrow[0][1]
+    length = (dx * dx + dy * dy) ** 0.5
+    return {"x_dir": round(dx / length, 4), "y_dir": round(dy / length, 4)} if length > 0 else {"x_dir": 0.0, "y_dir": 1.0}
 
 
 def _png(overlay: np.ndarray | None) -> bytes | None:
@@ -377,10 +441,16 @@ class LiveCalibrator:
         return self._flag[0]
 
     def _split(self) -> tuple[dict, dict]:
-        """(installed as rules, hints only). Crosswalks are rules; stop and solid lines are hints unless the flag says so."""
+        """(installed as rules, hints only). Crosswalks are rules; stop and solid lines are hints unless the flag says so, or the
+        operator confirmed that line ("confirmed": the solid line he drew or switched on in the road editor)."""
         rules_for_lines = self._lines_are_rules()
-        rules = {k: v for k, v in self.zones.items() if k not in BEST_EFFORT or rules_for_lines}
-        return rules, {k: v for k, v in self.zones.items() if k not in rules}
+        rules: dict[str, list] = {}
+        hints: dict[str, list] = {}
+        for key, zones in self.zones.items():
+            for zone in zones:
+                as_rule = key not in BEST_EFFORT or rules_for_lines or bool(zone.get("confirmed"))
+                (rules if as_rule else hints).setdefault(key, []).append(zone)
+        return rules, hints
 
     # ── connecting ──
     def attach(self, key: str) -> None:
@@ -581,16 +651,21 @@ class LiveCalibrator:
 
         def pts(points):
             return [[int(x * sx), int(y * sy)] for x, y in points]
-        return [{"violation": key, "polygon": pts(z["polygon"]), "line": pts(z["ui_vector"]) if z.get("ui_vector") else None,
+        return [{"violation": key, "polygon": pts(z.get("polygon") or []),
+                 "line": pts(z.get("line") or z.get("ui_vector")) if (z.get("line") or z.get("ui_vector")) else None,
                  "best_effort": True, "hint": True} for key, zones in hints.items() for z in zones]
 
     def region_overlay(self, frame_w: int, frame_h: int) -> list[dict]:
-        """The saved road and sidewalks, on the processed frame, for the live picture (drawn only: no rule uses them yet)."""
+        """The saved road and sidewalks, on the processed frame, for the live picture (drawn only, but a road area with a direction
+        carries "flow" ("in" / "out") and its "arrow": the dashboard draws them as the incoming and outgoing road)."""
         with self._lock:
             regions = list(self.regions)
         sx, sy = frame_w / REFERENCE[0], frame_h / REFERENCE[1]
-        return [{"violation": r["kind"], "polygon": [[int(x * sx), int(y * sy)] for x, y in r["polygon"]], "line": None,
-                 "best_effort": False, "hint": False} for r in regions]
+
+        def pts(points):
+            return [[int(x * sx), int(y * sy)] for x, y in points]
+        return [{"violation": r["kind"], "polygon": pts(r["polygon"]), "line": None, "best_effort": False, "hint": False,
+                 **({"flow": r["flow"], "arrow": pts(r["arrow"])} if r.get("flow") in FLOWS and r.get("arrow") else {})} for r in regions]
 
     def relearn(self) -> bool:
         """Throw away what is known for this camera's current view and learn again from the live stream."""
@@ -701,7 +776,8 @@ class LiveCalibrator:
                 "steps": {sid: {"id": sid, "title": title, "about": about, "state": "waiting", "overlay": None, "info": {}}
                           for sid, title, about in WALKTHROUGH},
                 "found": {"crosswalks": 0, "stop_lines": 0, "solid_lines": 0}, "zones": {}, "rules": [], "hints": [],
-                "editable": [], "edited": False, "background": None, "applied": False, "started": self._ring_last_g if self._ring_last_g is not None else 0.0}
+                "editable": [], "edited": False, "flow": None, "background": None, "applied": False,
+                "started": self._ring_last_g if self._ring_last_g is not None else 0.0}
             self._detect_check(self._ring_last_g if self._ring_last_g is not None else 0.0)
             return {"ok": True, "detect": self._detect_status()}
 
@@ -760,8 +836,10 @@ class LiveCalibrator:
                 overlay, marks = marks_overlay(result, clip["colour_size"], lines_are_rules)
                 d["steps"]["marks"].update(state="done", overlay=_png(overlay), info={"marks": marks})
                 rules = [k for k in zones if k not in BEST_EFFORT or lines_are_rules]
+                flow = result.get("flow") or {}
                 d.update(state="done", zones=zones, found=found, rules=sorted(rules), hints=sorted(set(zones) - set(rules)),
-                         background=background, editable=editable_zones(result, tuple(d["size"])), edited=False)
+                         background=background, editable=editable_zones(result, tuple(d["size"])), edited=False,
+                         flow={"state": flow.get("state", "none"), "bands": len(flow.get("bands") or []), "reason": flow.get("reason")})
             except Exception as exc:                                   # never leave a detection stuck on "analysing"
                 log.exception("Detect road: drawing the result failed")
                 d["state"] = "failed"
@@ -774,7 +852,7 @@ class LiveCalibrator:
             return {"state": "none"}
         return {"id": d["id"], "state": d["state"], "size": d["size"], "reason": d["reason"], "found": dict(d["found"]),
                 "rules": list(d["rules"]), "hints": list(d["hints"]), "applied": d["applied"],
-                "zones": [dict(z) for z in d["editable"]], "edited": d["edited"],
+                "zones": [dict(z) for z in d["editable"]], "edited": d["edited"], "flow": d.get("flow"),
                 "progress_s": round(min(self.learn_seconds, self._ring_span()), 1), "need_s": self.learn_seconds,
                 "steps": [{"id": st["id"], "title": st["title"], "about": st["about"], "state": st["state"],
                            "has_overlay": st["overlay"] is not None, "info": st["info"]} for st in d["steps"].values()]}
@@ -806,7 +884,8 @@ class LiveCalibrator:
                 return {"ok": False, "reason": "There is no finished detection to correct."}
             clean = clean_zones(zones, tuple(d["size"]))
             if clean is None:
-                return {"ok": False, "reason": "Those areas are not valid: each needs a kind (crosswalk, road or sidewalk) and 3 to 16 corners."}
+                return {"ok": False, "reason": "Those shapes are not valid: each needs a kind (crosswalk, road, sidewalk, solid line or stop line) "
+                                               f"and enough points (3 to {MAX_POINTS} for an area, 2 to {MAX_POINTS} for a line)."}
             d["editable"], d["edited"] = clean, True
             return {"ok": True, "zones": [dict(z) for z in clean]}
 
@@ -819,24 +898,46 @@ class LiveCalibrator:
             return [[round(x * sx, 1), round(y * sy, 1)] for x, y in poly]
         zones, found = dict(d["zones"]), dict(d["found"])
         if d["edited"]:
-            zones.pop("pedestrian_lane", None)
+            for key in ("pedestrian_lane", "crossing_solid_line", "red_light"):
+                zones.pop(key, None)
             walks = [z for z in d["editable"] if z["kind"] == "crosswalk"]
+            solids = [z for z in d["editable"] if z["kind"] == "solid_line"]
+            stops = [z for z in d["editable"] if z["kind"] == "stop_line"]
             if walks:
                 zones["pedestrian_lane"] = [{"polygon": ref(z["polygon"])} for z in walks]
-            found["crosswalks"] = len(walks)
-        regions = [{"kind": z["kind"], "polygon": ref(z["polygon"]), **({"side": z["side"]} if z.get("side") else {})}
-                   for z in d["editable"] if z["kind"] in ("road", "sidewalk")]
+            if solids:             # a line the operator switched on as a rule is "confirmed"; the others stay hints, like the finder's own
+                zones["crossing_solid_line"] = [{"polygon": [], "line": ref(z["line"]), "style": z.get("style", "solid_white"),
+                                                 **({"confirmed": True} if z.get("rule") else {})} for z in solids]
+            if stops:              # a stop line is only ever a mark: a red light needs a light, which this camera view does not give
+                zones["red_light"] = [{"polygon": [], "line": ref(z["line"]), "ui_vector": ref([z["line"][0], z["line"][-1]])} for z in stops]
+            found.update(crosswalks=len(walks), solid_lines=len(solids), stop_lines=len(stops))
+        regions = []
+        for z in d["editable"]:
+            if z["kind"] not in ("road", "sidewalk"):
+                continue
+            region = {"kind": z["kind"], "polygon": ref(z["polygon"])}
+            if z.get("side"):
+                region["side"] = z["side"]
+            if z.get("flow") in FLOWS and z.get("arrow"):          # the road area where traffic comes toward / goes away from the camera
+                region.update(flow=z["flow"], arrow=ref(z["arrow"]))
+            regions.append(region)
         return zones, regions, found
 
-    def apply_detect(self) -> dict:
+    def apply_detect(self, counterflow: bool = False) -> dict:
         """Make what the detection found (with the operator's corrections) the camera's road: saved for this camera and used by the live rules
-        (crosswalk -> Pedestrian lane; lines stay hints unless learned_lines_as_rules is set). The road and sidewalks are saved and drawn.
-        The caller switches the matching violations on."""
+        (crosswalk -> Pedestrian lane; lines stay hints unless learned_lines_as_rules is set or the operator switched a solid line on).
+        The road and sidewalks are saved and drawn, the incoming and outgoing sides of the road with their arrows. With `counterflow` the
+        road sides that have a direction also become Counterflow zones (traffic against the arrow is flagged). The caller switches the
+        matching violations on."""
         with self._lock:
             d = self._detect
             if d is None or d["state"] != "done":
                 return {"ok": False, "reason": "There is no finished detection to apply."}
             zones, regions, found = self._apply_set(d)
+            if counterflow:
+                sides = [r for r in regions if r["kind"] == "road" and r.get("flow") in FLOWS and r.get("arrow")]
+                if sides:
+                    zones["counterflow"] = [{"polygon": r["polygon"], "vector": _unit(r["arrow"])} for r in sides]
             if not zones and not regions:
                 return {"ok": False, "reason": "No clear crosswalk, line, road or sidewalk is left, so there is nothing to apply."}
             self._epoch += 1                                          # an automatic reading under way is now out of date

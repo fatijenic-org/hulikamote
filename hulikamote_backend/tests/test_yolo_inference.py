@@ -42,8 +42,11 @@ def _engine_that_returns(tmp_path, candidates):
     session.run.return_value = _preds(candidates)
     model = tmp_path / "yolov8n.onnx"
     model.write_bytes(b"dummy")
-    with patch("yolo_inference.MODEL_PATH", model):
-        return YoloInference(session_factory=MagicMock(return_value=session))
+    with patch("yolo_inference.MODEL_PATH", model), patch("yolo_inference.VIOLATION_CLASS_NAMES", None):
+        # COCO class ids in, raw class names out, whatever vehicle model is active on this machine
+        engine = YoloInference(session_factory=MagicMock(return_value=session))
+    engine._use_coco_map = False
+    return engine
 
 
 def test_a_motorcycle_needs_a_lower_confidence_than_other_classes(tmp_path):
@@ -159,3 +162,65 @@ def test_real_detection_object_accepts_every_field_the_pipeline_sets():
     d.plate_text, d.plate_bbox = "ABC123", [1, 2, 3, 4]
     d.marks = [{"bbox": [1, 2, 3, 4], "label": "NO PLATE FOUND"}]
     assert d.marks[0]["label"] == "NO PLATE FOUND"
+
+
+# ── People riding on vehicles (roof, pickup bed, kuliglig) ───────────────────────────────────────────────────────────
+VEHICLE_CLASSES_7 = ["motorcycle", "car", "bus", "truck", "person", "tricycle", "jeepney"]
+
+
+def _engine_with_boxes(tmp_path, boxes):
+    """A YoloInference on the 7-class vehicle model whose 'model' answers with (class name, score, cx, cy, w, h) boxes."""
+    import numpy as np
+    engine = _engine_that_returns(tmp_path, [])
+    engine._classes = VEHICLE_CLASSES_7
+    preds = np.zeros((4 + len(VEHICLE_CLASSES_7), 200), dtype=np.float32)
+    for i, (name, score, cx, cy, w, h) in enumerate(boxes):
+        preds[0:4, i] = [cx, cy, w, h]
+        preds[4 + VEHICLE_CLASSES_7.index(name), i] = score
+    engine._session.run.return_value = [preds[np.newaxis]]
+    return engine
+
+
+def test_an_unsure_person_counts_only_when_on_a_vehicle(tmp_path):
+    """People on a jeepney roof score 0.10-0.25 from CCTV: kept when standing on a vehicle box, dropped in the street."""
+    import numpy as np
+    engine = _engine_with_boxes(tmp_path, [
+        ("bus", 0.80, 200, 300, 200, 120),        # vehicle: x 100-300, y 240-360
+        ("person", 0.15, 200, 225, 20, 30),       # sitting on its roof (feet at y 240)
+        ("person", 0.15, 500, 300, 20, 40),       # in the street, same low score
+        ("person", 0.05, 220, 300, 20, 30),       # on the vehicle but below even the low cutoff
+    ])
+    kept = [(d.cls, round(d.bbox[0])) for d in engine.infer(np.zeros((640, 640, 3), dtype=np.uint8), track=False)]
+    assert ("person", 190) in kept
+    assert ("person", 490) not in kept
+    assert len([k for k in kept if k[0] == "person"]) == 1
+
+
+def test_on_a_vehicle_reads_the_feet():
+    from yolo_inference import on_a_vehicle
+    bus = [[100, 240, 300, 360]]
+    assert on_a_vehicle([190, 210, 210, 240], bus)          # feet on the roof line
+    assert on_a_vehicle([190, 300, 210, 350], bus)          # in the pickup bed / trailer
+    assert not on_a_vehicle([190, 150, 210, 200], bus)      # well above it (a sign, a building)
+    assert not on_a_vehicle([400, 300, 420, 350], bus)      # beside it
+
+
+def test_tiles_cover_the_whole_frame_with_overlap():
+    import numpy as np
+    from yolo_inference import TILE_COLS, TILE_ROWS, YoloInference
+    tiles = YoloInference._tiles(3840, 2160)
+    assert len(tiles) == TILE_COLS * TILE_ROWS
+    covered = np.zeros((2160, 3840), bool)
+    for x0, y0, x1, y1 in tiles:
+        covered[y0:y1, x0:x1] = True
+    assert covered.all()
+
+
+def test_small_people_mode_adds_people_from_tiles_only(tmp_path):
+    """Tiles add people (small riders) but never a second copy of a vehicle cut by a tile edge."""
+    import numpy as np
+    engine = _engine_with_boxes(tmp_path, [("truck", 0.80, 320, 320, 200, 200), ("person", 0.60, 320, 250, 20, 30)])
+    engine.small_people = True
+    dets = engine.infer(np.zeros((1080, 1920, 3), dtype=np.uint8), track=False)
+    assert engine._session.run.call_count == 1 + 6          # whole frame + 3 x 2 tiles
+    assert len([d for d in dets if d.cls == "truck"]) == 1  # vehicles come from the whole frame only

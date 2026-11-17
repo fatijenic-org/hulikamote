@@ -37,6 +37,50 @@ def moves_with(vehicle_ledger, person_ledger) -> bool:
     return dot(a, b) / (la * lb) >= 0.8 and 0.5 <= lb / la <= 2.0
 
 
+ATTACH_MAX_SHIFT = 0.15  # a rider on board keeps the same spot on the vehicle: offset may drift at most 15% of its size
+SEATED_SHARE = 0.6       # a person this much inside a car / tricycle box rides in it
+INSIDE_SHARE = 0.9       # a person this much inside a bus / jeepney / truck box is an occupant (driver, seated passenger)
+
+
+def stays_attached(vehicle_ledger, person_ledger, samples: int = MOTION_SAMPLES) -> bool:
+    """True when the person keeps the same spot on the vehicle over the last `samples` updates. A motorcycle or a
+    pedestrian passing alongside moves in the same direction but slides along the vehicle, so it fails."""
+    if len(vehicle_ledger.history) < samples or len(person_ledger.history) < samples:
+        return False
+    v0, v1 = vehicle_ledger.history[-samples], vehicle_ledger.history[-1]
+    p0, p1 = person_ledger.history[-samples], person_ledger.history[-1]
+    _, _, vw, vh = v1[3]
+    size = max(vw, vh)
+    if size <= 0:
+        return False
+    drift = math.hypot((p1[1] - v1[1]) - (p0[1] - v0[1]), (p1[2] - v1[2]) - (p0[2] - v0[2]))
+    return drift <= ATTACH_MAX_SHIFT * size
+
+
+def _share_inside(outer: list, person: list) -> float:
+    """Share of the person's box that lies inside the outer box (no headroom)."""
+    ox, oy, ow, oh = outer
+    px, py, pw, ph = person
+    if pw <= 0 or ph <= 0:
+        return 0.0
+    ix = max(0.0, min(px + pw, ox + ow) - max(px, ox))
+    iy = max(0.0, min(py + ph, oy + oh) - max(py, oy))
+    return ix * iy / (pw * ph)
+
+
+def claimed_by_small_vehicles(detections: list, people: list) -> set:
+    """ids of the person boxes that ride a motorcycle, or sit in a tricycle or car (never someone riding outside a
+    bus / jeepney / truck): motorcycle and tricycle riders by rider_boxes, and anyone mostly inside a car / tricycle."""
+    boxes = [p.bbox for p in people]
+    claimed = set()
+    for det in detections:
+        if det.cls in ("motorcycle", "tricycle"):
+            claimed |= {id(box) for box in rider_boxes(det.bbox, boxes)}
+        if det.cls in ("car", "tricycle"):
+            claimed |= {id(box) for box in boxes if _share_inside(det.bbox, box) >= SEATED_SHARE}
+    return claimed
+
+
 def claimed_by_motorcycles(detections: list, people: list) -> set:
     """ids of the person boxes that ride a motorcycle (so they are never a truck's passengers)."""
     boxes = [p.bbox for p in people]
@@ -55,6 +99,17 @@ def _share_over(vehicle: list, person: list) -> float:
     ix = max(0.0, min(px + pw, vx + vw) - max(px, vx))
     iy = max(0.0, min(py + ph, vy + vh) - max(py, top))
     return ix * iy / (pw * ph)
+
+
+def on_body(vehicle: list, person: list) -> bool:
+    """A person standing or sitting anywhere ON a vehicle (a kuliglig and its trailer): feet on its box and at least
+    half of the person over it. Position only: pair it with moves_with."""
+    vx, vy, vw, vh = vehicle
+    px, py, pw, ph = person
+    if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0 or ph < 0.2 * vh:
+        return False
+    foot_x, foot_y = px + pw / 2, py + ph
+    return vx <= foot_x <= vx + vw and vy <= foot_y <= vy + 1.05 * vh and _share_over(vehicle, person) >= 0.5
 
 
 def in_trailing_body(vehicle: list, head: tuple, person: list) -> bool:
@@ -86,16 +141,20 @@ def in_trailing_body(vehicle: list, head: tuple, person: list) -> bool:
 def outside_position(vehicle: list, person: list) -> str | None:
     """
     'roof' | 'hanging' | None for a person on a bus / jeepney / truck.
-      roof     feet in the top 30% of the vehicle, head at or above its roof line
+      roof     feet in the top 30% of the vehicle, head sticking out above its roof line (by 15% of the person)
       hanging  straddling the left or right edge (a quarter to three quarters of the person over the body),
                with the feet in the lower 60%: on a step, a ladder or the tailgate
+    A person (almost) wholly inside the vehicle's box is an occupant - the driver behind the windshield, a seated
+    passenger - and never counts.
     """
     vx, vy, vw, vh = vehicle
     px, py, pw, ph = person
     if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0 or ph < 0.2 * vh:
         return None
+    if _share_inside(vehicle, person) >= INSIDE_SHARE:
+        return None
     foot_x, foot_y = px + pw / 2, py + ph
-    if vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.3 * vh and py <= vy + 0.15 * vh:
+    if vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.3 * vh and py <= vy - 0.15 * ph:
         return "roof"
     inside = max(0.0, min(px + pw, vx + vw) - max(px, vx)) / pw
     if 0.25 <= inside <= 0.75 and (px < vx or px + pw > vx + vw) and vy + 0.4 * vh <= foot_y <= vy + 1.05 * vh:

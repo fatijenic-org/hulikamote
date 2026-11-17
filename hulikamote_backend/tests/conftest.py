@@ -23,6 +23,16 @@ from database import metadata
 from httpx import AsyncClient, ASGITransport
 
 @pytest.fixture(autouse=True)
+def forget_video_time_looks():
+    """The time found in a video is kept by file name and size (engine/video_clock.py): test videos share names and sizes,
+    so every test starts with nothing kept."""
+    module = sys.modules.get("engine.video_clock")
+    if module is not None:
+        module._LOOKS.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def no_real_email(monkeypatch, tmp_path):
     """No test may send a real e-mail or touch the real .env: the settings file is a temp one, and every mail setting
     starts empty (set but empty, so nothing overrides it, and whatever a test changes is undone afterwards)."""

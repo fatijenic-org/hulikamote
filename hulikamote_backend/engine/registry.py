@@ -59,7 +59,7 @@ class ModelRegistry:
         # to auto-download and convert the .pt -> .onnx before starting the server.
         self._load_model("primary_anchor", get_path("yolov8n.onnx"), fallback=False)
 
-        if "no_helmet" in self.active_violations:
+        if "no_helmet" in self.active_violations or "overloading" in self.active_violations:
             self._load_model("helmet_specialist", get_path("helmet_specialist.onnx"), fallback=True)
 
         # Always loaded — every violation ticket (counterflow, parking, etc.)

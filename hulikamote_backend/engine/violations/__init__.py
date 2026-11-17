@@ -18,7 +18,9 @@ from engine.violations.missing_side_mirror import MissingSideMirror
 from engine.violations.no_helmet import NoHelmet
 from engine.violations.no_plate import NoPlate
 from engine.violations.no_seatbelt import NoSeatbelt
+from engine.violations.kuliglig_passenger import KuligligPassenger
 from engine.violations.overloading import Overloading
+from engine.violations.overtaking_on_right import OvertakingOnRight
 from engine.violations.pedestrian_lane import PedestrianLane
 from engine.violations.pickup_passengers import PickupPassengers
 from engine.violations.red_light import RedLight
@@ -37,8 +39,9 @@ ALL: list[Violation] = [
     IllegalUTurn(), BlockingIntersection(), CrossingSolidLine(),
     # added after the first 20: Philippine road rules, all judged from the path inside a drawn zone
     IllegalLoading(), TruckBan(), TricycleOnHighway(), SidewalkDriving(), DoubleParking(),
+    OvertakingOnRight(),
     # frame checks (what is on screen now)
-    Overloading(), PickupPassengers(), RidingOutside(),
+    Overloading(), PickupPassengers(), RidingOutside(), KuligligPassenger(),
     # model checks (a specialist model's look at the vehicle)
     NoPlate(), NoHelmet(), NoSeatbelt(), DistractedDriving(), MissingSideMirror(),
 ]

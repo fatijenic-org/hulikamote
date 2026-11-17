@@ -11,6 +11,7 @@ from engine.track_stitcher import (
     match_births,
 )
 from engine.violations import ALL as ALL_VIOLATIONS
+from engine.violations.no_plate import plate_evidence, plate_status
 
 
 def inside_any(box, boxes, share: float = 0.4) -> bool:
@@ -63,6 +64,7 @@ class TrackLedger:
         self.turns_judged: set = set()    # signal-light zones where this vehicle's turn was already judged
         self.plate_checks: int = 0                        # plate looks that counted (see violations/no_plate.py)
         self.plate_hits: int = 0                          # ...and how many of them found a plate
+        self.plate_confs: list = []                       # the plate model's confidence in every look that found a plate
         # Looks like a violation so far, decided only when the vehicle leaves (e.g. no_plate)
         self.pending: set = set()
         self._classes_history: deque = deque(maxlen=100) # History of class predictions to prevent flickering
@@ -415,6 +417,8 @@ class ActiveLedgerManager:
             "snapshot_bbox": ledger.snapshot_bbox,
             "plate_bbox": ledger.plate_bbox,
             "plate_text": ledger.plate_text,
+            "plate_status": plate_status(ledger),       # no_plate | not_read | unclear | not_checked ("read" is set after the OCR)
+            "plate_evidence": plate_evidence(ledger),
             "plate_crops": ledger.plate_crops,
             "evidence_paths": ledger.evidence_paths,
             "evidence_meta": ledger.evidence_meta,
