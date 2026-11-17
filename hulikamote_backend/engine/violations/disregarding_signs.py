@@ -7,7 +7,7 @@ disregarding_signs - breaking a traffic sign. One zone per sign; each sign type 
   vehicle_ban a banned vehicle type in the zone (e.g. "no trucks")
   stop        crossed the stop line without first coming to a full stop (under 25 px/s over 1 s)
 """
-from engine import line_paint, overlay_objects
+from engine import line_paint, overlay_objects, sign_reader
 from engine.violations.base import Violation
 from engine.violations.geometry import (
     STOP_SPEED, crossed_line, moving_along, point_in_polygon, recent_speed, stopped_too_long, turned_into_any, vectors_of,
@@ -35,7 +35,25 @@ class DisregardingSigns(Violation):
             "stop_line": raw.get("stop_line"),
             "time_limit": float(raw.get("time_limit", 5.0)),
             "banned_classes": raw.get("banned_classes", []),
+            # stop zones only: judge the zone only after a REAL stop sign was read near it (engine/sign_reader.py)
+            "read_sign": bool(raw.get("read_sign", False)),
         }
+
+    SIGN_READ_EVERY_S = 2.0      # a sign does not move: one look every 2 s is enough
+
+    def prepare(self, pipe, frame, detections, zones, t):
+        """Stop zones that ask for it ("read_sign"): look for a real stop sign near the zone until one is found.
+        The zone then stays confirmed for the rest of the run (a truck passing in front must not switch the rule off)."""
+        waiting = [z for z in zones if z.get("sign") == "stop" and z.get("read_sign") and not z.get("sign_confirmed")]
+        if not waiting or t - getattr(pipe, "_stop_sign_look", -1e9) < self.SIGN_READ_EVERY_S:
+            return
+        pipe._stop_sign_look = t
+        for found in sign_reader.find_stop_signs(frame):
+            for zone in waiting:
+                if sign_reader.near_zone(found["box"], zone["polygon"]):
+                    zone["sign_confirmed"] = True
+                    zone["sign_box"] = found["box"]
+                    zone["sign_confidence"] = found["confidence"]
 
     def from_wizard(self, cfg):
         return [
@@ -48,6 +66,7 @@ class DisregardingSigns(Violation):
                 "stop_line": z.get("ui_vector") if z["sign"] == "stop" else None,
                 "time_limit": float(cfg.get("time_limit", 5.0)),
                 "banned_classes": cfg.get("banned_classes", []),
+                "read_sign": bool(z.get("read_sign", cfg.get("read_sign", False))),
             }
             for z in cfg.get("rois", []) if z.get("polygon") and z.get("sign")
         ]
@@ -89,6 +108,8 @@ class DisregardingSigns(Violation):
             elif sign == "vehicle_ban":
                 broken = ledger.vclass in zone.get("banned_classes", [])
             elif sign == "stop":
+                if zone.get("read_sign") and not zone.get("sign_confirmed"):
+                    continue                     # no real stop sign was read at this zone (yet): nothing to disregard
                 if recent_speed(ledger, 1.0) < STOP_SPEED:
                     ledger.made_stop.add(key)
                 crossed = crossed_line(ledger, key, zone.get("stop_line"))

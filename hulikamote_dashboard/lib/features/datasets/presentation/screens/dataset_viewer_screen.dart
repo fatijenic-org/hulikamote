@@ -307,7 +307,7 @@ class _DatasetHeader extends StatelessWidget {
           _Metric(label: isReid ? 'Photos' : 'Images', value: images),
           const SizedBox(width: 18),
           _Metric(
-            label: isReid ? 'Car folders' : 'Philippine share',
+            label: isReid ? 'Vehicles' : 'Philippine share',
             value: isReid
                 ? '${dataset?['cars'] ?? '—'}'
                 : ph is num
@@ -464,7 +464,7 @@ class _DatasetRailItem extends StatelessWidget {
               const SizedBox(height: 5),
               Text(
                 item['kind'] == 'reid'
-                    ? '${_count((total as num? ?? 0).toInt())} photos · ${item['cars'] ?? 0} cars'
+                    ? '${_count((total as num? ?? 0).toInt())} photos · ${item['cars'] ?? 0} vehicles'
                     : total is num
                     ? '${_count(total.toInt())} images'
                     : 'Building index…',
@@ -474,7 +474,7 @@ class _DatasetRailItem extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 3),
                   child: Text(
-                    'Clean the cars before training',
+                    'Clean the vehicles before training',
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                 ),

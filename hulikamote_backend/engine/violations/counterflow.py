@@ -70,6 +70,27 @@ class Counterflow(Violation):
         zone["invert"] = bool(cfg.get("invert_flow", False))
         return zone
 
+    def set_test_reversed(self, pipe, on: bool) -> None:
+        """Live demo: reverse the legal direction (or put it back) while the camera runs, so ordinary traffic is flagged without
+        waiting for a real wrong-way car. The whole-picture rule reads "invert_flow" on every frame; a drawn zone's arrow was fixed
+        when the zones were parsed, so it is flipped here. What the traffic taught the flow field is kept. Vehicles flagged under
+        the other setting are cleared, so a test never leaves tickets behind after it is switched off. Run it on the pipeline's
+        own thread (the live feed's single-thread executor) so it never races a frame."""
+        settings = getattr(pipe, "violation_cfg", None)
+        if settings is None:
+            settings = pipe.violation_cfg = {}
+        settings.setdefault(self.key, {})["invert_flow"] = bool(on)
+        for zone in getattr(pipe, "rois", {}).get(self.zone_key) or []:
+            if bool(zone.get("test_reversed")) != bool(on):
+                vx, vy = zone["vector"]
+                zone["vector"] = (-vx, -vy)
+                zone["test_reversed"] = bool(on)
+        manager = getattr(pipe, "ledger_manager", None)
+        for ledger in list(manager.ledgers.values()) if manager is not None else []:
+            ledger.violations.discard(self.key)
+            for timer in [k for k in list(ledger.stop_timers) if isinstance(k, tuple) and k[:1] == (self.key,)]:
+                ledger.stop_timers.pop(timer, None)
+
     def evaluate(self, mgr, track_id, zones):
         """Each zone: {"polygon": [...], "vector": (x, y)}, or the whole-frame zone (nothing drawn)."""
         if track_id not in mgr.ledgers or not zones:

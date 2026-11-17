@@ -2,7 +2,7 @@
 import numpy as np
 
 from engine import marks
-from yolo_inference import YoloDetection, box_specs, draw_specs
+from yolo_inference import YoloDetection, box_specs, draw_specs, vehicle_label
 
 
 def det(cls="motorcycle", bbox=(100, 100, 80, 60), plate=None, violation=None, track_id=7):
@@ -11,15 +11,21 @@ def det(cls="motorcycle", bbox=(100, 100, 80, 60), plate=None, violation=None, t
     return d
 
 
-def test_label_is_plate_and_type_or_just_vehicle():
+def test_label_is_plate_and_class_or_just_the_class():
     assert box_specs([det(plate="ABC 1234")])[0]["lines"] == ["ABC 1234 - MOTORCYCLE"]
-    assert box_specs([det()])[0]["lines"] == ["VEHICLE"]
+    assert box_specs([det()])[0]["lines"] == ["MOTORCYCLE"]
+    assert box_specs([det("jeepney")])[0]["lines"] == ["JEEPNEY"]
 
 
-def test_violation_keeps_plate_and_type():
+def test_an_unknown_class_is_called_vehicle():
+    assert vehicle_label(det("bicycle")) == "VEHICLE"
+    assert vehicle_label(det("bicycle", plate="ABC 1234")) == "ABC 1234 - VEHICLE"
+
+
+def test_violation_keeps_plate_and_class():
     lines = box_specs([det("car", plate="XYZ 987", violation="no_seatbelt+overloading?")])[0]["lines"]
     assert lines == ["NO SEATBELT", "OVERLOADING?", "XYZ 987 - CAR"]
-    assert box_specs([det("car", violation="red_light")])[0]["lines"] == ["RED LIGHT", "VEHICLE"]
+    assert box_specs([det("car", violation="red_light")])[0]["lines"] == ["RED LIGHT", "CAR"]
 
 
 def test_no_vehicle_id_anywhere_in_the_labels():

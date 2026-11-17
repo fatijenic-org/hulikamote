@@ -324,10 +324,12 @@ class DatasetViewerApi {
     String? analysis,
     String filter = 'all',
     String q = '',
+    String? cls,
   }) => get('/api/reid/cars', {
     'analysis': ?analysis,
     'filter': filter,
     if (q.isNotEmpty) 'q': q,
+    'class': ?cls,
   });
 
   Future<Map<String, dynamic>> reidCar(String key) =>
@@ -356,7 +358,25 @@ class DatasetViewerApi {
   Future<Map<String, dynamic>> reidMove(
     List<Map<String, String>> photos, {
     String? to,
-  }) => post('/api/reid/move', {'photos': photos, 'to': to});
+    bool temporary = false,
+  }) => post('/api/reid/move', {
+    'photos': photos,
+    'to': to,
+    'temporary': temporary,
+  });
+
+  /// The other vehicles of the analysis, most alike first (for the selected photos, or the whole vehicle).
+  Future<Map<String, dynamic>> reidSimilar(String key, {List<String>? photos}) =>
+      post('/api/reid/similar', {'key': key, 'photos': photos});
+
+  Future<Map<String, dynamic>> reidSetClass(List<String> cars, String cls) =>
+      post('/api/reid/class', {'cars': cars, 'class': cls});
+
+  Future<Map<String, dynamic>> reidHold(List<String> cars) =>
+      post('/api/reid/hold', {'cars': cars});
+
+  Future<Map<String, dynamic>> reidKeep(List<String> cars) =>
+      post('/api/reid/keep', {'cars': cars});
 
   Future<Map<String, dynamic>> reidMerge(List<String> cars, String into) =>
       post('/api/reid/merge', {'cars': cars, 'into': into});
@@ -381,6 +401,9 @@ class DatasetViewerApi {
   Future<Map<String, dynamic>> reidUndo() => post('/api/reid/undo', {});
 
   Future<Map<String, dynamic>> reidScan() => post('/api/reid/scan', {});
+
+  /// Ask the vehicle model for a class for the vehicles that have none.
+  Future<Map<String, dynamic>> reidSuggest() => post('/api/reid/suggest', {});
 
   Future<Map<String, dynamic>> reidJob(String id) =>
       get('/api/reid/job', {'id': id});

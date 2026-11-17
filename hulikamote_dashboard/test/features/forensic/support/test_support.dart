@@ -300,9 +300,15 @@ Future<void> pumpScreen(WidgetTester tester, Widget child, {Size size = const Si
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
+  // The app's font (Lexend, fetched by google_fonts) cannot load in a test, and the fallback is a block font that is
+  // wider than any real one: rows then "overflow" that fit in the real app. Roboto (loaded by loadRoboto) stands in.
+  final theme = AppTheme.darkTheme;
   await tester.pumpWidget(MaterialApp(
     debugShowCheckedModeBanner: false,
-    theme: AppTheme.darkTheme,
+    theme: theme.copyWith(
+      textTheme: theme.textTheme.apply(fontFamily: 'Roboto'),
+      primaryTextTheme: theme.primaryTextTheme.apply(fontFamily: 'Roboto'),
+    ),
     home: Scaffold(body: child),
   ));
   await tester.pump(const Duration(milliseconds: 50));

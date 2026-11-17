@@ -1,13 +1,19 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../domain/models/road_detect.dart';
+import 'road_arrow.dart';
 
-/// The correction step after "Detect road": the frozen picture with the draft areas on it. Tap an area to select it, drag its corners,
-/// change what it is (crosswalk, road or sidewalk), delete it, or add a new one. The finder only gives a first draft; the enforcer who
-/// knows the street has the last word.
+/// The correction step after "Detect road": the frozen picture with the draft shapes on it. Areas (crosswalk, road, sidewalk) and lines
+/// (solid line, stop line) are made of points, as many as the shape needs, so a curve is just more points:
+///   - tap a shape to select it, drag a point to move it
+///   - tap an EDGE of the selected shape to add a point there; right-click a point (or select it and press Remove point) to take it away
+///   - Smooth rounds the corners into a curve; Draw… places a new shape point by point
+///   - a road area can have a direction (incoming = toward the camera, outgoing = away), shown by its arrow
+/// The finder only gives a first draft; the enforcer who knows the street has the last word.
 class RoadZoneEditor extends StatefulWidget {
   const RoadZoneEditor({
     super.key,
@@ -20,7 +26,7 @@ class RoadZoneEditor extends StatefulWidget {
 
   final Uint8List? frame;
 
-  /// The frozen picture's size in pixels: the areas are in these coordinates.
+  /// The frozen picture's size in pixels: the shapes are in these coordinates.
   final Size size;
   final List<RoadArea> areas;
   final ValueChanged<List<RoadArea>> onChanged;
@@ -28,21 +34,57 @@ class RoadZoneEditor extends StatefulWidget {
   /// Back to what the scan found.
   final VoidCallback onReset;
 
-  static Color colourOf(String kind) => switch (kind) {
-    'road' => Colors.lightBlueAccent,
+  static Color colourOf(RoadArea area) => switch (area.kind) {
+    'road' => flowColour(area.flow),
     'sidewalk' => Colors.lightGreenAccent,
+    'solid_line' => area.style == 'solid_white' ? Colors.white : Colors.yellowAccent,
+    'stop_line' => Colors.orangeAccent,
     _ => Colors.cyanAccent,
   };
+
+  /// Chaikin corner cutting: each segment is replaced by two points a quarter and three quarters along it, which rounds the shape into a
+  /// curve. A line keeps its two ends.
+  static List<Offset> smooth(List<Offset> points, {required bool closed}) {
+    final n = points.length;
+    if (n < 3 && closed || n < 2) return points;
+    final out = <Offset>[];
+    if (!closed) out.add(points.first);
+    final segments = closed ? n : n - 1;
+    for (var i = 0; i < segments; i++) {
+      final a = points[i], b = points[(i + 1) % n];
+      out
+        ..add(a * 0.75 + b * 0.25)
+        ..add(a * 0.25 + b * 0.75);
+    }
+    if (!closed) out.add(points.last);
+    return out;
+  }
 
   @override
   State<RoadZoneEditor> createState() => _RoadZoneEditorState();
 }
 
+/// A shape being drawn, one tap at a time.
+class _Drawing {
+  _Drawing(this.kind, {this.flow, this.style = 'solid_white'});
+
+  final String kind;
+  final String? flow;
+  final String style;
+  final List<Offset> points = [];
+
+  bool get isLine => RoadArea.lineKinds.contains(kind);
+  int get least => isLine ? 2 : 3;
+}
+
 class _RoadZoneEditorState extends State<RoadZoneEditor> {
-  static const _grab = 18.0; // how close to a corner (screen pixels) a press grabs it
+  static const _grab = 18.0; // how close to a point (screen pixels) a press grabs it
+  static const _edge = 12.0; // how close to an edge or a line a tap must be to add a point there / select the line
   String? _selected;
-  int? _corner;
+  int? _point; // the selected point of the selected shape (the one Remove point takes away)
+  int? _drag; // the point being dragged
   int _added = 0;
+  _Drawing? _drawing;
 
   RoadArea? get _selectedArea => widget.areas.where((a) => a.id == _selected).firstOrNull;
 
@@ -62,69 +104,303 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
     return inside;
   }
 
-  void _select(Offset local, double scale) {
-    final p = local / scale;
-    final hit = widget.areas.reversed.where((a) => _inside(p, a.polygon)).firstOrNull;
-    setState(() => _selected = hit?.id);
+  /// The edge of [a] nearest to [p] (screen pixels): the index of the edge's first point, the distance and the nearest point on it.
+  ({int index, double distance, Offset point})? _nearestEdge(RoadArea a, Offset p, double scale) {
+    final pts = [for (final q in a.polygon) q * scale];
+    if (pts.length < 2) return null;
+    final count = a.isLine ? pts.length - 1 : pts.length;
+    ({int index, double distance, Offset point})? best;
+    for (var i = 0; i < count; i++) {
+      final from = pts[i], to = pts[(i + 1) % pts.length];
+      final ab = to - from;
+      final len2 = ab.dx * ab.dx + ab.dy * ab.dy;
+      final t = len2 == 0 ? 0.0 : (((p - from).dx * ab.dx + (p - from).dy * ab.dy) / len2).clamp(0.0, 1.0);
+      final q = from + ab * t;
+      final d = (p - q).distance;
+      if (best == null || d < best.distance) best = (index: i, distance: d, point: q);
+    }
+    return best;
   }
 
-  void _grabCorner(Offset local, double scale) {
-    final candidates = [?_selectedArea, ...widget.areas];
-    for (final area in candidates) {
-      for (var i = 0; i < area.polygon.length; i++) {
-        if ((area.polygon[i] * scale - local).distance <= _grab) {
-          setState(() {
-            _selected = area.id;
-            _corner = i;
-          });
-          return;
-        }
+  int? _pointNear(RoadArea area, Offset local, double scale) {
+    for (var i = 0; i < area.polygon.length; i++) {
+      if ((area.polygon[i] * scale - local).distance <= _grab) return i;
+    }
+    return null;
+  }
+
+  // ── tapping ──
+  void _tap(Offset local, double scale) {
+    final drawing = _drawing;
+    if (drawing != null) {
+      _drawPoint(drawing, local, scale);
+      return;
+    }
+    final selected = _selectedArea;
+    if (selected != null) {
+      final near = _pointNear(selected, local, scale);
+      if (near != null) {
+        setState(() => _point = near);
+        return;
+      }
+      final edge = _nearestEdge(selected, local, scale);
+      if (edge != null && edge.distance <= _edge && selected.polygon.length < RoadArea.maxPoints) {
+        _replace(selected.copyWith(polygon: [...selected.polygon]..insert(edge.index + 1, _toFrame(edge.point, scale))));
+        setState(() => _point = edge.index + 1);
+        return;
       }
     }
-    _corner = null;
+    _select(local, scale);
   }
 
-  void _drag(Offset local, double scale) {
-    final area = _selectedArea, corner = _corner;
-    if (area == null || corner == null) return;
-    final moved = [...area.polygon]..[corner] = _toFrame(local, scale);
-    _replace(area.copyWith(polygon: moved));
+  void _select(Offset local, double scale) {
+    final p = local / scale;
+    RoadArea? hit;
+    for (final a in widget.areas.reversed) {
+      final onIt = a.isLine ? (_nearestEdge(a, local, scale)?.distance ?? double.infinity) <= _edge : (a.polygon.length >= 3 && _inside(p, a.polygon));
+      if (onIt) {
+        hit = a;
+        break;
+      }
+    }
+    setState(() {
+      _selected = hit?.id;
+      _point = null;
+    });
   }
 
+  // ── dragging a point ──
+  void _grabPoint(Offset local, double scale) {
+    if (_drawing != null) return;
+    for (final area in [?_selectedArea, ...widget.areas]) {
+      final i = _pointNear(area, local, scale);
+      if (i != null) {
+        setState(() {
+          _selected = area.id;
+          _drag = i;
+          _point = i;
+        });
+        return;
+      }
+    }
+    _drag = null;
+  }
+
+  void _dragPoint(Offset local, double scale) {
+    final area = _selectedArea, i = _drag;
+    if (area == null || i == null || i >= area.polygon.length) return;
+    _replace(area.copyWith(polygon: [...area.polygon]..[i] = _toFrame(local, scale)));
+  }
+
+  // ── removing a point ──
+  void _removePoint(RoadArea area, int i) {
+    if (area.polygon.length <= area.minPoints || i >= area.polygon.length) return;
+    _replace(area.copyWith(polygon: [...area.polygon]..removeAt(i)));
+    setState(() => _point = null);
+  }
+
+  void _removeNear(Offset local, double scale) {
+    final area = _selectedArea;
+    if (area == null || _drawing != null) return;
+    final i = _pointNear(area, local, scale);
+    if (i != null) _removePoint(area, i);
+  }
+
+  // ── drawing a new shape ──
+  void _startDrawing(String kind, {String? flow, String style = 'solid_white'}) => setState(() {
+    _drawing = _Drawing(kind, flow: flow, style: style);
+    _selected = null;
+    _point = null;
+  });
+
+  void _drawPoint(_Drawing d, Offset local, double scale) {
+    if (!d.isLine && d.points.length >= 3 && (d.points.first * scale - local).distance <= _grab) {
+      _finishDrawing(); // tapping the first point again closes an area
+      return;
+    }
+    if (d.points.length >= RoadArea.maxPoints) return;
+    setState(() => d.points.add(_toFrame(local, scale)));
+  }
+
+  void _finishDrawing() {
+    final d = _drawing;
+    if (d == null || d.points.length < d.least) return;
+    final id = '${d.kind}-new-${++_added}';
+    var shape = RoadArea(id: id, kind: d.kind, polygon: List.of(d.points), style: d.style, rule: d.kind == 'solid_line');
+    if (d.flow != null) shape = shape.copyWith(flow: d.flow, arrow: _autoArrow(shape.polygon, d.flow!));
+    widget.onChanged([...widget.areas, shape]);
+    setState(() {
+      _drawing = null;
+      _selected = id;
+      _point = null;
+    });
+  }
+
+  /// An arrow down the middle of a road area: incoming (toward the camera) points down the picture, outgoing points up.
+  static List<Offset> _autoArrow(List<Offset> poly, String flow) {
+    final xs = poly.map((p) => p.dx), ys = poly.map((p) => p.dy);
+    final x = (xs.reduce(math.min) + xs.reduce(math.max)) / 2;
+    final top = ys.reduce(math.min), bottom = ys.reduce(math.max);
+    final far = Offset(x, top + 0.30 * (bottom - top)), near = Offset(x, top + 0.78 * (bottom - top));
+    return flow == 'in' ? [far, near] : [near, far];
+  }
+
+  void _setFlow(RoadArea area, String? flow) {
+    if (flow == null) {
+      _replace(area.copyWith(clearFlow: true));
+      return;
+    }
+    final turned = area.arrow.length == 2 && area.flow != null;
+    final arrow = turned ? (area.flow == flow ? area.arrow : area.arrow.reversed.toList()) : _autoArrow(area.polygon, flow);
+    _replace(area.copyWith(flow: flow, arrow: arrow));
+  }
+
+  // ── the buttons ──
+  /// A starting shape the operator then reshapes (add points, drag them): a box in the middle of the picture.
   void _add() {
-    final kind = _selectedArea?.kind ?? 'road';
+    final current = _selectedArea;
+    final kind = current != null && !current.isLine ? current.kind : 'road';
     final w = widget.size.width, h = widget.size.height;
     final id = '$kind-new-${++_added}';
     final box = [Offset(w * .35, h * .35), Offset(w * .65, h * .35), Offset(w * .65, h * .65), Offset(w * .35, h * .65)];
     widget.onChanged([...widget.areas, RoadArea(id: id, kind: kind, polygon: box)]);
-    setState(() => _selected = id);
+    setState(() {
+      _selected = id;
+      _point = null;
+    });
   }
 
   void _delete() {
     widget.onChanged([for (final a in widget.areas) if (a.id != _selected) a]);
-    setState(() => _selected = null);
+    setState(() {
+      _selected = null;
+      _point = null;
+    });
+  }
+
+  void _smooth(RoadArea area) {
+    final next = RoadZoneEditor.smooth(area.polygon, closed: !area.isLine);
+    if (next.length > RoadArea.maxPoints) return;
+    _replace(area.copyWith(polygon: next));
+    setState(() => _point = null);
+  }
+
+  Widget _drawMenu() => MenuAnchor(
+    menuChildren: [
+      MenuItemButton(key: const ValueKey('draw-solid'), onPressed: () => _startDrawing('solid_line'), child: const Text('Solid line')),
+      MenuItemButton(key: const ValueKey('draw-stop'), onPressed: () => _startDrawing('stop_line'), child: const Text('Stop line')),
+      MenuItemButton(key: const ValueKey('draw-in'), onPressed: () => _startDrawing('road', flow: 'in'), child: const Text('Incoming road (toward the camera)')),
+      MenuItemButton(key: const ValueKey('draw-out'), onPressed: () => _startDrawing('road', flow: 'out'), child: const Text('Outgoing road (away from the camera)')),
+      MenuItemButton(key: const ValueKey('draw-crosswalk'), onPressed: () => _startDrawing('crosswalk'), child: const Text('Crosswalk')),
+      MenuItemButton(key: const ValueKey('draw-sidewalk'), onPressed: () => _startDrawing('sidewalk'), child: const Text('Sidewalk')),
+    ],
+    builder: (context, controller, _) => OutlinedButton.icon(
+      key: const ValueKey('road-draw'),
+      onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+      icon: const Icon(Icons.draw_outlined),
+      label: const Text('Draw…'),
+    ),
+  );
+
+  Widget _toolbar(BuildContext context) {
+    final d = _drawing;
+    if (d != null) {
+      return Wrap(spacing: Fx.s8, runSpacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+        Text(
+          'Drawing ${RoadArea.labelOf(d.kind).toLowerCase()}${d.flow == null ? '' : ' (${flowLabel(d.flow)!.toLowerCase()})'}: tap the picture to place points '
+          '(${d.points.length}). ${d.isLine ? 'At least 2.' : 'At least 3; tap the first point to close it.'}',
+          key: const ValueKey('road-drawing'),
+          style: Fx.caption(context),
+        ),
+        FilledButton.icon(
+          key: const ValueKey('road-finish'),
+          onPressed: d.points.length >= d.least ? _finishDrawing : null,
+          icon: const Icon(Icons.check),
+          label: const Text('Finish'),
+        ),
+        TextButton(
+          key: const ValueKey('road-draw-undo'),
+          onPressed: d.points.isEmpty ? null : () => setState(d.points.removeLast),
+          child: const Text('Undo point'),
+        ),
+        TextButton(key: const ValueKey('road-draw-cancel'), onPressed: () => setState(() => _drawing = null), child: const Text('Cancel')),
+      ]);
+    }
+    final selected = _selectedArea;
+    // The buttons that are always there come first, then what belongs to the selected shape (its kind, direction, paint).
+    return Wrap(spacing: Fx.s8, runSpacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      IconButton.outlined(key: const ValueKey('road-add'), tooltip: 'Add an area (a box to reshape)', onPressed: _add, icon: const Icon(Icons.add_box_outlined)),
+      _drawMenu(),
+      if (selected != null) ...[
+        IconButton.outlined(
+          key: const ValueKey('road-remove-point'),
+          tooltip: 'Remove the selected point (or right-click a point)',
+          onPressed: (_point != null && selected.polygon.length > selected.minPoints) ? () => _removePoint(selected, _point!) : null,
+          icon: const Icon(Icons.remove_circle_outline),
+        ),
+        IconButton.outlined(
+          key: const ValueKey('road-smooth'),
+          tooltip: 'Smooth: round the corners into a curve',
+          onPressed: selected.polygon.length * 2 <= RoadArea.maxPoints ? () => _smooth(selected) : null,
+          icon: const Icon(Icons.gesture),
+        ),
+        IconButton.outlined(key: const ValueKey('road-delete'), tooltip: 'Delete this shape', onPressed: _delete, icon: const Icon(Icons.delete_outline)),
+      ],
+      TextButton(key: const ValueKey('road-reset'), onPressed: widget.onReset, child: const Text('Back to the scan')),
+      if (selected == null)
+        Text(
+          'Tap a shape to select it. Drag a point to move it. Tap an edge to add a point; right-click a point to remove it.',
+          style: Fx.caption(context),
+        )
+      else if (!selected.isLine)
+        SegmentedButton<String>(
+          key: const ValueKey('road-kind'),
+          showSelectedIcon: false,
+          segments: [for (final k in RoadArea.kinds) ButtonSegment(value: k, label: Text(RoadArea.labelOf(k)))],
+          selected: {selected.kind},
+          onSelectionChanged: (s) => _replace(selected.copyWith(kind: s.first, clearFlow: s.first != 'road')),
+        )
+      else if (selected.kind == 'solid_line') ...[
+        DropdownButton<String>(
+          key: const ValueKey('line-style'),
+          value: selected.style,
+          items: [for (final s in RoadArea.lineStyles) DropdownMenuItem(value: s, child: Text(RoadArea.styleLabel(s)))],
+          onChanged: (s) {
+            if (s != null) _replace(selected.copyWith(style: s));
+          },
+        ),
+        Tooltip(
+          message: 'On: a vehicle that crosses this line is flagged (Crossing a solid line). Off: the line is only shown.',
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Switch(key: const ValueKey('line-rule'), value: selected.rule, onChanged: (v) => _replace(selected.copyWith(rule: v))),
+            Text('Flag crossings', style: Fx.caption(context)),
+          ]),
+        ),
+      ] else
+        Text('Stop line: only shown (a red light needs a light).', style: Fx.caption(context)),
+      if (selected != null && selected.kind == 'road')
+        SegmentedButton<String>(
+          key: const ValueKey('road-flow'),
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 'none', label: Text('No direction')),
+            ButtonSegment(value: 'in', label: Text('Incoming')),
+            ButtonSegment(value: 'out', label: Text('Outgoing')),
+          ],
+          selected: {selected.flow ?? 'none'},
+          onSelectionChanged: (s) => _setFlow(selected, s.first == 'none' ? null : s.first),
+        ),
+    ]);
   }
 
   @override
   Widget build(BuildContext context) {
-    final selected = _selectedArea;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: Fx.s8, runSpacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        if (selected != null)
-          SegmentedButton<String>(
-            key: const ValueKey('road-kind'),
-            showSelectedIcon: false,
-            segments: [for (final k in RoadArea.kinds) ButtonSegment(value: k, label: Text(RoadArea.labelOf(k)))],
-            selected: {selected.kind},
-            onSelectionChanged: (s) => _replace(selected.copyWith(kind: s.first)),
-          )
-        else
-          Text('Tap an area to select it. Drag its corners to fix it.', style: Fx.caption(context)),
-        OutlinedButton.icon(key: const ValueKey('road-add'), onPressed: _add, icon: const Icon(Icons.add), label: const Text('Add area')),
-        if (selected != null)
-          OutlinedButton.icon(key: const ValueKey('road-delete'), onPressed: _delete, icon: const Icon(Icons.delete_outline), label: const Text('Delete')),
-        TextButton(key: const ValueKey('road-reset'), onPressed: widget.onReset, child: const Text('Back to the scan')),
-      ]),
+    // The toolbar never takes more than 55% of the height (it scrolls instead), so the picture always has room and nothing overlaps the buttons below.
+    return LayoutBuilder(builder: (context, outer) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: outer.hasBoundedHeight ? outer.maxHeight * 0.55 : double.infinity),
+        child: SingleChildScrollView(child: _toolbar(context)),
+      ),
       const SizedBox(height: Fx.s8),
       Expanded(
         child: Center(
@@ -134,60 +410,114 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
               borderRadius: BorderRadius.circular(Fx.radiusSm),
               child: LayoutBuilder(builder: (context, box) {
                 final scale = box.maxWidth / widget.size.width;
-                return GestureDetector(
-                  key: const ValueKey('road-canvas'),
-                  behavior: HitTestBehavior.opaque,
-                  onTapUp: (d) => _select(d.localPosition, scale),
-                  onPanDown: (d) => _grabCorner(d.localPosition, scale),
-                  onPanUpdate: (d) => _drag(d.localPosition, scale),
-                  onPanEnd: (_) => _corner = null,
-                  child: Stack(fit: StackFit.expand, children: [
-                    const ColoredBox(color: Colors.black),
-                    if (widget.frame != null) Image.memory(widget.frame!, fit: BoxFit.fill, gaplessPlayback: true),
-                    CustomPaint(painter: _AreasPainter(widget.areas, _selected, scale)),
-                  ]),
+                return MouseRegion(
+                  cursor: _drawing != null ? SystemMouseCursors.precise : MouseCursor.defer,
+                  child: GestureDetector(
+                    key: const ValueKey('road-canvas'),
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (d) => _tap(d.localPosition, scale),
+                    onSecondaryTapUp: (d) => _removeNear(d.localPosition, scale),
+                    onPanDown: (d) => _grabPoint(d.localPosition, scale),
+                    onPanUpdate: (d) => _dragPoint(d.localPosition, scale),
+                    onPanEnd: (_) => _drag = null,
+                    onPanCancel: () => _drag = null,
+                    child: Stack(fit: StackFit.expand, children: [
+                      const ColoredBox(color: Colors.black),
+                      if (widget.frame != null) Image.memory(widget.frame!, fit: BoxFit.fill, gaplessPlayback: true),
+                      CustomPaint(painter: _ShapesPainter(widget.areas, _selected, _point, scale, _drawing)),
+                    ]),
+                  ),
                 );
               }),
             ),
           ),
         ),
       ),
-    ]);
+    ]));
   }
 }
 
-class _AreasPainter extends CustomPainter {
-  _AreasPainter(this.areas, this.selected, this.scale);
+class _ShapesPainter extends CustomPainter {
+  _ShapesPainter(this.areas, this.selected, this.point, this.scale, this.drawing);
 
   final List<RoadArea> areas;
   final String? selected;
+  final int? point;
   final double scale;
+  final _Drawing? drawing;
+
+  static void _text(Canvas canvas, String text, Color colour, Offset at) {
+    final painter = TextPainter(
+      text: TextSpan(text: ' $text ', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold, backgroundColor: colour)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, at);
+  }
+
+  static Offset _topLeft(List<Offset> pts) =>
+      Offset(pts.map((p) => p.dx).reduce(math.min), pts.map((p) => p.dy).reduce(math.min));
+
+  void _handles(Canvas canvas, List<Offset> pts, Color colour, {required bool closed}) {
+    final segments = closed ? pts.length : pts.length - 1;
+    for (var i = 0; i < segments; i++) {                                    // a small dot in the middle of each edge: tap there to add a point
+      final mid = (pts[i] + pts[(i + 1) % pts.length]) / 2;
+      canvas.drawCircle(mid, 4, Paint()..color = colour.withValues(alpha: 0.7));
+    }
+    for (final (i, p) in pts.indexed) {
+      final chosen = i == point;
+      canvas.drawCircle(p, chosen ? 10 : 8, Paint()..color = chosen ? colour : Colors.white);
+      canvas.drawCircle(p, chosen ? 10 : 8, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     for (final area in areas) {
-      if (area.polygon.length < 3) continue;
+      if (area.polygon.length < (area.isLine ? 2 : 3)) continue;
       final isSelected = area.id == selected;
-      final colour = RoadZoneEditor.colourOf(area.kind);
-      final path = Path()..addPolygon([for (final p in area.polygon) p * scale], true);
-      canvas.drawPath(path, Paint()..color = colour.withValues(alpha: isSelected ? 0.34 : 0.2));
-      canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 3.5 : 2);
-      final text = TextPainter(
-        text: TextSpan(text: ' ${RoadArea.labelOf(area.kind)} ', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold, backgroundColor: colour)),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      final top = area.polygon.map((p) => p.dy).reduce((a, b) => a < b ? a : b) * scale;
-      final left = area.polygon.map((p) => p.dx).reduce((a, b) => a < b ? a : b) * scale;
-      text.paint(canvas, Offset(left + 4, top + 4));
-      if (isSelected) {
-        for (final p in area.polygon) {
-          canvas.drawCircle(p * scale, 8, Paint()..color = Colors.white);
-          canvas.drawCircle(p * scale, 8, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
+      final colour = RoadZoneEditor.colourOf(area);
+      final pts = [for (final p in area.polygon) p * scale];
+      if (area.isLine) {
+        final path = Path()..addPolygon(pts, false);
+        if (area.style == 'double_yellow') {
+          canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 8 : 6);
+          canvas.drawPath(path, Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 2);
+        } else {
+          canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 6 : 4);
         }
+        final what = area.kind == 'stop_line' ? 'Stop line' : 'Solid line · ${area.rule ? 'rule' : 'hint'}';
+        _text(canvas, what, colour, _topLeft(pts) + const Offset(2, -18));
+      } else {
+        final path = Path()..addPolygon(pts, true);
+        canvas.drawPath(path, Paint()..color = colour.withValues(alpha: isSelected ? 0.34 : 0.2));
+        canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 3.5 : 2);
+        final flow = flowLabel(area.flow);
+        _text(canvas, flow == null || area.kind != 'road' ? RoadArea.labelOf(area.kind) : 'Road · $flow', colour, _topLeft(pts) + const Offset(4, 4));
+        if (area.kind == 'road' && area.flow != null && area.arrow.length == 2) {
+          paintRoadArrow(canvas, area.arrow[0] * scale, area.arrow[1] * scale, colour, width: isSelected ? 6 : 4, head: 22);
+        }
+      }
+      if (isSelected) _handles(canvas, pts, colour, closed: !area.isLine);
+    }
+    final d = drawing;
+    if (d != null && d.points.isNotEmpty) {
+      final colour = switch (d.kind) {
+        'solid_line' => d.style == 'solid_white' ? Colors.white : Colors.yellowAccent,
+        'stop_line' => Colors.orangeAccent,
+        'road' => flowColour(d.flow),
+        'sidewalk' => Colors.lightGreenAccent,
+        _ => Colors.cyanAccent,
+      };
+      final pts = [for (final p in d.points) p * scale];
+      if (!d.isLine && pts.length >= 3) canvas.drawPath(Path()..addPolygon(pts, true), Paint()..color = colour.withValues(alpha: 0.18));
+      canvas.drawPath(Path()..addPolygon(pts, false), Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
+      for (final (i, p) in pts.indexed) {
+        canvas.drawCircle(p, i == 0 ? 10 : 7, Paint()..color = i == 0 ? colour : Colors.white);
+        canvas.drawCircle(p, i == 0 ? 10 : 7, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
       }
     }
   }
 
   @override
-  bool shouldRepaint(covariant _AreasPainter old) => true;
+  bool shouldRepaint(covariant _ShapesPainter old) => true;
 }

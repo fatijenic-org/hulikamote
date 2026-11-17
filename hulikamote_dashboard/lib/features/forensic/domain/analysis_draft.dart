@@ -25,6 +25,10 @@ class PipelineSettings {
 /// their zones and the pipeline options. Builds the exact `config_json` the backend expects.
 class AnalysisDraft extends ChangeNotifier {
   String? videoPath;
+
+  /// Road and traffic overlays placed on the picture for the whole video (backend: engine/scene_overlays.py). The backend
+  /// paints them and reads the markings back; the selected rules with nothing drawn get their zones from that.
+  final List<Map<String, dynamic>> sceneOverlays = [];
   String? videoName;
   String? frameUrl; // first frame, for drawing zones
   double fps = 30;
@@ -49,6 +53,9 @@ class AnalysisDraft extends ChangeNotifier {
 
   /// A video was chosen (its picture for the zones may still be on its way).
   bool get hasVideoPath => videoPath != null;
+
+  /// The draft is for the Live Monitor's setup (one frozen camera picture, no video file): the time is this computer's clock.
+  bool get isLive => false;
 
   /// Where the analysis ends, in seconds (the whole length when no end was set).
   double get effectiveEnd => trimEnd ?? duration;
@@ -217,6 +224,7 @@ class AnalysisDraft extends ChangeNotifier {
     'restricted_lane',
     'illegal_loading',
     'double_parking',
+    'overtaking_on_right',
     'illegal_parking',
     'blocking_intersection', // the junction is found from the traffic flow (engine/intersection_finder.py)
   };
@@ -307,6 +315,7 @@ class AnalysisDraft extends ChangeNotifier {
       if (videoName != null) 'video_name': videoName,
       if (trimStart > 0.001) 'trim_start': trimStart,
       if (trimEnd != null) 'trim_end': trimEnd,
+      if (sceneOverlays.isNotEmpty) 'scene_overlays': sceneOverlays,
       'per_violation_configs': {for (final k in selected) k: config(k)},
     };
   }

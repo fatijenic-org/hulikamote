@@ -100,7 +100,7 @@ class TicketTile extends StatelessWidget {
                       child: ticket.plateRead
                           ? Text(ticket.plateText,
                               maxLines: 1, overflow: TextOverflow.ellipsis, style: Fx.plate.copyWith(fontSize: 15))
-                          : Text('Plate unread',
+                          : Text(ticket.unreadPlateLabel,
                               maxLines: 1,
                               style: Fx.body(context).copyWith(color: Fx.muted(context), fontStyle: FontStyle.italic)),
                     ),

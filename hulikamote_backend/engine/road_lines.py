@@ -718,7 +718,113 @@ def analyse_video(video_path: str | Path, max_seconds: float | None = None, keep
 
 
 def analyse_clip(clip: dict, keep_top: bool = False, trace=None, detector=None) -> tuple[dict, np.ndarray]:
-    """analyse_video on frames that were already read (_read_video).
+    """analyse_video on frames that were already read (_read_video). Two finders work on the same empty-road picture:
+    the top-view one (below: it needs enough traffic to learn the road direction) and the edge finder (engine/road_edges.py: it
+    reads the paint straight from the picture and needs no traffic). The edge finder's lines are used when it finds any; the
+    top-view finder fills in what the edge finder did not find. Same arguments and same result as before."""
+    kept: dict = {}
+    result, background = _analyse_top_view(clip, keep_top, trace, detector, kept)
+    if not kept.get("moving_camera"):                     # a panning camera has no empty-road picture to read
+        try:
+            _add_edges(result, background, kept.get("road_small"), kept.get("motion"))
+        except Exception as exc:                          # the edge finder must never take the other finder's result away
+            result["edges_error"] = str(exc)
+    from engine.road_flow import add_flow                 # which way the traffic goes on each part of the road (incoming / outgoing)
+    add_flow(result, kept.get("motion"))
+    return result, background
+
+
+def _strip(points: list[list[float]], half: float) -> list[list[float]]:
+    """A band of `half` pixels on each side of a line given as points (the road section around a painted line)."""
+    left, right = [], []
+    for i, (x, y) in enumerate(points):
+        ax, ay = points[max(i - 1, 0)]
+        bx, by = points[min(i + 1, len(points) - 1)]
+        n = math.hypot(bx - ax, by - ay) or 1.0
+        nx, ny = -(by - ay) / n, (bx - ax) / n
+        left.append([x + nx * half, y + ny * half])
+        right.append([x - nx * half, y - ny * half])
+    return left + right[::-1]
+
+
+def _across_traffic(points: list[list[float]], moving: np.ndarray, directions: np.ndarray, radius: float) -> bool | None:
+    """True when the traffic near a line drives ACROSS it (a stop line or a crosswalk edge), False when it drives ALONG it
+    (a lane line), None when too little traffic was seen near it to tell. Everything in the video's pixels."""
+    if moving is None or len(moving) < 20:
+        return None
+    pts = np.array(points, np.float64)
+    near = np.linalg.norm(moving[:, None, :] - pts[None, :, :], axis=2).min(axis=1) < radius
+    if int(near.sum()) < 8:
+        return None
+    axis = pts[-1] - pts[0]
+    axis = axis / (np.linalg.norm(axis) or 1.0)
+    d = directions[near]
+    cos = np.abs(d @ axis) / (np.linalg.norm(d, axis=1) + 1e-9)
+    return float(np.median(cos)) < 0.5
+
+
+def _add_edges(result: dict, background: np.ndarray, road_hint: np.ndarray | None, motion: tuple | None = None) -> None:
+    """Put what the edge finder sees in the empty-road picture into `result` (video pixels, same shape as the top-view items).
+    `motion` = (moving points, their directions, width of the picture they are in): a line that the traffic drives across is a
+    stop line, not a lane line."""
+    from engine import road_edges
+    found = road_edges.find(background, road_hint)
+    vw, vh = result["video_size"]
+    ch, cw = background.shape[:2]
+    fx, fy = vw / cw, vh / ch
+
+    def video(points) -> list[list[float]]:
+        return [[round(x * fx, 1), round(y * fy, 1)] for x, y in points]
+    had = bool(result.get("ok"))
+    to_top = np.linalg.inv(np.array(result["rectifier"]["top_to_video"], np.float64)) if had else np.eye(3)
+
+    def top_of(points) -> np.ndarray:
+        return cv2.perspectiveTransform(np.array(points, np.float64).reshape(-1, 1, 2), to_top).reshape(-1, 2)
+
+    def as_line(item: dict, **extra) -> dict:
+        pts = video(item["points"])
+        (u0, v0), (u1, v1) = top_of([pts[0], pts[-1]])
+        return {"p0": pts[0], "p1": pts[-1], "points": pts, "source": "edges",
+                "top": {"u0": round(float(u0), 1), "v0": round(float(v0), 1), "u1": round(float(u1), 1), "v1": round(float(v1), 1)}, **extra}
+    lanes = [as_line(ln, style=ln["style"], colour=ln["colour"], coverage=ln["coverage"]) for ln in found["lane_lines"]]
+    stops = [as_line(s, length=round(s["length"] * fx, 1)) for s in found["stop_lines"]]
+    if motion is not None and len(motion[0]):
+        k = vw / float(motion[2])
+        moving, directions = np.asarray(motion[0], np.float64) * k, np.asarray(motion[1], np.float64)
+        along = []
+        for ln in lanes:
+            if ln["style"] == "solid" and _across_traffic(ln["points"], moving, directions, 0.06 * vw):
+                stops.append({k2: v for k2, v in ln.items() if k2 not in ("style", "colour", "coverage")}
+                             | {"length": round(math.hypot(ln["p1"][0] - ln["p0"][0], ln["p1"][1] - ln["p0"][1]), 1)})
+            else:
+                along.append(ln)
+        lanes = along
+    walks = []
+    for c in found["crosswalks"]:
+        polygon = video(c["polygon"])
+        centre = (sum(p[0] for p in polygon) / 4.0, sum(p[1] for p in polygon) / 4.0)
+        if any(cv2.pointPolygonTest(np.array(old["polygon"], np.float32), centre, False) >= 0 for old in result["crosswalks"]):
+            continue                                      # the top-view finder has this crosswalk already
+        t = top_of(polygon)
+        walks.append({"polygon": polygon, "stripes": c["stripes"], "score": float(c["stripes"]), "source": "edges",
+                      "top": {"u0": float(t[:, 0].min()), "u1": float(t[:, 0].max()), "v0": float(t[:, 1].min()), "v1": float(t[:, 1].max())}})
+    result["road"] = {"polygons": [video(p) for p in found["road_polygons"]], "source": "edges"}
+    result["edges"] = {"lane_lines": len(lanes), "stop_lines": len(stops), "crosswalks": len(walks)}
+    if not (lanes or stops or walks):
+        return
+    if lanes:
+        result["lane_lines"] = lanes
+    if stops:
+        result["stop_lines"] = stops
+    result["crosswalks"] = list(result["crosswalks"]) + walks
+    result["method"] = "top view + edges" if had else "edges"
+    if not had:                                           # the top-view finder gave up (too little traffic ...): the edges carry the result
+        result["note"], result["reason"], result["ok"] = result.get("reason"), None, True
+        result["rectifier"] = {"top_to_video": np.eye(3).tolist(), "top_size": [vw, vh]}     # no top view: its "top" is the picture itself
+
+
+def _analyse_top_view(clip: dict, keep_top: bool = False, trace=None, detector=None, kept: dict | None = None) -> tuple[dict, np.ndarray]:
+    """The top-view finder (see the module text). `kept`, when given, receives what the edge finder needs from this pass.
     trace, when given, is called as trace(step, phase, overlay, info) around each stage: step is an id from WALKTHROUGH, phase is "start" or
     "done", overlay is a BGRA picture the size of the colour frames (or None) to lay over the empty road, info a small dict. It changes nothing
     in the result, and an error inside it is ignored."""
@@ -747,9 +853,14 @@ def analyse_clip(clip: dict, keep_top: bool = False, trace=None, detector=None) 
     say("empty", "done", _overlay_opaque(background) if trace is not None else None)
     if sway > 0.10 * gw or failed > 0.35:
         result["reason"] = "The camera moves too much (panning or heavy shake). This needs a fixed camera."
+        if kept is not None:
+            kept["moving_camera"] = True
         return result, background
     say("motion", "start")
     points, directions, road_small, grey_background = _motion(clip["greys"], mats)
+    if kept is not None:
+        kept["road_small"] = road_small
+        kept["motion"] = (points, directions, gw)
     say("motion", "done", _trace_motion(points, directions, (gw, gh), (cw, ch)) if trace is not None else None, moving_points=int(len(points)))
     say("direction", "start")
     info = _road_direction(points, directions, (gw, gh), _straight_edges(grey_background))
@@ -894,20 +1005,32 @@ def zone_hints(result: dict, band: float = 0.10) -> list[dict]:
 
     def clipped(points: list[list[float]]) -> list[list[float]]:
         return [[round(min(max(x, 0.0), vw - 1.0), 1), round(min(max(y, 0.0), vh - 1.0), 1)] for x, y in _to_video(to_video, points)]
+    def in_picture(points: list[list[float]]) -> list[list[float]]:
+        return [[round(min(max(x, 0.0), vw - 1.0), 1), round(min(max(y, 0.0), vh - 1.0), 1)] for x, y in points]
     hints = []
     for ln in result["lane_lines"]:
         if ln["style"] != "solid":
+            continue
+        if ln.get("source") == "edges":
+            hints.append({"violation": "crossing_solid_line", "polygon": in_picture(_strip(ln["points"], 0.6 * band * vw)),
+                          "ui_vector": [ln["p0"], ln["p1"]], "points": ln["points"]})
             continue
         t = ln["top"]
         mid = (t["u0"] + t["u1"]) / 2.0
         quad = _quad({"u0": mid, "u1": mid, "v0": min(t["v0"], t["v1"]), "v1": max(t["v0"], t["v1"])}, band * tw, 0.02 * th)
         hints.append({"violation": "crossing_solid_line", "polygon": clipped(quad), "ui_vector": [ln["p0"], ln["p1"]]})
     for ln in result["stop_lines"]:
+        if ln.get("source") == "edges":
+            hints.append({"violation": "red_light", "polygon": in_picture(_strip(ln["points"], 0.08 * vh)), "ui_vector": [ln["p0"], ln["p1"]]})
+            continue
         t = ln["top"]
         mid = (t["v0"] + t["v1"]) / 2.0
         quad = _quad({"u0": min(t["u0"], t["u1"]), "u1": max(t["u0"], t["u1"]), "v0": mid, "v1": mid}, 0.03 * tw, 0.15 * th)
         hints.append({"violation": "red_light", "polygon": clipped(quad), "ui_vector": [ln["p0"], ln["p1"]]})
     for c in result["crosswalks"]:
+        if c.get("source") == "edges":
+            hints.append({"violation": "pedestrian_lane", "polygon": in_picture(c["polygon"])})
+            continue
         hints.append({"violation": "pedestrian_lane", "polygon": clipped(_quad(c["top"], 0.02 * tw, 0.02 * th))})
     return hints
 
@@ -956,11 +1079,14 @@ def draw(background: np.ndarray, result: dict) -> np.ndarray:
 
     def p(pt):
         return int(round(pt[0] * k)), int(round(pt[1] * k))
+    for polygon in (result.get("road") or {}).get("polygons", []):
+        cv2.polylines(out, [np.array([p(q) for q in polygon])], True, (255, 255, 255), max(1, thick // 2), cv2.LINE_AA)
     for c in result["crosswalks"]:
         cv2.polylines(out, [np.array([p(q) for q in c["polygon"]])], True, (0, 220, 0), thick, cv2.LINE_AA)
     for ln in result["lane_lines"]:
         colour = (0, 215, 255) if ln["colour"] == "yellow" else (255, 200, 0)
-        cv2.line(out, p(ln["p0"]), p(ln["p1"]), colour, thick if ln["style"] == "solid" else max(1, thick // 2), cv2.LINE_AA)
+        path = np.array([p(q) for q in ln.get("points") or [ln["p0"], ln["p1"]]])
+        cv2.polylines(out, [path], False, colour, thick if ln["style"] == "solid" else max(1, thick // 2), cv2.LINE_AA)
     for ln in result["stop_lines"]:
         cv2.line(out, p(ln["p0"]), p(ln["p1"]), (0, 0, 255), thick + 2, cv2.LINE_AA)
     vp = (result.get("road_direction") or {}).get("point")

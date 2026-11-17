@@ -263,6 +263,8 @@ def _read_ticket_plate(task_id: str, t: dict, config: dict, written: list, on_cr
     if not votes:
         t["plate_text"] = "unidentified"
         t["plate_raw"] = "unidentified"
+        # no text: the status from the plate looks stays (no_plate / not_read / unclear / not_checked)
+        t.setdefault("plate_status", "not_read" if crop_results else "not_checked")
         return
 
     vote_tally = {}
@@ -280,6 +282,7 @@ def _read_ticket_plate(task_id: str, t: dict, config: dict, written: list, on_cr
 
     best_plate = max(votes.items(), key=get_vote_score)[0]
     t["plate_text"] = best_plate
+    t["plate_status"] = "read"
     t["vote_tally"] = vote_tally
     t["plate_raw"] = raw_map[best_plate]
 
@@ -506,6 +509,12 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         forensic_tasks[task_id]["video_done"] = False
         save_violation = _skip_db if config.get("benchmark") else add_violation
 
+        # Road and traffic overlays placed in the wizard: paint them, read the markings back, give them to the rules
+        if config.get("scene_overlays"):
+            from engine import scene_overlays
+            forensic_tasks[task_id]["message"] = "Reading the road markings..."
+            forensic_tasks[task_id]["message"] = scene_overlays.apply(config, video_path) or ""
+
         # "Crossing a solid line" with no drawn line: find the painted solid lines of the video first (engine/auto_lines.py)
         if "crossing_solid_line" in (config.get("active_violations") or []):
             from engine.auto_lines import fill_solid_lines
@@ -532,6 +541,8 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
                 log.error(f"Failed to load selected model {primary_model}, falling back to default: {e}")
 
         yolo = get_inference(force_reload=True, tracker_type=config.get("tracker", "bytetrack"))
+        if yolo is not None:                                # the wizard's tile switch: also look for small people in tiles
+            yolo.small_people = bool(config.get("use_sahi"))
         pipeline = DecoupledPipeline(str(temp_config_path))
 
         # The part of the video to analyze (the dashboard's trim step): seconds from the start of the file, or None
@@ -1014,6 +1025,26 @@ async def video_clock(file_path: str, video_start: str = "", trim_start: float =
     return clock.to_dict()
 
 
+@router.post('/scene-preview', dependencies=[Depends(local_only)])
+async def scene_preview(body: dict):
+    """One frame of a video on this laptop with the wizard's road and traffic overlays painted on it, and what the road
+    finder reads from that picture outlined. Body: {"file_path", "seconds", "overlays": [...]} (engine/scene_overlays.py).
+    Returns {"image": base64 JPEG, "found": counts, "width", "height"}."""
+    import base64
+
+    from engine import scene_overlays
+
+    source = Path(str(body.get("file_path") or ""))
+    if not source.is_file():
+        raise HTTPException(status_code=404, detail="That video was not found")
+    picture, found = await asyncio.to_thread(scene_overlays.preview, source, float(body.get("seconds") or 0.0), body.get("overlays"))
+    if picture is None:
+        raise HTTPException(status_code=400, detail="That frame could not be read")
+    ok, jpeg = cv2.imencode(".jpg", picture, [cv2.IMWRITE_JPEG_QUALITY, 88])
+    return {"image": base64.b64encode(jpeg.tobytes()).decode("ascii"), "found": found,
+            "width": int(picture.shape[1]), "height": int(picture.shape[0])}
+
+
 @router.get('/video-frame', dependencies=[Depends(local_only)])
 async def video_frame(file_path: str, seconds: float = 0.0):
     """One frame of a video on this laptop, found by its path (nothing is uploaded), with the video's speed and length.
@@ -1026,6 +1057,9 @@ async def video_frame(file_path: str, seconds: float = 0.0):
         raise HTTPException(status_code=404, detail="That video was not found")
     if source.suffix.lower() not in VIDEO_EXTENSIONS:
         raise HTTPException(status_code=400, detail="That does not look like a video file")
+
+    from engine.video_clock import look_ahead
+    look_ahead(source)       # a video was just picked: start reading its time now, in the background (nothing waits for it)
 
     def read() -> dict | None:
         cap = cv2.VideoCapture(str(source))

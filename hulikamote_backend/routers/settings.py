@@ -172,8 +172,9 @@ def test_video_source(path: str | None = None, name: str | None = None):
 @router.get("/video/status")
 async def video_status():
     """What the live feed is reading right now and how it is doing (state, fps, lag, reconnects), plus what the road learner
-    is doing ("road": learning progress, what it learned, or why it could not)."""
-    return {**stream.camera_status(), "road": stream.road_status()}
+    is doing ("road": learning progress, what it learned, or why it could not), and the traffic flow ("flow": learning, counterflow,
+    reversed, cells; null when no rule uses it)."""
+    return {**stream.camera_status(), "road": stream.road_status(), "flow": stream.flow_status()}
 
 
 @router.get("/video/road")
@@ -240,10 +241,11 @@ async def discard_detected_road():
 
 
 @router.post("/video/road/detect/apply")
-def apply_detected_road():
+def apply_detected_road(counterflow: bool = False):
     """Use what the detection found: the camera's road is saved and the matching violations (Pedestrian lane for a crosswalk) are switched
-    on in the live configuration. When one had to be switched on, the live view restarts once with it."""
-    result = stream.road.apply_detect()
+    on in the live configuration. When one had to be switched on, the live view restarts once with it.
+    `?counterflow=true` also makes the incoming / outgoing sides of the road Counterflow zones (traffic against the arrow is flagged)."""
+    result = stream.road.apply_detect(counterflow=counterflow)
     if not result.get("ok"):
         return result
     config = _read_config()
@@ -255,6 +257,54 @@ def apply_detected_road():
         stream.reload_pipeline()
         stream._stream_generation += 1
     return {**result, "switched_on": added, "road": stream.road_status()}
+
+
+# ─── Set up violations on the live picture (the Live Monitor's "Set up violations") ────────────
+
+# What the setup shows again when it is opened a second time. The camera addresses (with passwords) are NOT part of it.
+LIVE_SETUP_KEYS = (
+    "active_violations", "per_violation_configs", "tracker", "plate_model", "plate_method", "plate_format",
+    "ocr_engine", "enhancement", "primary_model", "use_sahi", "flag_sensitivity", "evidence_gap", "blur_privacy",
+)
+
+
+@router.post("/video/reference")
+async def capture_reference_picture():
+    """Freezes the newest picture of the running camera. The violations are set up on it; the live video goes on.
+    {"ok": True, "version", "width", "height", "fps"} or {"ok": False, "reason"} (no picture yet)."""
+    return stream.capture_reference()
+
+
+@router.get("/video/reference/frame")
+async def reference_frame():
+    """The frozen setup picture (JPEG)."""
+    data = stream.reference_jpeg()
+    if not data:
+        raise HTTPException(status_code=404, detail="No setup picture has been taken yet")
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@router.post("/live/flow/reverse")
+async def reverse_live_flow(on: bool):
+    """Demo of Counterflow on the live camera: on = the OPPOSITE of the learned (or drawn) direction counts as legal, so ordinary
+    traffic is flagged; off = normal again. Takes effect on the next frame and keeps what was learned. Tickets made while it is on
+    are tests (the photos carry a TEST label). Runs on the pipeline's own thread, so it never races a frame."""
+    import asyncio
+    return await asyncio.get_running_loop().run_in_executor(stream._PIPELINE_EXECUTOR, stream.set_flow_reversed, on)
+
+
+@router.post("/live/flow/relearn")
+async def relearn_live_flow():
+    """Forget the learned traffic flow and learn it again (the camera was moved, or a wrong flow was learned)."""
+    import asyncio
+    return await asyncio.get_running_loop().run_in_executor(stream._PIPELINE_EXECUTOR, stream.relearn_flow)
+
+
+@router.get("/live/setup")
+async def get_live_setup():
+    """The violations and settings the Live Monitor uses now, in the wizard's own shape (empty when none were set up)."""
+    config = _read_config()
+    return {key: config[key] for key in LIVE_SETUP_KEYS if key in config}
 
 
 # ─── Camera profiles: named addresses (CCTV / DVR, phone camera, another laptop, a file) ────────
@@ -331,6 +381,18 @@ async def upload_video_source(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, out)
     cap = cv2.VideoCapture(str(dest))
     ok = cap.isOpened()
+    video: dict = {}
+    if ok:                                              # what the video is, for the dashboard's "ready" card
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        video = {
+            "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0),
+            "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0),
+            "fps": round(fps, 2),
+            "frames": frames,
+            "duration": round(frames / fps, 1) if fps > 1.0 and frames > 0 else 0.0,
+            "size_mb": round(dest.stat().st_size / 1048576, 1),
+        }
     cap.release()
     if not ok:
         dest.unlink(missing_ok=True)
@@ -344,4 +406,4 @@ async def upload_video_source(file: UploadFile = File(...)):
                 old.unlink()
             except OSError:
                 pass  # still open by the stream; it will be removed on the next upload
-    return {"message": "Live source updated", "path": str(dest)}
+    return {"message": "Live source updated", "path": str(dest), "video": video}

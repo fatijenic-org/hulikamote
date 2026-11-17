@@ -1,0 +1,275 @@
+"""
+folder_labeller.py - The Labeller: label EVERY picture of a folder for one model, then export a clean dataset.
+
+  scan      lists every picture under a folder (the backend's evidence folder, or any folder) and queues each one
+            for the chosen model. Nothing is copied: the pictures stay where they are.
+  prepare   when the labelling page asks for a page of pictures, each one gets a hard link (or a copy, on another
+            drive) in the inbox, so the same labelling screen as in the Forensic Analyzer can show it.
+  suggest   pre-draws the boxes of the model that is deployed (CPU only), so a person only fixes them.
+  export    writes a clean YOLO dataset for the model to ANY folder (an external drive too) and MOVES the labelled
+            pictures there: train / val split, labels, data.yaml, a report. Nothing half-decided is exported.
+
+The folder items are kept out of the normal "all analyses" harvest views (see store.FOLDER_SOURCE), so the Harvest tab
+and "Add to dataset" never touch them. Moving files out of the evidence folder makes the photos of the tickets that
+used them disappear from the review screens: that is the point of the Labeller, and why export asks first.
+"""
+import hashlib
+import json
+import os
+import re
+import shutil
+import time
+from pathlib import Path
+
+import cv2
+import yaml
+from PIL import Image
+
+from .accept import VAL_SHARE, is_training, pick_split
+from .collect import Detectors, suggest
+from .config import MODELS, Paths, class_names
+from . import pii_blur
+from .frames import FRAME_CONF, anchor_boxes, anchor_names
+from .store import FOLDER_SOURCE, Item, Store, make_id, yolo_text
+
+BLUR_CLASS = "blur"          # a pseudo class the labelling page offers: whatever is inside a Blur box is blurred in the saved picture
+BLUR_HELP = ("Personal details to hide when the picture is saved: draw a box over a face or a plate. "
+             "It is not a label: it never goes into the dataset's labels.")
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+SKIP_DIRS = {"harvest_inbox", "__pycache__", ".git"}
+_TIME_RE = re.compile(r"(\d{10,})")
+_TRIED: set[str] = set()                     # pictures the model already looked at and found nothing in (this session)
+
+
+def folder_task(folder) -> str:
+    """The name that ties the pictures of one folder together (it is a valid analysis-style id: letters, digits, _)."""
+    return "folder_" + hashlib.sha1(str(Path(folder).resolve()).lower().encode("utf-8")).hexdigest()[:8]
+
+
+def blur_id(paths: Paths, model: str) -> int:
+    """The class number of the Blur pseudo class: right after the model's own classes."""
+    return len(class_names(paths, model))
+
+
+def picture_group(name: str) -> str:
+    """Pictures taken within the same minute (millisecond file names) share a group, so they land on the same side of the
+    train / validation split and near-identical frames never end up on both sides."""
+    m = _TIME_RE.search(Path(name).stem)
+    return f"t{int(m.group(1)) // 60000}" if m else Path(name).stem
+
+
+def scan(paths: Paths, store: Store, model: str, folder, batch: int = 2000) -> dict:
+    """Queue every picture under [folder] for [model]. Safe to repeat: known pictures are not added twice."""
+    if model not in MODELS:
+        raise KeyError(model)
+    root = Path(folder)
+    if not root.is_dir():
+        raise ValueError(f"not a folder: {folder}")
+    task = folder_task(root)
+    found = new = 0
+    pending: list[Item] = []
+    for dirpath, dirnames, files in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in sorted(files):
+            if Path(name).suffix.lower() not in IMAGE_EXT:
+                continue
+            path = os.path.join(dirpath, name)
+            found += 1
+            pending.append(Item(id=make_id("folder", model, path.lower()), model=model, state="label", source=FOLDER_SOURCE,
+                                reason=f"Picture {name}", group_id=picture_group(name), task_id=task, priority=5,
+                                src_path=path))
+            if len(pending) >= batch:
+                new += store.add_many(pending)
+                pending.clear()
+    if pending:
+        new += store.add_many(pending)
+    return {"task": task, "folder": str(root), "found": found, "new": new}
+
+
+def _link_or_copy(src: Path, dst: Path) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.link(src, dst)                      # same drive: no extra space
+    except OSError:
+        shutil.copy2(src, dst)                 # another drive, or a drive without links
+
+
+def _size(path: Path) -> tuple[int, int]:
+    with Image.open(path) as im:               # reads the header only
+        return im.size
+
+
+def prepare(store: Store, items: list) -> list:
+    """Make each picture showable by the labelling screen. Pictures that vanished from the folder are set aside
+    (state 'skipped') and left out of the returned list."""
+    shown = []
+    for item in items:
+        if not item.src_path:
+            shown.append(item)
+            continue
+        src = Path(item.src_path)
+        if not src.exists():
+            store.skip(item.id)
+            continue
+        dst = store.image_path(item.model, item.id)
+        if not dst.exists():
+            _link_or_copy(src, dst)
+        if not item.width:
+            try:
+                item.width, item.height = _size(dst)
+                store.set_size(item.id, item.width, item.height)
+            except Exception:
+                store.skip(item.id)            # not a readable picture
+                continue
+        shown.append(item)
+    return shown
+
+
+def suggest_batch(paths: Paths, store: Store, model: str, task: str, n: int = 40, detectors: Detectors | None = None,
+                  heads: bool = False, plates: bool = False) -> int:
+    """Pre-draw the boxes of the deployed model on the next [n] pictures that have none, and (when asked) Blur boxes over
+    the heads of people and the plates of vehicles. Returns how many pictures got boxes."""
+    detectors = detectors or Detectors(paths)
+    det = detectors.get(model)
+    heads, plates = pii_blur.allowed(model, heads, plates)
+    if det is None and not (heads or plates):
+        return 0
+    todo = [i for i in store.items(model, ("label",), task=task) if not i.suggested and i.id not in _TRIED][:n]
+    got = 0
+    for item in prepare(store, todo):
+        img = cv2.imread(str(store.image_path(model, item.id)))
+        if img is None:
+            continue
+        h, w = img.shape[:2]
+        if det is None:
+            boxes = []
+        elif model == "primary_anchor":
+            boxes = anchor_boxes(det.detect(img, conf=FRAME_CONF), det.names, anchor_names(paths), w, h)
+        else:
+            boxes = suggest(det, img, "find_plate" if model == "plate_specialist" else "riders", w, h) or []
+        if heads or plates:
+            blur = blur_id(paths, model)
+            boxes = list(boxes) + [pii_blur.to_yolo(b, w, h, blur) for b in pii_blur.find_pii(
+                img, heads=heads, plates=plates, vehicle_detector=detectors.get("primary_anchor"),
+                plate_detector=detectors.get("plate_specialist"))]
+        _TRIED.add(item.id)
+        if boxes:
+            store.set_suggestion(item.id, boxes)
+            got += 1
+    return got
+
+
+def _inside(child: Path, parent: Path) -> bool:
+    try:
+        child.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _digest(path: Path) -> str:
+    h = hashlib.sha1()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _safe_move(src: Path, dst: Path) -> None:
+    """Copy, check the copy has the same size, then remove the original (also works between drives)."""
+    shutil.copy2(src, dst)
+    if dst.stat().st_size != src.stat().st_size:
+        dst.unlink(missing_ok=True)
+        raise OSError(f"the copy of {src.name} is not the same size: the original was kept")
+    src.unlink()
+
+
+def export(paths: Paths, store: Store, model: str, task: str, dest, move: bool = True,
+           val_share: float = VAL_SHARE) -> dict:
+    """Write the finished pictures of one folder as a clean dataset under <dest>/<model>/ and move them there.
+
+    Clean means: only pictures a person decided (a picture with no box is a real "nothing here" example), readable
+    pictures only, labels checked against the class list, no duplicate picture twice, a group (same minute) never
+    split over train and val, data.yaml + report.json so training can start from the folder as it is."""
+    if model not in MODELS:
+        raise KeyError(model)
+    dest = Path(dest)
+    names = class_names(paths, model)
+    out = dest / model
+    if _inside(out, paths.datasets / model) and is_training(model):
+        raise RuntimeError(f"{MODELS[model]['title']} is training right now, and that folder is its dataset.")
+    ready = store.items(model, ("ready",), task=task)
+    result = {"model": model, "task": task, "ready": len(ready), "exported": 0, "train": 0, "val": 0, "empty_labels": 0,
+              "duplicates": 0, "unreadable": 0, "missing": 0, "failed": 0, "moved": bool(move), "per_class": {},
+              "blurred_pictures": 0, "blurred_regions": 0,
+              "dest": str(out)}
+    if not ready:
+        return result
+    for folder in {Path(i.src_path).parent for i in ready if i.src_path}:
+        if _inside(out, folder):
+            raise ValueError("the destination is inside the folder being labelled: choose another folder")
+    for split in ("train", "val"):
+        (out / "images" / split).mkdir(parents=True, exist_ok=True)
+        (out / "labels" / split).mkdir(parents=True, exist_ok=True)
+    seen: dict[str, str] = {}
+    for existing in (out / "images").rglob("*"):
+        if existing.is_file():
+            seen[_digest(existing)] = existing.name
+    per_class: dict[int, int] = {}
+    blur = blur_id(paths, model)
+    for item in ready:
+        src = Path(item.src_path or "")
+        if not src.is_file():
+            result["missing"] += 1
+            continue
+        picture = cv2.imread(str(src))
+        if picture is None:
+            result["unreadable"] += 1
+            continue
+        label_boxes = [b for b in item.boxes if int(b[0]) != blur]        # the Blur class is never a label
+        blur_boxes = [b for b in item.boxes if int(b[0]) == blur]
+        digest = _digest(src)
+        if digest in seen:
+            result["duplicates"] += 1
+            continue
+        split = pick_split(item.group_id, item.split_hint, val_share)
+        name = src.name
+        if (out / "images" / split / name).exists():
+            name = f"{src.stem}_{item.id[:6]}{src.suffix.lower()}"
+        target = out / "images" / split / name
+        try:
+            if blur_boxes:                                 # the saved copy is blurred; the original (with the faces) is removed when moving
+                pii_blur.blur_yolo(picture, blur_boxes)
+                if not cv2.imwrite(str(target), picture, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+                    raise OSError(f"could not write {target.name}")
+                if move:
+                    src.unlink()
+            elif move:
+                _safe_move(src, target)
+            else:
+                shutil.copy2(src, target)
+        except OSError:
+            target.unlink(missing_ok=True)
+            result["failed"] += 1
+            continue
+        (out / "labels" / split / f"{Path(name).stem}.txt").write_text(yolo_text(label_boxes), encoding="utf-8")
+        seen[digest] = name
+        store.mark_accepted(item.id, name)
+        if move:
+            store.set_source(item.id, str(target))
+            store.image_path(model, item.id).unlink(missing_ok=True)      # the inbox link
+        result["exported"] += 1
+        result[split] += 1
+        result["empty_labels"] += 0 if label_boxes else 1
+        if blur_boxes:
+            result["blurred_pictures"] += 1
+            result["blurred_regions"] += len(blur_boxes)
+        for b in label_boxes:
+            per_class[int(b[0])] = per_class.get(int(b[0]), 0) + 1
+    result["per_class"] = {names[c] if c < len(names) else str(c): n for c, n in sorted(per_class.items())}
+    (out / "data.yaml").write_text(yaml.safe_dump(
+        {"path": ".", "train": "images/train", "val": "images/val", "nc": len(names), "names": {i: n for i, n in enumerate(names)}},
+        sort_keys=False), encoding="utf-8")
+    (out / "report.json").write_text(json.dumps({**result, "when": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2),
+                                     encoding="utf-8")
+    return result

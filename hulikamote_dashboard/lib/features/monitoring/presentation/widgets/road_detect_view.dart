@@ -56,6 +56,7 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
   bool _loadedAreas = false;
   bool _editing = false;
   bool _edited = false;
+  bool _counterflow = false; // also make the incoming / outgoing sides of the road Counterflow zones (traffic against the arrow is flagged)
   String? _current;
   final _queue = <String>[];
   final _queued = <String>{};
@@ -159,7 +160,7 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
           return;
         }
       }
-      final result = await widget.api.applyRoadDetect();
+      final result = await widget.api.applyRoadDetect(counterflow: _counterflow && _hasDirections);
       if (!mounted) return;
       if (result['ok'] == true) {
         widget.onClose(applied: true);
@@ -190,6 +191,9 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
   }
 
   bool get _playedAll => _queue.isEmpty && !_running;
+
+  /// Some road area has a direction (incoming / outgoing), so there is something to mark and to use for Counterflow.
+  bool get _hasDirections => _areas.any((a) => a.kind == 'road' && a.flow != null);
 
   @override
   Widget build(BuildContext context) {
@@ -375,21 +379,43 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
     }
     if (status.state == 'done' && _playedAll) {
       final crosswalks = _areas.where((a) => a.kind == 'crosswalk').length;
-      final others = _areas.where((a) => a.kind != 'crosswalk').length;
+      final others = _areas.where((a) => a.kind == 'road' || a.kind == 'sidewalk').length;
       final usable = status.rules.isNotEmpty || _areas.isNotEmpty;
+      final directions = roadDirectionsText(_areas);
       final lines = <String>[
         if (_editing)
-          'Drag a corner to move it. Apply saves your version for this camera.'
+          'Drag a point to move it. Tap an edge to add a point. Right-click a point to remove it. Apply saves your version for this camera.'
         else ...[
           if (status.foundText.isNotEmpty || _areas.isNotEmpty) 'Found: ${[if (status.foundText.isNotEmpty) status.foundText, if (others > 0) '$others road or sidewalk area${others == 1 ? '' : 's'}'].join(', ')}.' else 'No clear crosswalk or line was found.',
+          if (directions.isNotEmpty) directions,
           if (crosswalks > 0) 'Apply makes the crosswalk the Pedestrian lane rule of the live monitor.',
           if (others > 0) 'Road and sidewalk are a draft: press Correct to fix them. Saved for this camera.',
-          if (status.hints.isNotEmpty) 'Lines are only hints: they are shown, not used as rules.',
+          if (status.hints.isNotEmpty) 'Lines are only hints: they are shown, not used as rules. In Correct, switch a solid line on to use it.',
         ],
         ?_error,
       ];
       return Row(children: [
-        Expanded(child: Text(lines.join(' '), key: const ValueKey('road-result'), maxLines: 3, overflow: TextOverflow.ellipsis, style: Fx.body(context))),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(lines.join(' '), key: const ValueKey('road-result'), maxLines: 3, overflow: TextOverflow.ellipsis, style: Fx.body(context)),
+            if (_hasDirections)
+              Tooltip(
+                message: 'Traffic that goes against the arrow of its side of the road is flagged as Counterflow. Check the arrows in Correct first.',
+                child: InkWell(
+                  onTap: _busy ? null : () => setState(() => _counterflow = !_counterflow),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Checkbox(
+                      key: const ValueKey('road-counterflow'),
+                      visualDensity: VisualDensity.compact,
+                      value: _counterflow,
+                      onChanged: _busy ? null : (v) => setState(() => _counterflow = v ?? false),
+                    ),
+                    Flexible(child: Text('Use for Counterflow', maxLines: 1, overflow: TextOverflow.ellipsis, style: Fx.caption(context))),
+                  ]),
+                ),
+              ),
+          ]),
+        ),
         const SizedBox(width: Fx.s12),
         OutlinedButton.icon(
           key: const ValueKey('road-correct'),

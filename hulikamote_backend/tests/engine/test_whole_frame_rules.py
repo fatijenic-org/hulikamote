@@ -15,7 +15,8 @@ from tests.helpers import FPS, H, W, Det, go_up_then
 WHOLE = [[0, 0], [FW, 0], [FW, FH], [0, FH]]
 BIG = (2000, 2000)                    # the picture the go_up_then / U-turn paths live in
 WHOLE_FRAME_KEYS = {"counterflow", "swerving", "illegal_u_turn", "illegal_turn", "signal_light", "truck_ban",
-                    "tricycle_on_highway", "restricted_lane", "illegal_loading", "double_parking", "illegal_parking", "blocking_intersection"}
+                    "tricycle_on_highway", "restricted_lane", "illegal_loading", "double_parking", "illegal_parking", "blocking_intersection",
+                    "overtaking_on_right"}
 
 
 def zone_of(key, cfg=None, field=None, size=(FW, FH)):

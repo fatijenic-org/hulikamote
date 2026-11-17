@@ -5,6 +5,8 @@ The tool READS from the backend's saved analyses (evidence photos, report.json, 
 database) and WRITES only inside training_lab/harvest_inbox/ - plus, when you press "Add to
 dataset", into training_lab/datasets/<model>/ (refused while that model is training).
 It never writes inside hulikamote_backend/, so it can run while the backend and a training run.
+The one exception is the Labeller's export (folder_labeller.py): when you press "move the finished pictures" and confirm, the
+labelled pictures are MOVED out of the folder you chose (e.g. snapshots/evidence). Moving pictures never restarts the backend.
 """
 import json
 from dataclasses import dataclass

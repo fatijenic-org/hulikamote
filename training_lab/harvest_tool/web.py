@@ -15,6 +15,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import config
+from . import folder_labeller as folders
 from .accept import TrainingBusy, accept, training_models
 from .cars import car_counts, car_detail, car_list, check_car, fill_cars
 from .collect import COLLECT_VERSION, collect, refresh_suggestions
@@ -22,9 +23,9 @@ from .config import AUTOMATIC, CLASS_COLORS, CLASS_HELP, MODELS, Paths, active_o
 from .frames import task_video
 from .pairs import answer_pair
 from .sources import load_protected, review_counts
-from .store import Store, clean_boxes
+from .store import FOLDER_SOURCE, Store, clean_boxes
 
-API_VERSION = 4        # the dashboard asks /api/ping and restarts a helper that is older than it needs
+API_VERSION = 5        # 5 = the Labeller (folder scan, export); the dashboard asks /api/ping and restarts a helper that is older than it needs
 
 PAGE = Path(__file__).with_name("page.html")
 ID_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -83,6 +84,7 @@ class HarvestApp:
         self.paths = paths or Paths()
         self.store = store or Store(self.paths)
         self._collect = {"running": False, "summary": None, "error": None, "task": None}
+        self._labeller = {"running": False, "kind": None, "summary": None, "error": None, "task": None}
         self._lock = threading.Lock()
 
     def _publish(self, busy: set | None = None) -> None:
@@ -136,7 +138,12 @@ class HarvestApp:
             raise KeyError(model)
         task = self._task(task)
         items = self.store.queue(model, limit, task)
-        return {"model": model, "classes": safe_classes(self.paths, model), "help": CLASS_HELP.get(model, {}),
+        if task and task.startswith("folder_"):             # the Labeller's pictures stay in their folder: make this page showable
+            items = folders.prepare(self.store, items)
+        classes, help_ = safe_classes(self.paths, model), dict(CLASS_HELP.get(model, {}))
+        if task and task.startswith("folder_"):               # the Labeller offers one more "class": Blur
+            classes, help_[folders.BLUR_CLASS] = classes + [folders.BLUR_CLASS], folders.BLUR_HELP
+        return {"model": model, "classes": classes, "help": help_,
                 "total": self.store.counts(model, task)["needs_eyes"],
                 "items": [{"id": i.id, "state": i.state, "reason": i.reason, "boxes": i.boxes,
                            "suggested": i.suggested, "violation": i.violation, "decision": i.decision,
@@ -208,6 +215,8 @@ class HarvestApp:
         n_classes = len(safe_classes(self.paths, item.model))
         if not n_classes:
             raise ValueError(f"no dataset definition for {item.model}")
+        if item.source == FOLDER_SOURCE:
+            n_classes += 1                                    # the Labeller's Blur pseudo class
         self.store.save_boxes(item_id, clean_boxes(boxes, n_classes))
         self._publish()
         return {"counts": self.store.counts(item.model)}
@@ -224,6 +233,58 @@ class HarvestApp:
         result = accept(self.paths, self.store, model)
         self._publish(busy=training_models())
         return result
+
+    # ── the Labeller: every picture of a folder, one model, a clean dataset at the end ──
+    def labeller_status(self, model: str, task: str | None = None) -> dict:
+        if model not in MODELS:
+            raise KeyError(model)
+        task = self._task(task)
+        return {"model": model, "task": task, "job": dict(self._labeller),
+                "counts": self.store.counts(model, task) if task else None}
+
+    def _start_job(self, kind: str, task: str | None, work) -> dict:
+        with self._lock:
+            if self._labeller["running"]:
+                raise ValueError("another Labeller job is still running: wait until it is done")
+            self._labeller.update(running=True, kind=kind, summary=None, error=None, task=task)
+
+        def run():
+            try:
+                self._labeller["summary"] = work()
+                self._publish()
+            except Exception as e:                           # shown on the page, never crashes the server
+                self._labeller["error"] = f"{type(e).__name__}: {e}"
+            finally:
+                self._labeller["running"] = False
+
+        threading.Thread(target=run, daemon=True).start()
+        return dict(self._labeller)
+
+    def labeller_scan(self, model: str, folder: str) -> dict:
+        """List every picture under a folder in the background; poll labeller_status for the result."""
+        if model not in MODELS:
+            raise KeyError(model)
+        if not folder or not Path(folder).is_dir():
+            raise ValueError(f"not a folder: {folder!r}")
+        return self._start_job("scan", folders.folder_task(folder),
+                               lambda: folders.scan(self.paths, self.store, model, folder))
+
+    def labeller_suggest(self, model: str, task: str, n: int = 40, heads: bool = False, plates: bool = False) -> dict:
+        """Pre-draw the deployed model's boxes (and, when asked, Blur boxes over heads and plates) on the next pictures."""
+        task = self._task(task)
+        if model not in MODELS or task is None:
+            raise ValueError("a model and a folder are needed")
+        return {"suggested": folders.suggest_batch(self.paths, self.store, model, task, max(1, min(int(n), 200)),
+                                                    heads=bool(heads), plates=bool(plates))}
+
+    def labeller_export(self, model: str, task: str, dest: str, move: bool = True) -> dict:
+        """Write the clean dataset to [dest] and move the finished pictures there, in the background."""
+        task = self._task(task)
+        if model not in MODELS or task is None:
+            raise ValueError("a model and a folder are needed")
+        if not dest or not Path(dest).is_absolute():
+            raise ValueError("choose the folder to move the finished pictures to (a full path)")
+        return self._start_job("export", task, lambda: folders.export(self.paths, self.store, model, task, dest, bool(move)))
 
     def start_collect(self, task: str | None = None) -> dict:
         """Gather pictures from the saved analyses in the background: one analysis, or all of them."""
@@ -324,6 +385,16 @@ def make_server(app: HarvestApp, port: int = 8765, token: str | None = None) -> 
                     return self._json(200, app.accept(body["model"]))
                 if method == "POST" and path == "/api/collect":
                     return self._json(200, app.start_collect(body.get("task")))
+                if method == "GET" and path == "/api/labeller":
+                    return self._json(200, app.labeller_status((q.get("model") or [""])[0], (q.get("task") or [None])[0]))
+                if method == "POST" and path == "/api/labeller/scan":
+                    return self._json(200, app.labeller_scan(str(body.get("model", "")), str(body.get("folder", ""))))
+                if method == "POST" and path == "/api/labeller/suggest":
+                    return self._json(200, app.labeller_suggest(str(body.get("model", "")), body.get("task"), body.get("n", 40),
+                                                               body.get("heads", False), body.get("plates", False)))
+                if method == "POST" and path == "/api/labeller/export":
+                    return self._json(200, app.labeller_export(str(body.get("model", "")), body.get("task"),
+                                                               str(body.get("dest", "")), body.get("move", True)))
                 if method == "GET" and path == "/api/ping":
                     return self._json(200, {"ok": True, "api": API_VERSION})
                 return self._json(404, {"error": "not found"})

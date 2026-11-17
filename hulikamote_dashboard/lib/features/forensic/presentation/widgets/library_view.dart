@@ -202,6 +202,8 @@ class _LibraryViewState extends State<LibraryView> {
     final violations = ((cfg?['active_violations'] as List?) ?? const [])
         .map((e) => '$e')
         .toList();
+    final saved = '${cfg?['video_name'] ?? ''}'.trim();
+    final fileName = saved.isEmpty ? null : saved;
     return SizedBox(
       width: 360,
       child: FxCard(
@@ -234,7 +236,16 @@ class _LibraryViewState extends State<LibraryView> {
                         style: Fx.heading(context),
                         overflow: TextOverflow.ellipsis,
                       ),
-                      Text(r.shortId, style: Fx.caption(context)),
+                      // The video's file name when the analysis saved it; the short id otherwise.
+                      Tooltip(
+                        message: fileName == null ? r.taskId : '$fileName\n${r.taskId}',
+                        child: Text(
+                          fileName ?? r.shortId,
+                          style: Fx.caption(context),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
                 ),

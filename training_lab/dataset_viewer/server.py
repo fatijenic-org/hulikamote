@@ -148,7 +148,8 @@ def make_handler(viewer: ViewerApp, token: str, touch):
             if what == "summary":
                 return self._json(200, r.summary())
             if what == "cars":
-                return self._json(200, r.cars(p.get("analysis") or None, p.get("filter") or "all", p.get("q") or ""))
+                return self._json(200, r.cars(p.get("analysis") or None, p.get("filter") or "all", p.get("q") or "",
+                                              p.get("class") or None))
             if what == "car":
                 return self._json(200, r.car(p.get("key")))
             if what == "photo":
@@ -183,7 +184,15 @@ def make_handler(viewer: ViewerApp, token: str, touch):
         def _post_reid(self, what: str, b: dict):
             r = viewer.reid
             if what == "move":
-                return self._json(200, r.move(b.get("photos"), b.get("to")))
+                return self._json(200, r.move(b.get("photos"), b.get("to"), bool(b.get("temporary"))))
+            if what == "similar":
+                return self._json(200, r.similar(b.get("key"), b.get("photos")))
+            if what == "class":
+                return self._json(200, r.set_class(b.get("cars"), b.get("class")))
+            if what == "hold":
+                return self._json(200, r.hold(b.get("cars")))
+            if what == "keep":
+                return self._json(200, r.keep(b.get("cars")))
             if what == "merge":
                 return self._json(200, r.merge(b.get("cars"), b.get("into")))
             if what == "remove":
@@ -198,6 +207,8 @@ def make_handler(viewer: ViewerApp, token: str, touch):
                 return self._json(200, r.undo())
             if what == "scan":
                 return self._json(200, r.start_scan())
+            if what == "suggest":
+                return self._json(200, r.start_suggest())
             self._json(404, {"error": "no such endpoint"})
 
         def _post(self, path: str, b: dict):

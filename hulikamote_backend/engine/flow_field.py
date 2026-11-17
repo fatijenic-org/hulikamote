@@ -169,23 +169,17 @@ class FlowField:
         self._cache = (key, out)
         return out
 
-    def draw(self, frame: np.ndarray, invert: bool = False) -> np.ndarray:
-        """What the system believes the legal flow is: one soft arrow per 2 x 2 block of judged cells (a calm teal,
-        smooth edges, see-through), not one per cell. `invert` draws the opposite way in amber: the flow the
-        counterflow test treats as legal (see Counterflow, "invert_flow")."""
-        import cv2
-        h, w = frame.shape[:2]
-        cell_w, cell_h = w / self.cells_x, h / self.cells_y
+    def arrows(self, frame_w: float, frame_h: float, invert: bool = False) -> list[dict]:
+        """The learned flow as arrows, one per 2 x 2 block of judged cells (not one per cell): [{"x1", "y1", "x2", "y2"}], tail
+        and head in the pixels of a frame_w x frame_h picture. `invert` points them the opposite way: the flow the counterflow
+        test treats as legal (see Counterflow, "invert_flow"). draw() paints these, and the live feed sends them to the dashboard."""
+        cell_w, cell_h = frame_w / self.cells_x, frame_h / self.cells_y
         blocks: dict[tuple, list] = {}
-        for cell in self.learned_cells(w, h):
+        for cell in self.learned_cells(frame_w, frame_h):
             key = (int(cell["x"] // (2 * cell_w)), int(cell["y"] // (2 * cell_h)))
             blocks.setdefault(key, []).append(cell)
-        if not blocks:
-            return frame
         length = 0.6 * min(cell_w, cell_h)
-        thick = max(2, h // 360)
-        shadow, ink = (30, 30, 30), ((0, 140, 255) if invert else (170, 190, 0))      # BGR: amber for the test, teal otherwise
-        layer = frame.copy()
+        out = []
         for cells in blocks.values():
             weight = sum(c["votes"] for c in cells)
             vx = sum(c["direction"][0] * c["votes"] for c in cells) / weight
@@ -196,8 +190,24 @@ class FlowField:
             ux, uy = (vx / norm, vy / norm) if not invert else (-vx / norm, -vy / norm)
             x = sum(c["x"] * c["votes"] for c in cells) / weight
             y = sum(c["y"] * c["votes"] for c in cells) / weight
-            a = (int(x - ux * length), int(y - uy * length))
-            b = (int(x + ux * length), int(y + uy * length))
+            out.append({"x1": x - ux * length, "y1": y - uy * length, "x2": x + ux * length, "y2": y + uy * length})
+        return out
+
+    def draw(self, frame: np.ndarray, invert: bool = False) -> np.ndarray:
+        """What the system believes the legal flow is: one soft arrow per 2 x 2 block of judged cells (a calm teal,
+        smooth edges, see-through), not one per cell. `invert` draws the opposite way in amber: the flow the
+        counterflow test treats as legal (see Counterflow, "invert_flow")."""
+        import cv2
+        h, w = frame.shape[:2]
+        arrows = self.arrows(w, h, invert)
+        if not arrows:
+            return frame
+        thick = max(2, h // 360)
+        shadow, ink = (30, 30, 30), ((0, 140, 255) if invert else (170, 190, 0))      # BGR: amber for the test, teal otherwise
+        layer = frame.copy()
+        for arrow in arrows:
+            a = (int(arrow["x1"]), int(arrow["y1"]))
+            b = (int(arrow["x2"]), int(arrow["y2"]))
             cv2.arrowedLine(layer, a, b, shadow, thick + 2, cv2.LINE_AA, tipLength=0.35)
             cv2.arrowedLine(layer, a, b, ink, thick, cv2.LINE_AA, tipLength=0.35)
         cv2.addWeighted(layer, 0.75, frame, 0.25, 0, dst=frame)

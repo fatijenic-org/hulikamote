@@ -338,6 +338,23 @@ def test_outside_ignores_a_passenger_inside_the_cabin():
     assert "riding_outside_vehicle" not in ledger.violations
 
 
+def test_outside_ignores_a_driver_behind_the_windshield():
+    ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1090, y + 10, 40, 70], "person")])      # upper part, wholly inside
+    assert "riding_outside_vehicle" not in ledger.violations
+
+
+def test_outside_ignores_a_motorcycle_rider_overtaking_alongside():
+    # same direction, straddles the bus edge, but slides along it (faster than the bus)
+    ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1200, y + 160 - 6 * i, 40, 100], "person")])
+    assert "riding_outside_vehicle" not in ledger.violations
+
+
+def test_outside_ignores_a_tricycle_passenger_beside_the_bus():
+    ledger = run_bus(fake_pipe(), lambda i, y: [Det(60, [1190, y + 80, 70, 110], "tricycle"),
+                                                Det(50, [1200, y + 90, 40, 100], "person")])
+    assert "riding_outside_vehicle" not in ledger.violations
+
+
 def test_outside_ignores_a_stopped_bus():
     pipe = fake_pipe()
     for i in range(30):

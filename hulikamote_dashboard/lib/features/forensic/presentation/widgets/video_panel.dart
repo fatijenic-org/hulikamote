@@ -281,7 +281,7 @@ class TicketTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = duration.inMilliseconds / 1000.0;
-    final tickets = controller.all;
+    final tickets = controller.visible; // follows the violation filter
     if (total <= 0 || tickets.every((t) => t.span == null)) {
       return SizedBox(
         height: 28,

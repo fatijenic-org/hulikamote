@@ -121,6 +121,14 @@ CONFIDENCE_THRESHOLD = 0.45
 CLASS_CONFIDENCE: dict[str, float] = {"motorcycle": 0.25}
 IOU_THRESHOLD = 0.50
 INPUT_SIZE = 640
+# People riding ON a vehicle (jeepney roof, pickup bed, kuliglig trailer) are a few pixels tall once a 4K frame is shrunk
+# to 640, and the model is unsure of them (2026-11-17 probe, 74 frames of a 4K clip: 0 people on vehicles whole-frame,
+# 23 with tiles, scores mostly 0.10-0.25). A person below the normal cutoff is kept only when it stands on a vehicle box;
+# the rules that use them still vote over several looks.
+PERSON_ON_VEHICLE_CONFIDENCE = 0.10
+# "Small people" mode (the wizard's tile switch, use_sahi): the frame is also cut into 3 x 2 overlapping tiles and each is
+# searched for people only (vehicles come from the whole frame, so a car cut by a tile edge is never counted twice).
+TILE_COLS, TILE_ROWS = 3, 2
 # Riders and pedestrians (class "person") are tracked apart from vehicles. A rider's box overlaps its motorcycle, and one
 # shared tracker hands the motorcycle's id to the rider on any frame where the bike was missed: the track then flips
 # between "motorcycle" and "person" and its box jumps to the rider. Person ids start here so the two id spaces never meet.
@@ -148,9 +156,12 @@ PLATE_BOX_COLOR = (0, 200, 255)  # amber outline for the detected plate crop
 
 
 def vehicle_label(d) -> str:
-    """What a box says about the vehicle: "PLATE - TYPE", or just "VEHICLE" while the plate is not read. Never an id."""
+    """What a box says about the vehicle: "PLATE - CLASS", or just "CLASS" while the plate is not read. "VEHICLE" stands in
+    for a class that is not known. Never an id."""
+    from engine.violations.base import VEHICLE_CLASSES
+    kind = d.cls.upper() if d.cls in VEHICLE_CLASSES else "VEHICLE"
     plate = getattr(d, "plate_text", None)
-    return f"{plate} - {d.cls.upper()}" if plate else "VEHICLE"
+    return f"{plate} - {kind}" if plate else kind
 
 
 def box_specs(detections) -> list[dict]:
@@ -236,6 +247,8 @@ class YoloInference:
         
         # Load tracker via Strategy Pattern
         self.tracker_type = tracker_type
+        self.small_people = False                       # tile search for people on vehicles (see TILE_COLS)
+        self._n_classes = 0
         self.tracker = self._new_tracker()              # vehicles
         self.people_tracker = self._new_tracker()       # riders and pedestrians (see PERSON_ID_BASE)
         self._class_votes: dict[int, deque] = {}        # vehicle track id -> recent (class, confidence)
@@ -372,6 +385,45 @@ class YoloInference:
             self._threshold_key, self._thresholds = key, thresholds
         return self._thresholds
 
+    def _is_person(self, class_id) -> bool:
+        return class_id < len(self._classes) and self._classes[class_id] == "person"
+
+    def _candidates(self, img: np.ndarray, x0: int = 0, y0: int = 0):
+        """Every box the model gives on one image above the lowest cutoff in use: (x1y1x2y2 in frame pixels, score, class id)."""
+        h, w = img.shape[:2]
+        blob, sx, sy, pad_x, pad_y = self.preprocess(img)
+        preds = self._session.run(None, {self._input_name: blob})[0][0]   # (4+num_classes, N) or (N, 4+num_classes)
+        if preds.shape[0] < preds.shape[1]:
+            preds = preds.T
+        self._n_classes = preds.shape[1] - 4
+        empty = (np.zeros((0, 4), np.float32), np.zeros(0, np.float32), np.zeros(0, int))
+        if preds.shape[0] == 0:
+            return empty
+        class_scores = preds[:, 4:]
+        class_ids = class_scores.argmax(axis=1)
+        confidences = class_scores[np.arange(len(class_ids)), class_ids]
+        floor = min(PERSON_ON_VEHICLE_CONFIDENCE, float(self._class_thresholds(self._n_classes).min()))
+        keep = confidences >= floor
+        if not keep.any():
+            return empty
+        cx, cy, bw, bh = preds[keep, 0], preds[keep, 1], preds[keep, 2], preds[keep, 3]
+        # Undo letterbox padding + scale, then move the tile back into the frame
+        boxes = np.stack([((cx - bw / 2 - pad_x) / sx).clip(0, w) + x0, ((cy - bh / 2 - pad_y) / sy).clip(0, h) + y0,
+                          ((cx + bw / 2 - pad_x) / sx).clip(0, w) + x0, ((cy + bh / 2 - pad_y) / sy).clip(0, h) + y0], axis=1)
+        return boxes, confidences[keep], class_ids[keep]
+
+    @staticmethod
+    def _tiles(w: int, h: int) -> list[tuple[int, int, int, int]]:
+        """TILE_COLS x TILE_ROWS tiles, each about 40% wider / taller than its share so a person on a seam is whole in one."""
+        tw, th = int(w / TILE_COLS * 1.4), int(h / TILE_ROWS * 1.4)
+        tiles = []
+        for r in range(TILE_ROWS):
+            for c in range(TILE_COLS):
+                x0 = min(int(c * (w - tw) / max(1, TILE_COLS - 1)), w - tw)
+                y0 = min(int(r * (h - th) / max(1, TILE_ROWS - 1)), h - th)
+                tiles.append((max(0, x0), max(0, y0), min(w, x0 + tw), min(h, y0 + th)))
+        return tiles
+
     def _nms(self, boxes, scores, iou_thresh: float) -> list[int]:
         """Simple IoU-based NMS (shared with the specialist models, see engine/specialists.py)."""
         return specialists.nms(boxes, scores, iou_thresh)
@@ -383,43 +435,35 @@ class YoloInference:
         track=False returns the boxes only and leaves the trackers alone: for a second caller (the road scan) that must not
         disturb the live tracking.
         """
-        orig_h, orig_w = frame.shape[:2]
-        blob, sx, sy, pad_x, pad_y = self.preprocess(frame)
-
-        outputs = self._session.run(None, {self._input_name: blob})
-        preds = outputs[0][0]  # shape: (num_detections, 4+num_classes) or (84, 8400)
-
-        # YOLOv8 output shape: (84, 8400) → transpose to (8400, 84)
-        if preds.shape[0] < preds.shape[1]:
-            preds = preds.T
-
         detections: list[YoloDetection] = []
-        if preds.shape[0] == 0:
+        boxes_xyxy, confidences, class_ids = self._candidates(frame)
+        if self.small_people:
+            parts = [(boxes_xyxy, confidences, class_ids)]
+            for x0, y0, x1, y1 in self._tiles(frame.shape[1], frame.shape[0]):
+                b, c, k = self._candidates(frame[y0:y1, x0:x1], x0, y0)
+                people = np.array([self._is_person(i) for i in k], dtype=bool)
+                parts.append((b[people], c[people], k[people]))
+            boxes_xyxy = np.concatenate([p[0] for p in parts])
+            confidences = np.concatenate([p[1] for p in parts])
+            class_ids = np.concatenate([p[2] for p in parts])
+        if len(confidences) == 0:
             return detections
 
-        boxes_raw = preds[:, :4]      # cx, cy, w, h (normalised to input size)
-        class_scores = preds[:, 4:]   # (N, num_classes)
-
-        class_ids = class_scores.argmax(axis=1)
-        confidences = class_scores[np.arange(len(class_ids)), class_ids]
-
-        # Filter by confidence (one cutoff per class, see CLASS_CONFIDENCE)
-        mask = confidences >= self._class_thresholds(class_scores.shape[1])[class_ids]
+        # Filter by confidence (one cutoff per class, see CLASS_CONFIDENCE); an unsure person only when on a vehicle
+        thresholds = self._class_thresholds(self._n_classes)
+        mask = confidences >= thresholds[class_ids]
+        is_person = np.array([self._is_person(i) for i in class_ids], dtype=bool)
+        weak = is_person & ~mask & (confidences >= PERSON_ON_VEHICLE_CONFIDENCE)
+        if weak.any():
+            vehicles = boxes_xyxy[mask & ~is_person]
+            weak &= np.array([on_a_vehicle(b, vehicles) for b in boxes_xyxy], dtype=bool)
+        mask |= weak
         if not mask.any():
             return detections
 
-        boxes_raw = boxes_raw[mask]
+        boxes_xyxy = boxes_xyxy[mask]
         confidences = confidences[mask]
         class_ids = class_ids[mask]
-
-        # cx,cy,w,h → x1,y1,x2,y2 in original image space
-        cx, cy, bw, bh = boxes_raw[:, 0], boxes_raw[:, 1], boxes_raw[:, 2], boxes_raw[:, 3]
-        # Undo letterbox padding + scale
-        x1 = ((cx - bw / 2 - pad_x) / sx).clip(0, orig_w)
-        y1 = ((cy - bh / 2 - pad_y) / sy).clip(0, orig_h)
-        x2 = ((cx + bw / 2 - pad_x) / sx).clip(0, orig_w)
-        y2 = ((cy + bh / 2 - pad_y) / sy).clip(0, orig_h)
-        boxes_xyxy = np.stack([x1, y1, x2, y2], axis=1)
 
         # ---------------------------------------------------------
         # YOLO26 NMS Bypass Route
@@ -433,9 +477,7 @@ class YoloInference:
             # (and the other riders) heavily, and must not delete it (overloading /
             # helmet checks count them). Vehicles stay in one group so a car is not
             # reported twice as car + truck.
-            is_person = np.array([
-                c < len(self._classes) and self._classes[c] == "person" for c in class_ids
-            ], dtype=bool)
+            is_person = np.array([self._is_person(c) for c in class_ids], dtype=bool)
             keep = []
             for group in (np.flatnonzero(is_person), np.flatnonzero(~is_person)):
                 if group.size:
@@ -514,6 +556,15 @@ class YoloInference:
 # ─── Singleton ───────────────────────────────────────────────────────────────
 
 _inference: Optional[YoloInference] = None
+
+
+def on_a_vehicle(person_xyxy, vehicles_xyxy) -> bool:
+    """A person's feet (bottom centre) lie on a vehicle box, or just above its top edge (sitting on a roof)."""
+    px, py = (person_xyxy[0] + person_xyxy[2]) / 2, person_xyxy[3]
+    for vx1, vy1, vx2, vy2 in vehicles_xyxy:
+        if vx1 <= px <= vx2 and vy1 - 0.15 * (vy2 - vy1) <= py <= vy2:
+            return True
+    return False
 
 
 def get_inference(force_reload: bool = False, session_factory=None, tracker_type: str = "bytetrack") -> YoloInference:

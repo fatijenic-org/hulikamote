@@ -27,13 +27,14 @@ THESIS_KEYS = {
     "missing_side_mirror", "distracted_driving",
 }
 # added after the consultation: Philippine road rules, each judged from a drawn zone
-PH_RULE_KEYS = {"illegal_loading", "truck_ban", "tricycle_on_highway", "sidewalk_driving", "double_parking"}
+PH_RULE_KEYS = {"illegal_loading", "truck_ban", "tricycle_on_highway", "sidewalk_driving", "double_parking",
+                "overtaking_on_right", "kuliglig_passenger"}       # the last two: added 2026-11-15
 
 
 def test_twenty_five_violations_are_registered():
-    assert len(ALL) == 25
+    assert len(ALL) == 27
     assert {v.key for v in ALL} == THESIS_KEYS | PH_RULE_KEYS
-    assert len(REGISTRY) == 25                                  # no two share a key
+    assert len(REGISTRY) == 27                                  # no two share a key
 
 
 def test_zone_violations_have_their_own_zone_list_and_colour():

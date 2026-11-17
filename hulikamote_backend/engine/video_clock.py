@@ -24,6 +24,7 @@ import json
 import logging
 import re
 import subprocess
+import threading
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from datetime import time as dtime
@@ -427,10 +428,114 @@ def _at(moment: datetime) -> str:
     return moment.strftime("%I:%M %p").lstrip("0")
 
 
+@dataclass
+class FileClock:
+    """What the video FILE says about when it was recorded, before a trim or a typed time is applied."""
+    source: str                    # screen | metadata | filename | estimate | none
+    start: datetime | None         # the time of the first frame of the file, or None
+    note: str
+    daylight: str | None = None
+
+
+def _read_file_clock(path: Path, name: str | None, reader=None, use_screen: bool = True) -> FileClock:
+    """The slow part: look for the time in the file itself, best source first (see the ladder at the top). Never raises."""
+    try:
+        screen = start_from_screen(path, reader) if use_screen else None
+        meta = start_from_metadata(path)
+        if screen is not None:
+            note = screen[1]
+            if meta is not None and abs((meta - screen[0]).total_seconds()) > DISAGREE_S:
+                note += (f" The video's own information says {_at(meta)}, so it was not used (cameras often write local "
+                         "time where UTC belongs).")
+            elif meta is not None:
+                note += " It matches the video's own information."
+            return FileClock("screen", screen[0], note)
+        if meta is not None:
+            return FileClock("metadata", meta, "The file information is taken as UTC and shown as Philippine time.")
+        named = start_from_filename(name or path.name)
+        if named is not None:
+            return FileClock("filename", named, "")
+    except Exception:
+        log.exception("Reading the time of %s failed", path)
+
+    daylight = None
+    try:
+        daylight = estimate_daylight(path)
+    except Exception:
+        log.exception("Estimating the daylight of %s failed", path)
+    seen = {"day": " The picture looks like daytime.", "twilight": " The picture looks like dawn or dusk.",
+            "night": " The picture looks like night."}.get(daylight or "", "")
+    return FileClock("estimate" if daylight else "none", None, "No time was found in the video." + seen, daylight)
+
+
+# Reading the time can take a while (OCR on the picture's clock), so it starts as soon as a video is picked (look_ahead) and its
+# answer is kept: the screen, the analysis and the next look at the same file reuse it, or wait for the look that is already running.
+_LOOKS: dict[tuple, "_Look"] = {}
+_LOOKS_LOCK = threading.Lock()
+_LOOKS_KEEP = 8
+_ONE_AT_A_TIME = threading.Lock()          # the picture search is heavy: never two at once
+
+
+class _Look:
+    def __init__(self):
+        self.done = threading.Event()
+        self.result: FileClock | None = None
+
+
+def _signature(path: Path, name: str | None) -> tuple | None:
+    """Which file this is, or None when it cannot be found: its name and size. Not its path or date: the analysis gets an uploaded COPY
+    of the picked video (other path, new date, same name and same bytes), and it must find the answer the look-ahead already kept."""
+    try:
+        return (name or path.name, path.stat().st_size)
+    except OSError:
+        return None
+
+
+def _file_clock(path: Path, name: str | None, reader=None, use_screen: bool = True) -> FileClock:
+    """The file's own time: from the kept answer, by waiting for a look that is under way, or by looking now."""
+    key = _signature(path, name) if (reader is None and use_screen) else None
+    if key is None:                                    # a test reader, or a file that cannot be found: nothing is kept
+        return _read_file_clock(path, name, reader, use_screen)
+    with _LOOKS_LOCK:
+        look = _LOOKS.get(key)
+        mine = look is None
+        if mine:
+            look = _LOOKS[key] = _Look()
+            while len(_LOOKS) > _LOOKS_KEEP:
+                _LOOKS.pop(next(iter(_LOOKS)))
+    if mine:
+        try:
+            with _ONE_AT_A_TIME:
+                look.result = _read_file_clock(path, name)
+        finally:
+            look.result = look.result or FileClock("none", None, "No time was found in the video.")
+            look.done.set()
+    else:
+        look.done.wait()
+    return look.result
+
+
+def look_ahead(video_path: str | Path, name: str | None = None) -> None:
+    """Start reading the time of this video now, in the background; the caller never waits. Later questions about the same
+    file use the answer, or wait for this look. Does nothing when the file is already read or being read. Never raises."""
+    try:
+        path = Path(video_path)
+        key = _signature(path, name)
+        if key is None:
+            return
+        with _LOOKS_LOCK:
+            if key in _LOOKS:
+                return
+        threading.Thread(target=_file_clock, args=(path, name), daemon=True, name="video-clock-look").start()
+    except Exception:
+        log.exception("Could not start reading the time of %s", video_path)
+
+
 def resolve_clock(video_path: str | Path, *, start_text: str | None = None, name: str | None = None,
                   trim_start: float = 0.0, reader=None, use_screen: bool = True) -> ClockInfo:
     """The time of the analysed part of a video, from the best source there is (see the ladder at the top of this file).
-    `name` is the file's real name when `video_path` is a renamed copy (an upload). Never raises."""
+    `name` is the file's real name when `video_path` is a renamed copy (an upload). A typed time answers at once; otherwise the
+    file is read once and the answer is kept (see look_ahead). Never raises."""
     path = Path(video_path)
     shift = timedelta(seconds=max(float(trim_start or 0.0), 0.0))
 
@@ -445,34 +550,13 @@ def resolve_clock(video_path: str | Path, *, start_text: str | None = None, name
             return made("operator", typed, "")
         if start_text and str(start_text).strip():
             log.warning("The start time %r could not be read; looking in the video instead.", start_text)
-
-        screen = start_from_screen(path, reader) if use_screen else None
-        meta = start_from_metadata(path)
-        if screen is not None:
-            note = screen[1]
-            if meta is not None and abs((meta - screen[0]).total_seconds()) > DISAGREE_S:
-                note += (f" The video's own information says {_at(meta)}, so it was not used (cameras often write local "
-                         "time where UTC belongs).")
-            elif meta is not None:
-                note += " It matches the video's own information."
-            return made("screen", screen[0], note)
-        if meta is not None:
-            return made("metadata", meta, "The file information is taken as UTC and shown as Philippine time.")
-        named = start_from_filename(name or path.name)
-        if named is not None:
-            return made("filename", named, "")
+        found = _file_clock(path, name, reader, use_screen)
     except Exception:
         log.exception("Reading the time of %s failed", path)
-
-    daylight = None
-    try:
-        daylight = estimate_daylight(path)
-    except Exception:
-        log.exception("Estimating the daylight of %s failed", path)
-    seen = {"day": " The picture looks like daytime.", "twilight": " The picture looks like dawn or dusk.",
-            "night": " The picture looks like night."}.get(daylight or "", "")
-    return ClockInfo(start=None, source="estimate" if daylight else "none", confirmed=False, daylight=daylight,
-                     note="No time was found in the video." + seen)
+        found = FileClock("none", None, "No time was found in the video.")
+    if found.start is not None:
+        return made(found.source, found.start, found.note)
+    return ClockInfo(start=None, source=found.source, confirmed=False, daylight=found.daylight, note=found.note)
 
 
 def clock_wanted(config: dict) -> bool:

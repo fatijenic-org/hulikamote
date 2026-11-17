@@ -33,10 +33,13 @@ def solid_line_rois(result: dict, ref: tuple[int, int] = REF) -> list[dict]:
     for line in result.get("lane_lines", []):
         if line.get("style") != "solid":
             continue
-        (x0, y0), (x1, y1) = line["p0"], line["p1"]
+        points = line.get("points") or [line["p0"], line["p1"]]         # the edge finder follows a curve with more points
+        (x0, y0), (x1, y1) = points[0], points[-1]
         if ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5 < MIN_LENGTH * vh:
             continue
-        rois.append({"line": [[round(x0 * sx, 1), round(y0 * sy, 1)], [round(x1 * sx, 1), round(y1 * sy, 1)]],
+        if len(points) > 12:                                             # the rule needs the shape, not every sample
+            points = [points[round(i * (len(points) - 1) / 11)] for i in range(12)]
+        rois.append({"line": [[round(x * sx, 1), round(y * sy, 1)] for x, y in points],
                      "auto": True, "colour": line.get("colour")})
     return rois
 

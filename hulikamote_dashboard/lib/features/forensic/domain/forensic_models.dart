@@ -197,6 +197,10 @@ class ForensicTicket {
   final int trackId;
   final List<String> violations;
   final String plateText;
+
+  /// Why there is no plate text (backend `plate_status`): `no_plate` = the vehicle shows none, `not_read` = a plate was seen
+  /// but not read, `unclear` = the plate model fired too weakly to say, `not_checked` = too few looks. Empty on older reports.
+  final String plateStatus;
   final String? plateRaw;
   final bool plateLengthWarning;
 
@@ -225,6 +229,7 @@ class ForensicTicket {
     required this.trackId,
     required this.violations,
     required this.plateText,
+    this.plateStatus = '',
     required this.plateRaw,
     required this.plateLengthWarning,
     this.plateManual = false,
@@ -301,6 +306,7 @@ class ForensicTicket {
           .map((e) => '$e')
           .toList(),
       plateText: '${j['plate_text'] ?? 'unidentified'}',
+      plateStatus: '${j['plate_status'] ?? ''}',
       plateRaw: _cleanPlate(j['plate_raw']),
       plateLengthWarning: j['plate_length_warning'] == true,
       plateManual: j['plate_manual'] == true,
@@ -327,6 +333,15 @@ class ForensicTicket {
   ];
 
   bool get plateRead => !_unreadPlate.contains(plateText.toLowerCase());
+
+  /// What to show in place of a plate that was not read: "no plate" and "plate not read" are different findings.
+  String get unreadPlateLabel => switch (plateStatus) {
+        'no_plate' => 'No plate on vehicle',
+        'not_read' => 'Plate seen, not read',
+        'unclear' => 'Plate not confirmed',
+        'not_checked' => 'Plate not checked',
+        _ => 'Plate unread',
+      };
   bool get isFlagged => flags.isNotEmpty;
   int get frameCount => frames.length;
 

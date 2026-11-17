@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 
 import '../../data/forensic_media.dart';
 import '../../data/harvest_labeling.dart';
+import '../../domain/analysis_setup.dart';
 import '../../domain/forensic_models.dart';
 import '../../domain/review_controller.dart';
+import 'analysis_setup_panel.dart';
 import 'decision_panel.dart';
 import 'evidence_viewer.dart';
 import 'fx.dart';
@@ -15,6 +17,7 @@ import 'merge_dialog.dart';
 import 'plate_reads_panel.dart';
 import 'queue_panel.dart';
 import 'video_panel.dart';
+import 'violation_filter_bar.dart';
 
 /// Review workspace for one finished analysis: queue | evidence | decision.
 ///
@@ -35,6 +38,7 @@ class ResultsWorkspace extends StatefulWidget {
     required this.onNewAnalysis,
     this.onSendToLive,
     this.harvest,
+    this.loadSetup,
   });
 
   final ReviewController controller;
@@ -50,6 +54,9 @@ class ResultsWorkspace extends StatefulWidget {
 
   /// Gives this analysis its own Harvest tab (the pictures that can teach the system). Null = no such tab.
   final HarvestLabeling? harvest;
+
+  /// Reads the settings this analysis ran with (file name, violations, models ...). Null = the header stays as it was.
+  final Future<AnalysisSetup?> Function()? loadSetup;
 
   @override
   State<ResultsWorkspace> createState() => _ResultsWorkspaceState();
@@ -70,6 +77,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
   bool _showDetails = false; // right column: false = the list of tickets, true = the open ticket's details
   String? _lastUid;
   String? _lastVideo;
+  AnalysisSetup? _setup; // what this analysis ran with: shown in the header and in the setup panel
 
   ReviewController get c => widget.controller;
 
@@ -83,6 +91,14 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
     _lastVideo = _videoUrl;
     c.addListener(_onController);
     c.loadHolding(); // photos set aside earlier: the header shows how many wait
+    widget.loadSetup?.call().then((s) {
+      if (mounted && s != null) setState(() => _setup = s);
+    }).catchError((Object _) {}); // no setup on disk: the header just stays plain
+  }
+
+  void _openSetup() {
+    final s = _setup;
+    if (s != null) showAnalysisSetup(context, s, analyzedAt: widget.title.replaceFirst('Analysis · ', ''));
   }
 
   /// Another view (Harvest or Holding) is on screen instead of the review: no ticket shortcuts, no review controls.
@@ -561,27 +577,40 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
                 onPressed: widget.onBack,
               ),
               const SizedBox(width: Fx.s8),
-              Flexible(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.title,
-                      style: Fx.heading(context),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    // The video's file name leads when the analysis saved it (hover shows it in full).
+                    Tooltip(
+                      message: _setup?.videoName ?? '',
+                      child: Text(
+                        _setup?.videoName ?? widget.title,
+                        key: const Key('header-title'),
+                        style: Fx.heading(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                    if (widget.subtitle != null)
+                    if (_setup?.videoName != null || widget.subtitle != null)
                       Text(
-                        widget.subtitle!,
+                        [if (_setup?.videoName != null) widget.title, ?widget.subtitle].join(' · '),
                         style: Fx.caption(context),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                    if (_setup != null)
+                      AnalysisSetupStrip(violations: _setup!.violations, onOpen: _openSetup),
                   ],
                 ),
               ),
-              const Spacer(),
+              if (_setup != null)
+                IconButton(
+                  key: const Key('open-setup'),
+                  tooltip: 'Analysis setup',
+                  icon: const Icon(Icons.tune),
+                  onPressed: _openSetup,
+                ),
               _holdingButton(context, mode),
               const SizedBox(width: Fx.s12),
               if (widget.harvest != null) ...[
@@ -739,6 +768,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
                   ),
                 ],
               ),
+              ViolationFilterBar(controller: c),
               const SizedBox(height: Fx.s12),
               Expanded(
                 child: IndexedStack(

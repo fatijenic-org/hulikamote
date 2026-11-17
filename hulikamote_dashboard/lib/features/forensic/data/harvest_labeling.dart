@@ -66,6 +66,23 @@ abstract class HarvestLabeling {
   ImageProvider carPhoto(String evidenceDir, String file, {int? width});
 }
 
+/// What the Labeller page needs on top of the labelling screen: list every picture of a folder for one model, pre-draw
+/// the deployed model's boxes, and write the finished pictures as a clean dataset (moving them) to any folder.
+abstract class FolderLabelling extends HarvestLabeling {
+  /// Queues every picture under [folder] for [model]. Returns when the listing is done (a big folder can take a minute).
+  Future<LabellerStatus> scanFolder(String model, String folder);
+
+  /// How the pictures of one folder stand, and the last job.
+  Future<LabellerStatus> folderStatus(String model, String taskId);
+
+  /// Pre-draws the deployed model's boxes on the next [n] pictures that have none, and, when asked, Blur boxes over the heads of
+  /// people ([heads]) and over number plates ([plates]). Returns how many pictures got boxes.
+  Future<int> predraw(String model, String taskId, {int n = 40, bool heads = false, bool plates = false});
+
+  /// Writes the finished pictures of the folder as a dataset under [dest]/[model] and, with [move], moves them there.
+  Future<LabellerStatus> exportFolder(String model, String taskId, String dest, {bool move = true});
+}
+
 class _Helper {
   const _Helper(this.base, this.token, [this.pid]);
 
@@ -76,7 +93,7 @@ class _Helper {
 
 /// Talks to `harvest.py serve` on this computer: reuses a helper that is already running, or starts one that stops by
 /// itself when it has been idle for a while.
-class LocalHarvestLabeling implements HarvestLabeling {
+class LocalHarvestLabeling implements FolderLabelling {
   LocalHarvestLabeling({LocalHarvestSource? lab, http.Client? client, this.startTimeout = const Duration(seconds: 30)})
       : _lab = lab ?? LocalHarvestSource(),
         _client = client ?? http.Client();
@@ -88,8 +105,8 @@ class LocalHarvestLabeling implements HarvestLabeling {
 
   static const _idleMinutes = 30;
 
-  /// What the helper must know: 4 = "the rest are fine" (3 = the cars one by one, 2 = the "same car?" questions and the clip's own pictures).
-  static const _apiNeeded = 4;
+  /// What the helper must know: 5 = the Labeller (folders), 4 = "the rest are fine" (3 = the cars one by one, 2 = the "same car?" questions and the clip's own pictures).
+  static const _apiNeeded = 5;
 
   String _labDir() {
     try {
@@ -278,5 +295,42 @@ class LocalHarvestLabeling implements HarvestLabeling {
   @override
   Future<void> skip(String itemId) async {
     await _call('POST', '/api/skip', body: {'id': itemId});
+  }
+
+  /// A Labeller job runs in the helper; look every 1.5 seconds until it says it is done.
+  Future<LabellerStatus> _finishJob(String model, String taskId, {Duration limit = const Duration(minutes: 60)}) async {
+    final until = DateTime.now().add(limit);
+    while (DateTime.now().isBefore(until)) {
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
+      final s = await folderStatus(model, taskId);
+      if (!s.running) {
+        if (s.error != null) throw HarvestLabelingException(s.error!);
+        return s;
+      }
+    }
+    throw HarvestLabelingException('This is taking very long. The helper keeps working: open this page again in a few minutes.');
+  }
+
+  @override
+  Future<LabellerStatus> scanFolder(String model, String folder) async {
+    final job = LabellerStatus.fromJson(await _call('POST', '/api/labeller/scan', body: {'model': model, 'folder': folder}));
+    return _finishJob(model, job.task ?? '');
+  }
+
+  @override
+  Future<LabellerStatus> folderStatus(String model, String taskId) async =>
+      LabellerStatus.fromJson(await _call('GET', '/api/labeller', query: {'model': model, 'task': taskId}));
+
+  @override
+  Future<int> predraw(String model, String taskId, {int n = 40, bool heads = false, bool plates = false}) async {
+    final r = await _call('POST', '/api/labeller/suggest',
+        body: {'model': model, 'task': taskId, 'n': n, 'heads': heads, 'plates': plates});
+    return (r['suggested'] as num?)?.toInt() ?? 0;
+  }
+
+  @override
+  Future<LabellerStatus> exportFolder(String model, String taskId, String dest, {bool move = true}) async {
+    await _call('POST', '/api/labeller/export', body: {'model': model, 'task': taskId, 'dest': dest, 'move': move});
+    return _finishJob(model, taskId);
   }
 }

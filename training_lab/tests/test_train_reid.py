@@ -182,3 +182,26 @@ def test_deploy_backs_up_the_old_model_and_swaps_only_when_the_check_passes(tmp_
         assert (live / "ckpt_original.t7").read_bytes() == old and len(list(live.glob("ckpt_backup_*.t7"))) == 1
     else:
         assert (live / "ckpt.t7").read_bytes() == old and not list(live.glob("ckpt_*.t7"))
+
+
+def test_vehicles_set_aside_in_the_manager_are_not_trained_on(tmp_path):
+    make_cars(tmp_path, 3, 4)
+    (tmp_path / "temporary" / "t1" / "carX").mkdir(parents=True)
+    shutil.copy2(tmp_path / "images" / "t1" / "car00" / "1000.jpg", tmp_path / "temporary" / "t1" / "carX" / "1000.jpg")
+    shutil.copy2(tmp_path / "images" / "t1" / "car00" / "1001.jpg", tmp_path / "temporary" / "t1" / "carX" / "1001.jpg")
+    assert sorted(tr.collect_identities(tmp_path)) == ["t1/car00", "t1/car01", "t1/car02"]
+
+
+def test_class_suggestion_votes_by_photo_then_by_vehicle():
+    spec = importlib.util.spec_from_file_location("reid_suggest_class", SCRIPT.with_name("reid_suggest_class.py"))
+    sc = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sc)
+    assert sc.photo_class([("person", 0.9, 0.5), ("motorcycle", 0.6, 0.30), ("car", 0.9, 0.02)]) == "motorcycle"   # the bigger vehicle wins, a person is no vehicle
+    assert sc.photo_class([("person", 0.9, 0.5)]) is None and sc.photo_class([]) is None
+    assert sc.vote(["truck", None, "truck", "car"]) == ("truck", 2, 3)
+    assert sc.vote(["car", "bus"]) == ("car", 1, 2)                                                             # a tie goes to the first one
+    assert sc.vote([None, None]) is None
+    assert sc.confident(('car', 3, 4)) and sc.confident(('car', 2, 2)) and not sc.confident(('car', 1, 1))   # one photo is not enough
+    assert not sc.confident(('car', 2, 4)) and not sc.confident(None)                                       # a split vote is left to you
+    assert sc.confident(('motorcycle', 4, 4)) and not sc.confident(('truck', 4, 4)) and not sc.confident(('tricycle', 3, 3))   # only car / motorcycle
+    assert sc.spread(list(range(10)), 4) == [0, 3, 6, 9] and sc.spread([1, 2], 4) == [1, 2]

@@ -471,6 +471,13 @@ class DecoupledPipeline:
         return out
 
     def _draw_rois(self, frame: np.ndarray) -> np.ndarray:
+        scene = getattr(self, "_scene_overlays", None)
+        if scene is None:                                 # the wizard's road and traffic overlays (engine/scene_overlays.py)
+            from engine import scene_overlays
+            scene = self._scene_overlays = scene_overlays.usable((getattr(self, "config", None) or {}).get("scene_overlays"))
+        if scene:
+            from engine import line_paint, scene_overlays
+            scene_overlays.paint(frame, scene, [d.bbox for d in getattr(self, "_draw_dets", ()) if getattr(d, "cls", None) in line_paint.OCCLUDES])
         fh, fw = frame.shape[:2]
         scaled_rois = self._get_scaled_rois(fw, fh)
         for violation in ZONE_VIOLATIONS:

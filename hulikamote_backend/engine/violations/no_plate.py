@@ -9,6 +9,15 @@ Heuristic: judged over the WHOLE track, never on a short run of misses.
     a plate found at any later look clears it.
   - The ticket is decided when the vehicle leaves or the video ends (decide_end): no plate in any
     fair look -> no_plate. Evidence photos of a cleared suspicion are deleted by the ledger.
+
+"No plate" is not "plate not read". Every ticket (of any violation) carries plate_status, from the plate model's
+confidence over ALL the looks at the vehicle (plate_evidence gives the numbers):
+    read         a plate was seen and its text was read (set after the OCR, routers/forensic.py)
+    not_read     a plate was SEEN (one look at 0.5 or more, or weaker looks that add up to 0.8) but no text was read
+    unclear      the model fired weakly once or twice: a plate may be there; not a "no plate" and not a sure plate
+    no_plate     6 or more fair looks and the model never fired: the vehicle shows no plate
+    not_checked  too few fair looks to say anything (vehicle too small, too short on screen, motorcycle seen from the front)
+The thresholds 0.5 / 0.8 are first values: measure them with training_lab/scripts/plate_status_eval.py.
 """
 import math
 
@@ -17,6 +26,24 @@ from engine.violations.base import Violation
 
 NO_PLATE_MIN_CHECKS = 6     # fair looks needed (~3 s with SPECIALIST_INTERVAL=5 at 10 inferences/s)
 NO_PLATE_MIN_WIDTH = 60     # px; a smaller vehicle is too far away for its plate to be found
+PLATE_SURE_CONF = 0.5       # one look this confident: a plate was seen
+PLATE_SEEN_SUM = 0.8        # ...or weaker looks whose confidences add up to this (for example four looks at 0.2)
+
+
+def plate_evidence(ledger) -> dict:
+    """The numbers behind plate_status: fair looks, looks that found a plate, and the plate model's confidence in them."""
+    confs = list(getattr(ledger, "plate_confs", []))
+    return {"fair_looks": ledger.plate_checks, "fair_hits": ledger.plate_hits, "plate_looks": len(confs),
+            "best_conf": round(max(confs), 3) if confs else 0.0, "conf_sum": round(sum(confs), 3)}
+
+
+def plate_status(ledger) -> str:
+    """no_plate | not_read | unclear | not_checked for a vehicle whose plate text is not known (yet). See the module text."""
+    confs = list(getattr(ledger, "plate_confs", []))
+    if confs:
+        seen = max(confs) >= PLATE_SURE_CONF or sum(confs) >= PLATE_SEEN_SUM
+        return "not_read" if seen else "unclear"
+    return "no_plate" if ledger.plate_checks >= NO_PLATE_MIN_CHECKS else "not_checked"
 
 
 class NoPlate(Violation):
@@ -52,6 +79,8 @@ class NoPlate(Violation):
         mgr = pipe.ledger_manager
         self.record_look(mgr, det.track_id, look.found)
         ledger = mgr.ledgers.get(det.track_id)
+        if look.found and ledger is not None:        # every look that found a plate counts as evidence, fair or not
+            ledger.plate_confs.append(float(getattr(look, "confidence", 0.0)))
         if not look.found and ledger is not None:
             # Provisional: the ticket is decided when the vehicle leaves (decide_end)
             marks.set_marks(ledger, self.key, det.bbox, [(look.search_box, "NO PLATE SEEN YET", marks.YELLOW)])

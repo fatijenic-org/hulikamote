@@ -32,6 +32,7 @@ class Look:
     dets: list = field(default_factory=list)   # [{"class_id", "confidence", "box": [x, y, w, h] in FRAME pixels}]
     found: bool = False                        # plate job: a plate (or, in direct-OCR mode, a bumper to read) was found
     search_box: list | None = None             # plate job: the area that was searched, [x, y, w, h] in frame pixels
+    confidence: float = 0.0                    # plate job: the model's confidence in the plate it found (0 = none found)
     crop: object = None                        # helmet / cabin jobs: the picture the model was given (raw frame pixels)
     origin: tuple = (0, 0)                     # where that crop's top-left corner sits in the frame
 
@@ -47,7 +48,8 @@ class HelmetJob:
     model = "helmet_specialist"
 
     def wanted(self, active, det) -> bool:
-        return "no_helmet" in active and det.cls == "motorcycle"
+        # overloading counts the riders from the same look (heads overlap less than whole bodies)
+        return ("no_helmet" in active or "overloading" in active) and det.cls == "motorcycle"
 
     def look(self, pipe, frame, det, detections):
         session = pipe.registry.get_model(self.model)
@@ -158,7 +160,7 @@ class PlateJob:
             ledger.plate_bbox = plate_box
         log.debug("[Plate] Track %s: %s", det.track_id,
                   f"plate found ({best_conf:.0%})" if found else "no plate detected")
-        return Look(found=found, search_box=search_box)
+        return Look(found=found, search_box=search_box, confidence=float(best_conf))
 
 
 JOBS = (HelmetJob(), PlateJob(), CabinJob())

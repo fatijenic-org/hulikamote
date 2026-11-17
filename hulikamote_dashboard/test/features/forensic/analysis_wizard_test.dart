@@ -255,6 +255,8 @@ void main() {
     await tester.pump();
     await _next(tester);
     await _next(tester); // Settings
+    await tester.tap(find.text('Review & storage')); // the group is folded until it is needed
+    await tester.pump();
 
     final flowSwitch = find.byKey(const ValueKey('show-flow-switch'));
     expect(find.text('Fine-tune the pipeline'), findsOneWidget);
@@ -273,6 +275,31 @@ void main() {
     expect(h.draft.config('counterflow')['show_flow'], isTrue);
   });
 
+  testWidgets('settings fit one screen: folded groups show their choices and open on a tap', (tester) async {
+    final h = await _pump(tester);
+    await tester.tap(find.text('Choose video…'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await _next(tester);
+    await tester.tap(find.text('Counterflow').first);
+    await tester.pump();
+    await _next(tester);
+    await _next(tester); // Settings
+    expect(find.text('Tracker'), findsWidgets); // Detection starts open
+    expect(find.text('Plate format'), findsNothing); // License plates is folded...
+    expect(find.textContaining('Philippines (ABC 1234) · EasyOCR'), findsOneWidget); // ...and says what is chosen
+    expect(find.textContaining('privacy blur on'), findsOneWidget);
+    await tester.tap(find.text('License plates'));
+    await tester.pump();
+    expect(find.text('Plate format'), findsOneWidget);
+    await tester.tap(find.text('Direct OCR'));
+    await tester.pump();
+    expect(h.draft.settings.plateMethod, 'direct_ocr');
+    await tester.tap(find.text('License plates')); // fold again: the line follows the change
+    await tester.pump();
+    expect(find.textContaining('Direct OCR · Philippines'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the show-the-flow switch is not offered when Counterflow (the rule that draws it) is not chosen', (tester) async {
     await _pump(tester);
     await tester.tap(find.text('Choose video…'));
@@ -283,6 +310,9 @@ void main() {
     await _next(tester);
     await _next(tester); // Settings
     expect(find.text('Fine-tune the pipeline'), findsOneWidget);
+    await tester.tap(find.text('Review & storage'));
+    await tester.pump();
+    expect(find.text('Keep the uploaded video'), findsOneWidget); // the group is open
     expect(find.text('Detect traffic flow automatically'), findsNothing); // illegal turn has nothing to do with the flow
     expect(find.text('Show the learned flow'), findsNothing);
   });

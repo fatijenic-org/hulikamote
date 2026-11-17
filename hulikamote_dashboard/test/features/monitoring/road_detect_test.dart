@@ -60,6 +60,7 @@ class FakeRoadBackend {
   Map<String, dynamic> status = _statusJson('none');
   final requests = <String>[];
   Object? corrected; // the body of the last corrections POST
+  String? applyQuery; // the query of the last Apply POST ('' = none)
 
   CameraApi get api => CameraApi(
     baseUrl: 'http://test',
@@ -74,6 +75,7 @@ class FakeRoadBackend {
           corrected = jsonDecode(req.body);
           return http.Response(jsonEncode({'ok': true, 'zones': (corrected as Map)['zones']}), 200);
         case '/settings/video/road/detect/apply':
+          applyQuery = req.url.query;
           return http.Response(jsonEncode({'ok': true, 'zones': ['pedestrian_lane'], 'switched_on': <String>[]}), 200);
         case '/settings/video/road/detect/discard':
           return http.Response(jsonEncode({'ok': true}), 200);
@@ -283,6 +285,48 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('road-apply')));
       await _settle(tester, 200);
       expect(backend.requests, isNot(contains('POST /settings/video/road/detect/zones')), reason: 'back to the scan means nothing edited');
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  group('the directions of the road', () {
+    final sides = [
+      {'id': 'road-1', 'kind': 'road', 'flow': 'in', 'polygon': [[200, 100], [600, 100], [600, 700], [200, 700]], 'arrow': [[400, 200], [400, 600]]},
+      {'id': 'road-2', 'kind': 'road', 'flow': 'out', 'polygon': [[600, 100], [1000, 100], [1000, 700], [600, 700]], 'arrow': [[800, 600], [800, 200]]},
+    ];
+
+    testWidgets('the result names the two sides, and Apply uses them for Counterflow only when ticked', (tester) async {
+      final backend = FakeRoadBackend()..status = _statusJson('done', zones: sides, steps: {for (final id in _titles.keys) id: 'done'});
+      await tester.pumpWidget(_host(backend, ({required bool applied}) {}));
+      await _settle(tester, 3500);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('road-result'))).data, contains('Traffic: incoming on the left, outgoing on the right.'));
+      expect(tester.widget<Checkbox>(find.byKey(const ValueKey('road-counterflow'))).value, false, reason: 'off until the operator has looked at the arrows');
+      await tester.tap(find.byKey(const ValueKey('road-counterflow')));
+      await _settle(tester, 100);
+      await tester.tap(find.byKey(const ValueKey('road-apply')));
+      await _settle(tester, 200);
+      expect(backend.applyQuery, 'counterflow=true');
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('not ticked: Apply asks for no Counterflow zones', (tester) async {
+      final backend = FakeRoadBackend()..status = _statusJson('done', zones: sides, steps: {for (final id in _titles.keys) id: 'done'});
+      await tester.pumpWidget(_host(backend, ({required bool applied}) {}));
+      await _settle(tester, 3500);
+      await tester.tap(find.byKey(const ValueKey('road-apply')));
+      await _settle(tester, 200);
+      expect(backend.applyQuery, '');
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a road without directions has no Counterflow tick', (tester) async {
+      final backend = FakeRoadBackend()
+        ..status = _statusJson('done', zones: [
+          {'id': 'road-1', 'kind': 'road', 'polygon': [[200, 100], [600, 100], [600, 700], [200, 700]]},
+        ], steps: {for (final id in _titles.keys) id: 'done'});
+      await tester.pumpWidget(_host(backend, ({required bool applied}) {}));
+      await _settle(tester, 3500);
+      expect(find.byKey(const ValueKey('road-counterflow')), findsNothing);
       await tester.pumpWidget(const SizedBox());
     });
   });

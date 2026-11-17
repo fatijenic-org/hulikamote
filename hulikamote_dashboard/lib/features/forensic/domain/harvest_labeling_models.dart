@@ -321,3 +321,47 @@ class CarDetail {
         marked: {for (final p in ((j['marked'] as List?) ?? const [])) '$p'},
       );
 }
+
+/// The Labeller's job in the helper (listing a folder, or exporting the finished pictures) and how a folder's pictures
+/// stand. Scanning and exporting answer with the job itself; the status answer holds the job and the counts.
+class LabellerStatus {
+  const LabellerStatus({this.task, this.running = false, this.kind, this.error, this.summary = const {}, this.counts});
+
+  /// The folder's id in the helper ("folder_" + a few letters): pass it on to the labelling screen.
+  final String? task;
+  final bool running;
+
+  /// `scan` or `export`.
+  final String? kind;
+  final String? error;
+
+  /// What the last job reported: found / new for a scan; exported, train, val, duplicates ... for an export.
+  final Map<String, dynamic> summary;
+  final HarvestCounts? counts;
+
+  int _n(String key) => (summary[key] as num?)?.toInt() ?? 0;
+  int get found => _n('found');
+  int get exported => _n('exported');
+  int get train => _n('train');
+  int get val => _n('val');
+  int get emptyLabels => _n('empty_labels');
+  int get duplicates => _n('duplicates');
+  int get unreadable => _n('unreadable');
+  int get missing => _n('missing');
+  int get failed => _n('failed');
+  int get blurredPictures => _n('blurred_pictures');
+  int get blurredRegions => _n('blurred_regions');
+  String? get dest => summary['dest'] as String?;
+
+  factory LabellerStatus.fromJson(Map<String, dynamic> j) {
+    final job = Map<String, dynamic>.from(((j['job'] ?? j) as Map?) ?? const {});
+    return LabellerStatus(
+      task: (j['task'] ?? job['task']) as String?,
+      running: job['running'] == true,
+      kind: job['kind'] as String?,
+      error: job['error'] as String?,
+      summary: Map<String, dynamic>.from((job['summary'] as Map?) ?? const {}),
+      counts: j['counts'] is Map ? HarvestCounts.fromJson((j['counts'] as Map).cast<String, dynamic>()) : null,
+    );
+  }
+}

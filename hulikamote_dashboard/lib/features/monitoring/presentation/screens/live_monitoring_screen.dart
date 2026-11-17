@@ -9,18 +9,34 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/utils/visible_poller.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
+import '../../data/video_upload.dart';
 import '../widgets/camera_input_dialog.dart';
 import '../widgets/camera_status_chip.dart';
+import '../widgets/flow_controls.dart';
 import '../widgets/road_detect_view.dart';
 import '../widgets/road_learning_chip.dart';
+import '../widgets/upload_status_card.dart';
 import '../widgets/video_feed_widget.dart';
 import '../widgets/alert_list_widget.dart';
+import 'live_setup_screen.dart';
+
+/// Picks the video file to upload. Replaceable in tests.
+typedef LiveVideoPicker = Future<({String path, String name})?> Function();
+
+Future<({String path, String name})?> pickLiveVideoFile() async {
+  final file = await FilePicker.pickFile(type: FileType.video);
+  if (file == null || file.path == null) return null;
+  return (path: file.path!, name: file.name);
+}
 
 class LiveMonitoringScreen extends StatefulWidget {
-  const LiveMonitoringScreen({super.key, this.client});
+  const LiveMonitoringScreen({super.key, this.client, this.pickVideo = pickLiveVideoFile});
 
   /// Injected by tests; the app talks to the backend.
   final http.Client? client;
+
+  /// "Video file…": the dialog that picks the file (a test gives a fixed one).
+  final LiveVideoPicker pickVideo;
 
   @override
   State<LiveMonitoringScreen> createState() => _LiveMonitoringScreenState();
@@ -35,6 +51,20 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   bool _roadDetecting = false;   // "Detect road": the live video is a small window and the frozen frame is shown large
   int _roadDetectRun = 0;        // a new walkthrough starts from a clean view
   String _sourceName = 'Intersection_01';
+  bool _preparingSetup = false;  // "Set up violations": the camera is being started / a picture is being taken
+  int? _violationsOn;            // how many violations the live monitor watches now (null until asked)
+
+  // "Video file…": where the upload is, shown as a card above the picture (null = no upload to show)
+  UploadStatus? _upload;
+  Completer<void>? _cancelUpload;   // complete it to stop an upload that is still going out
+  Timer? _uploadTicker;             // counts the seconds while the backend gets the video ready
+  Timer? _uploadFade;               // clears the "ready" card after a while
+  String? _uploadPath;              // the file of the last upload, for Try again
+
+  /// The learned traffic-flow arrows on the live picture can be switched off; the choice is kept.
+  static const _flowKey = 'live_show_flow_arrows';
+  bool _showFlowArrows = true;
+  bool _flowBusy = false;        // a flow action (reverse / learn again) is on its way
 
   int _reconnectTries = 0;
 
@@ -66,6 +96,104 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     // so it doesn't run in the background and spam the database.
     _loadSource();
     _loadBoxDelay();
+    _loadSetup();
+    _loadFlowChoice();
+  }
+
+  Future<void> _loadFlowChoice() async {
+    try {
+      final saved = (await SharedPreferences.getInstance()).getBool(_flowKey);
+      if (saved != null && mounted) setState(() => _showFlowArrows = saved);
+    } catch (_) {}
+  }
+
+  Future<void> _setShowFlowArrows(bool on) async {
+    setState(() => _showFlowArrows = on);
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_flowKey, on);
+    } catch (_) {}
+  }
+
+  /// Counterflow demo: the opposite direction counts as legal (or normal again). The backend does it on the next frame and keeps
+  /// what was learned; the status poll then shows the new state, and the picture carries the "TEST: FLOW REVERSED" label.
+  Future<void> _reverseFlow(bool on) async {
+    if (_flowBusy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _flowBusy = true);
+    try {
+      final answer = await _cameraApi.reverseFlow(on);
+      if (answer['ok'] != true) {
+        messenger.showSnackBar(SnackBar(content: Text('${answer['reason'] ?? 'The flow could not be changed.'}')));
+      }
+      await _pollCamera();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('The flow could not be changed: ${e.toString().replaceFirst('Exception: ', '')}')));
+    } finally {
+      if (mounted) setState(() => _flowBusy = false);
+    }
+  }
+
+  /// Forget the learned flow and learn it again from the traffic (e.g. the camera was moved).
+  Future<void> _relearnFlow() async {
+    if (_flowBusy) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _flowBusy = true);
+    try {
+      final answer = await _cameraApi.relearnFlow();
+      messenger.showSnackBar(SnackBar(
+        content: Text(answer['ok'] == true ? 'Learning the traffic flow again. The arrows come back as traffic passes.' : '${answer['reason'] ?? 'Could not start again.'}'),
+      ));
+      await _pollCamera();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not start again: ${e.toString().replaceFirst('Exception: ', '')}')));
+    } finally {
+      if (mounted) setState(() => _flowBusy = false);
+    }
+  }
+
+  /// How many violations the live monitor watches now (shown next to the camera name).
+  Future<void> _loadSetup() async {
+    try {
+      final setup = await _cameraApi.liveSetup();
+      if (mounted) setState(() => _violationsOn = (setup['active_violations'] as List?)?.length ?? 0);
+    } catch (_) {}
+  }
+
+  /// "Set up violations": freeze ONE picture of the camera, set the violations up on it (the Forensic Analyzer's own steps),
+  /// then apply. The backend restarts the live view with the new rules and [_onChannelClosed] reconnects, so the video goes on.
+  Future<void> _openSetup() async {
+    if (_preparingSetup || _uploading) return;
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _preparingSetup = true);
+    try {
+      if (!_playing) {
+        await _startMonitoring();
+        if (!mounted || !_playing) return;       // the reason is shown above the picture
+      }
+      Map<String, dynamic> shot = {'ok': false};
+      for (var i = 0; i < 20 && mounted; i++) {   // the first picture of a camera can take a few seconds
+        shot = await _cameraApi.captureReference();
+        if (shot['ok'] == true) break;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+      if (!mounted) return;
+      if (shot['ok'] != true) {
+        messenger.showSnackBar(SnackBar(content: Text('${shot['reason'] ?? 'No picture from the camera yet.'}')));
+        return;
+      }
+      final count = await Navigator.of(context).push<int>(
+        MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, shot: shot)),
+      );
+      if (!mounted) return;
+      if (count != null) {
+        messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches $count violation${count == 1 ? '' : 's'}.')));
+        _loadSetup();
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not set up violations: ${e.toString().replaceFirst('Exception: ', '')}')));
+    } finally {
+      if (mounted) setState(() => _preparingSetup = false);
+    }
   }
 
   Future<void> _loadBoxDelay() async {
@@ -217,32 +345,128 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     });
   }
 
-  /// Upload a video file and make it the live monitor source (stand-in for a real camera).
+  // ─── "Video file…" ─────────────────────────────────────────────────────────
+  // Upload a video file and make it the live monitor source (stand-in for a real camera). A card above the picture says where the
+  // upload is: how much went out, how fast, what the backend does after that, and at the end that the video is ready (or why not).
+
+  bool get _uploading => _upload?.active ?? false;
+
+  /// Why an upload failed, in words (a backend that does not answer gets its own sentence).
+  String _uploadReason(Object e) {
+    if (e is http.ClientException || e is TimeoutException) return 'The backend is not answering. Check that it is running, then try again.';
+    return '$e'.replaceFirst('Exception: ', '');
+  }
+
   Future<void> _uploadVideoSource() async {
+    if (_uploading) return;
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final file = await FilePicker.pickFile(type: FileType.video);
-      if (file == null || file.path == null) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Uploading video...')));
+      final picked = await widget.pickVideo();
+      if (picked == null || !mounted) return;
+      await _sendVideo(picked.path, picked.name);
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Could not open the file: ${_uploadReason(e)}')));
+    }
+  }
 
-      final request = http.MultipartRequest(
-          'POST', Uri.parse('${ApiConstants.baseUrl}/settings/video/upload'));
-      request.files.add(await http.MultipartFile.fromPath('file', file.path!));
-      final response = await request.send().timeout(const Duration(minutes: 5));
-      if (response.statusCode != 200) {
-        throw Exception('Upload failed (${response.statusCode})');
-      }
+  Future<void> _sendVideo(String path, String name) async {
+    _uploadFade?.cancel();
+    _uploadTicker?.cancel();
+    final cancel = Completer<void>();
+    final clock = Stopwatch()..start();
+    final waiting = Stopwatch();       // starts when the last byte is out
+    var lastShown = -1000;
+    var allSent = false;
+    _uploadPath = path;
+    setState(() {
+      _cancelUpload = cancel;
+      _upload = UploadStatus(name: name, stage: UploadStage.sending);
+    });
+    try {
+      final answer = await uploadLiveVideo(
+        path,
+        client: _client,
+        cancel: cancel.future,
+        onProgress: (sent, total) {
+          if (!mounted || allSent) return;
+          final now = clock.elapsedMilliseconds;
+          final finished = total > 0 && sent >= total;
+          if (!finished && now - lastShown < 120) return;      // a few updates a second are plenty
+          lastShown = now;
+          if (finished) {
+            allSent = true;
+            waiting.start();
+            setState(() => _upload = UploadStatus(name: name, stage: UploadStage.preparing, sent: total, total: total));
+            _uploadTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+              if (mounted && _upload?.stage == UploadStage.preparing) {
+                setState(() => _upload = UploadStatus(name: name, stage: UploadStage.preparing, sent: total, total: total, waited: waiting.elapsed));
+              }
+            });
+            return;
+          }
+          final seconds = (now / 1000).clamp(0.2, double.infinity);
+          setState(() => _upload = UploadStatus(name: name, stage: UploadStage.sending, sent: sent, total: total, bytesPerSecond: sent / seconds));
+        },
+      );
+      _uploadTicker?.cancel();
       if (!mounted) return;
-      setState(() => _sourceName = file.name);
+      final wasPlaying = _isPlaying;
+      setState(() {
+        _sourceName = name;
+        _upload = UploadStatus(name: name, stage: UploadStage.done, detail: _describeVideo(answer['video']));
+      });
       // Reconnect so the feed picks up the new source.
-      if (_isPlaying) {
+      if (wasPlaying) {
         _stopMonitoring();
         _startMonitoring();
       }
-      messenger.showSnackBar(SnackBar(content: Text('Source set to ${file.name}')));
+      _uploadFade = Timer(const Duration(seconds: 25), () {
+        if (mounted && _upload?.stage == UploadStage.done) setState(() => _upload = null);
+      });
+    } on UploadCancelled {
+      _uploadTicker?.cancel();
+      if (!mounted) return;
+      setState(() => _upload = null);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload cancelled. The source did not change.')));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Video upload failed: $e')));
+      _uploadTicker?.cancel();
+      if (mounted) setState(() => _upload = UploadStatus(name: name, stage: UploadStage.failed, error: _uploadReason(e)));
+    } finally {
+      _cancelUpload = null;
     }
+  }
+
+  /// "1920x1080  ·  25 fps  ·  1 min 23 s  ·  312 MB" from the backend's description of the video ('' when it gave none).
+  String _describeVideo(Object? video) {
+    if (video is! Map) return '';
+    final width = (video['width'] as num?)?.toInt() ?? 0;
+    final height = (video['height'] as num?)?.toInt() ?? 0;
+    final fps = (video['fps'] as num?)?.toDouble() ?? 0;
+    final seconds = (video['duration'] as num?)?.round() ?? 0;
+    final size = (video['size_mb'] as num?)?.toDouble() ?? 0;
+    return [
+      if (width > 0 && height > 0) '${width}x$height',
+      if (fps > 0) '${fps.toStringAsFixed(fps.truncateToDouble() == fps ? 0 : 1)} fps',
+      if (seconds > 0) formatSeconds(seconds),
+      if (size > 0) formatBytes(size * 1024 * 1024),
+    ].join('  ·  ');
+  }
+
+  void _stopUpload() {
+    final cancel = _cancelUpload;
+    if (cancel != null && !cancel.isCompleted && _upload?.stage == UploadStage.sending) cancel.complete();
+  }
+
+  void _retryUpload() {
+    final path = _uploadPath;
+    final name = _upload?.name;
+    if (path != null && name != null && !_uploading) _sendVideo(path, name);
+  }
+
+  void _dismissUpload() {
+    if (_uploading) return;
+    _uploadFade?.cancel();
+    setState(() => _upload = null);
   }
 
   Future<void> _toggleMock(bool value) async {
@@ -258,6 +482,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   @override
   void dispose() {
     _noPicture?.cancel();
+    _uploadTicker?.cancel();
+    _uploadFade?.cancel();
     _poller.dispose();
     _channel?.sink.close();
     super.dispose();
@@ -274,6 +500,16 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     final stage = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _sourceBar(),
       const SizedBox(height: Fx.s16),
+      if (_upload != null) ...[
+        UploadStatusCard(
+          status: _upload!,
+          playing: _playing,
+          onCancel: _stopUpload,
+          onRetry: _retryUpload,
+          onDismiss: _dismissUpload,
+        ),
+        const SizedBox(height: Fx.s12),
+      ],
       if (_problem != null) ...[
         FxBanner(message: _problem!, action: TextButton(onPressed: _retry, child: const Text('Try again'))),
         const SizedBox(height: Fx.s12),
@@ -328,6 +564,17 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       Expanded(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_sourceName, overflow: TextOverflow.ellipsis, style: Fx.heading(context).copyWith(fontSize: 18)),
+          if (_violationsOn != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: StatusPill(
+                key: const ValueKey('violations-on-chip'),
+                label: _violationsOn == 0 ? 'No violations set up yet' : 'Watching $_violationsOn violation${_violationsOn == 1 ? '' : 's'}',
+                color: _violationsOn == 0 ? Fx.warning : Fx.success,
+                icon: _violationsOn == 0 ? Icons.rule : Icons.fact_check_outlined,
+                dense: true,
+              ),
+            ),
           if (_camera != null && _playing) CameraStatusChip(status: _camera!),
           if (_camera?['road'] is Map && _playing)
             RoadLearningChip(
@@ -339,6 +586,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       ),
       const SizedBox(width: Fx.s12),
       if (_playing) ...[
+        _setupButton(),
+        const SizedBox(width: Fx.s8),
         _roadDetecting
             ? FilledButton.tonalIcon(
                 key: const ValueKey('road-detect-toggle'),
@@ -371,6 +620,22 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       ),
       _moreMenu(),
     ]);
+  }
+
+  /// "Set up violations": works while monitoring, and from the paused screen too (it starts the camera first).
+  Widget _setupButton({bool filled = true}) {
+    final onPressed = (_roadDetecting || _preparingSetup || _uploading) ? null : _openSetup;
+    final icon = _preparingSetup ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.tune);
+    const label = Text('Set up violations');
+    return filled
+        ? FilledButton.tonalIcon(key: const ValueKey('live-setup-button'), onPressed: onPressed, icon: icon, label: label)
+        : OutlinedButton.icon(
+            key: const ValueKey('live-setup-button'),
+            onPressed: onPressed,
+            icon: icon,
+            label: label,
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
+          );
   }
 
   // ─── "Detect road" ─────────────────────────────────────────────────────────
@@ -411,10 +676,25 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     _pollCamera();
   }
 
+  /// The traffic flow controls over the live picture (bottom-left). Null while no rule uses the flow (the backend then reports none).
+  Widget? _flowControls() {
+    final flow = _camera?['flow'];
+    if (flow is! Map) return null;
+    return FlowControls(
+      flow: flow,
+      showArrows: _showFlowArrows,
+      busy: _flowBusy,
+      onShowArrows: _setShowFlowArrows,
+      onReverse: _reverseFlow,
+      onRelearn: _relearnFlow,
+    );
+  }
+
   /// The live video, full size, or - while the road is being detected - a small window in the top-right corner over the walkthrough.
   Widget _videoArea() {
     return LayoutBuilder(builder: (context, box) {
       final detecting = _roadDetecting;
+      final flowControls = detecting ? null : _flowControls();
       return Stack(children: [
         Positioned.fill(
           child: detecting
@@ -441,10 +721,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(detecting ? Fx.radiusSm : 0),
-              child: VideoFeedWidget(stream: _broadcastStream!, boxDelayMs: _boxDelayMs),
+              child: VideoFeedWidget(stream: _broadcastStream!, boxDelayMs: _boxDelayMs, showFlow: _showFlowArrows),
             ),
           ),
         ),
+        if (flowControls != null) Positioned(left: Fx.s12, bottom: Fx.s12, child: flowControls),
       ]);
     });
   }
@@ -457,7 +738,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         MenuItemButton(leadingIcon: const Icon(Icons.upload_file), onPressed: _uploadVideoSource, child: const Text('Video file…')),
       ],
       builder: (context, controller, _) => OutlinedButton.icon(
-        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+        onPressed: _uploading ? null : () => controller.isOpen ? controller.close() : controller.open(),   // not while a file is going up
         icon: const Icon(Icons.swap_horiz),
         label: const Text('Change source'),
       ),
@@ -495,12 +776,16 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         icon: Icons.videocam_off_outlined,
         title: 'Monitoring is off',
         message: 'Source: $_sourceName\nPress Start to watch the live feed and catch violations.',
-        action: FilledButton.icon(
-          onPressed: _startMonitoring,
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('Start monitoring'),
-          style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
-        ),
+        action: Column(mainAxisSize: MainAxisSize.min, children: [
+          FilledButton.icon(
+            onPressed: _uploading ? null : _startMonitoring,       // the new video is not the source yet
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Start monitoring'),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
+          ),
+          const SizedBox(height: Fx.s12),
+          _setupButton(filled: false),
+        ]),
       ),
     );
   }

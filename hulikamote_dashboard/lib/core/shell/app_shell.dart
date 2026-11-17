@@ -68,6 +68,7 @@ class _AppShellState extends State<AppShell> {
     _NavItem(icon: Icons.school_outlined, label: 'Visualizer', path: '/visualizer', opensOnSelect: _OpenKind.visualizer),
     _NavItem(icon: Icons.photo_library_outlined, label: 'Datasets', path: '/datasets'),
     _NavItem(icon: Icons.space_dashboard_outlined, label: 'Overview', path: '/overview', officer: true, first: true),
+    _NavItem(icon: Icons.label_outline, label: 'Labeller', path: '/labeller'),
   ];
 
   Future<void> _openExternal(_OpenKind kind) async {
