@@ -955,6 +955,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
           draft: widget.draft,
           violationKey: key,
           onChanged: () => setState(() {}),
+          api: widget.api,
         ),
       ],
     );

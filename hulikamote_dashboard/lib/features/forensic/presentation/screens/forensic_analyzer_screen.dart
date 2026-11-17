@@ -5,6 +5,7 @@ import '../../data/forensic_media.dart';
 import '../../data/harvest_labeling.dart';
 import '../../domain/analysis_draft.dart';
 import '../../domain/analysis_runner.dart';
+import '../../domain/analysis_setup.dart';
 import '../../domain/forensic_models.dart';
 import '../../domain/review_controller.dart';
 import '../widgets/analysis_wizard.dart';
@@ -294,6 +295,10 @@ class _ForensicAnalyzerScreenState extends State<ForensicAnalyzerScreen> {
             onNewAnalysis: () => _closeRun(toTab: 0),
             onSendToLive: (run.videoUrl ?? run.controller.resultVideo) == null ? null : () => _sendToLive(run.taskId),
             harvest: _labeling,
+            loadSetup: () async {
+              final cfg = await _api.runConfig(run.taskId);
+              return cfg.isEmpty ? null : AnalysisSetup.fromJson(cfg, taskId: run.taskId);
+            },
           ),
         ),
       ),

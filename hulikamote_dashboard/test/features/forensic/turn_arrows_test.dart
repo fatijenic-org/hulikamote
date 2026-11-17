@@ -81,7 +81,7 @@ void main() {
     expect(zone['vector'], isNotNull);
   });
 
-  testWidgets('the tricycle rule shows no vehicle-type list; the truck ban still does', (tester) async {
+  testWidgets('the tricycle ban and the truck ban show no vehicle-type list; the sidewalk rule does', (tester) async {
     Future<void> show(String rule) async {
       final d = AnalysisDraft()..toggle(rule);
       await tester.pumpWidget(MaterialApp(
@@ -92,6 +92,8 @@ void main() {
     await show('tricycle_on_highway');
     expect(find.text('Vehicle types NOT allowed here'), findsNothing);
     await show('truck_ban');
+    expect(find.text('Vehicle types NOT allowed here'), findsNothing);
+    await show('sidewalk_driving');
     expect(find.text('Vehicle types NOT allowed here'), findsOneWidget);
   });
 }

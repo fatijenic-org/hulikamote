@@ -205,6 +205,17 @@ class ViolationCatalog {
           '(not the whole road). Needs moving traffic in that lane to tell it from a queue.',
     ),
     ViolationInfo(
+      key: 'overtaking_on_right',
+      label: 'Overtaking on the right',
+      blurb: 'Passes a moving vehicle on its right side (RA 4136 Sec. 39: pass on the left).',
+      group: ViolationGroup.movement,
+      icon: Icons.compare_arrows,
+      needsZone: true,
+      zoneHint:
+          'A zone is optional: with none drawn the whole picture is watched. Do NOT use it on a one-way road with two or more lanes '
+          '(passing on the right is legal there). A vehicle that passes one turning left is not flagged.',
+    ),
+    ViolationInfo(
       key: 'red_light',
       label: 'Red light',
       blurb: 'Crosses the stop line while the light is red.',
@@ -256,6 +267,13 @@ class ViolationCatalog {
       blurb: 'People on the roof of, or hanging off, a moving bus, jeepney or truck (RA 4136).',
       group: ViolationGroup.vehicle,
       icon: Icons.directions_bus_filled,
+    ),
+    ViolationInfo(
+      key: 'kuliglig_passenger',
+      label: 'Passengers on a kuliglig',
+      blurb: 'A moving kuliglig (hand tractor with a trailer) carries people other than its driver. Needs a vehicle model that knows the kuliglig class.',
+      group: ViolationGroup.vehicle,
+      icon: Icons.agriculture,
     ),
     ViolationInfo(
       key: 'no_helmet',

@@ -32,13 +32,13 @@ void main() {
     expect(draft.config('illegal_turn')['banned_turns'], ['right']);
   });
 
-  testWidgets('the vehicle-type picker of a truck ban is unchanged', (tester) async {
+  testWidgets('a truck ban has no vehicle-type picker (it bans trucks), a sidewalk rule still has one', (tester) async {
     final draft = AnalysisDraft();
     await pumpParams(tester, draft, 'truck_ban');
-    expect(find.text('Truck'), findsOneWidget);
+    expect(find.text('Truck'), findsNothing);
     expect(find.text('Left'), findsNothing); // the turn chips belong to illegal turn only
-    await tester.tap(find.text('Bus'));
-    await tester.pump();
-    expect(draft.config('truck_ban')['banned_classes'], ['truck', 'bus']);
+    expect(draft.config('truck_ban')['banned_classes'], ['truck']); // what the backend gets is still the trucks
+    await pumpParams(tester, draft, 'sidewalk_driving');
+    expect(find.text('Truck'), findsOneWidget);
   });
 }

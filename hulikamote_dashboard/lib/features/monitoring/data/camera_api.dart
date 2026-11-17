@@ -123,9 +123,10 @@ class CameraApi {
     return res.statusCode == 200 ? res.bodyBytes : null;
   }
 
-  /// Use what was found. {ok, zones, switched_on} or {ok: false, reason}.
-  Future<Map<String, dynamic>> applyRoadDetect() async =>
-      _json(await _client.post(_uri('/settings/video/road/detect/apply')));
+  /// Use what was found. {ok, zones, switched_on} or {ok: false, reason}. With [counterflow] the road sides that have a direction also
+  /// become Counterflow zones (traffic against the arrow is flagged).
+  Future<Map<String, dynamic>> applyRoadDetect({bool counterflow = false}) async =>
+      _json(await _client.post(_uri('/settings/video/road/detect/apply', counterflow ? {'counterflow': 'true'} : null)));
 
   /// The operator's corrections to the draft (areas in the frozen picture's pixels). Apply then saves these.
   Future<Map<String, dynamic>> correctRoadDetect(List<RoadArea> areas) async => _json(await _client.post(
@@ -135,6 +136,26 @@ class CameraApi {
   ));
 
   Future<void> discardRoadDetect() async => _json(await _client.post(_uri('/settings/video/road/detect/discard')));
+
+  // ── "Set up violations": freeze one picture of the running camera, then set the violations up on it ──
+
+  /// Freezes the newest picture. {ok: true, version, width, height, fps} or {ok: false, reason} (no picture yet).
+  Future<Map<String, dynamic>> captureReference() async => _json(await _client.post(_uri('/settings/video/reference')));
+
+  /// Where the frozen picture is served; [version] keeps the image cache from showing an older one.
+  String referenceFrameUrl(int version) => '$baseUrl/settings/video/reference/frame?v=$version';
+
+  /// The violations and settings the Live Monitor uses now, in the wizard's own shape ({} when none were set up).
+  Future<Map<String, dynamic>> liveSetup() async => _json(await _client.get(_uri('/settings/live/setup')));
+
+  // ── Traffic flow: Counterflow demo ──
+
+  /// Demo: on = the opposite of the legal direction counts as legal, so ordinary traffic is flagged. {ok, reversed} or {ok: false, reason}.
+  Future<Map<String, dynamic>> reverseFlow(bool on) async =>
+      _json(await _client.post(_uri('/settings/live/flow/reverse', {'on': '$on'})));
+
+  /// Forget the learned traffic flow and learn it again.
+  Future<Map<String, dynamic>> relearnFlow() async => _json(await _client.post(_uri('/settings/live/flow/relearn')));
 
   /// state: live | connecting | offline | file | idle ...
   Future<Map<String, dynamic>> status() async => _json(await _client.get(_uri('/settings/video/status')));

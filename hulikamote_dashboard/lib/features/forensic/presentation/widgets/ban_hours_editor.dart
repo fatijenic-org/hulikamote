@@ -38,8 +38,7 @@ class BanHoursEditor extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               on
-                  ? 'Trucks are flagged only inside these hours. The time comes from the video: its own clock, its file '
-                      'information, or the start time you type in Settings.'
+                  ? 'Trucks are flagged only inside these hours. The time it goes by is shown below.'
                   : 'Off: the ban holds all day. Turn on to set the hours from the city ordinance.',
               style: Fx.caption(context),
             ),

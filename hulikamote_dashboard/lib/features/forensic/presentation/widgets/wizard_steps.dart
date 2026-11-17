@@ -7,8 +7,8 @@ import '../../domain/analysis_runner.dart';
 import '../../domain/violation_catalog.dart';
 import '../../../trimmer/presentation/widgets/trim_player.dart';
 import 'fx.dart';
+import 'scene_overlay_dialog.dart';
 import 'solid_line_editor.dart';
-import 'video_time_card.dart';
 import 'video_trim_panel.dart';
 import 'violation_params.dart';
 import 'crosswalk_editor.dart';
@@ -132,8 +132,10 @@ class ViolationsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final all = ViolationCatalog.selectable;
     final n = draft.selection.length;
-    return ListView(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // stays in view while the list scrolls
         Row(
           children: [
             Text('$n of ${all.length} selected', style: Fx.heading(context)),
@@ -152,25 +154,39 @@ class ViolationsStep extends StatelessWidget {
           ],
         ),
         const SizedBox(height: Fx.s8),
-        for (final g in ViolationGroup.values) ...[
-          SectionLabel(g.title),
-          Wrap(
-            spacing: Fx.s12,
-            runSpacing: Fx.s12,
-            children: [
-              for (final v in ViolationCatalog.inGroup(g))
-                _PickCard(
-                  info: v,
-                  draft: draft,
-                  modelMissing:
-                      v.needsModel != null &&
-                      models.loaded &&
-                      !models.ready(v.needsModel!),
-                ),
-            ],
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, box) {
+              // Equal cards that fill the width: every row reads the same way, and nothing is left empty on the right.
+              final cols = (box.maxWidth / 264).floor().clamp(1, 6);
+              final width = ((box.maxWidth - Fx.s12 * (cols - 1)) / cols).floorToDouble();
+              return ListView(
+                children: [
+                  for (final g in ViolationGroup.values) ...[
+                    SectionLabel(g.title),
+                    Wrap(
+                      spacing: Fx.s12,
+                      runSpacing: Fx.s12,
+                      children: [
+                        for (final v in ViolationCatalog.inGroup(g))
+                          _PickCard(
+                            info: v,
+                            draft: draft,
+                            width: width,
+                            modelMissing:
+                                v.needsModel != null &&
+                                models.loaded &&
+                                !models.ready(v.needsModel!),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: Fx.s16),
+                  ],
+                ],
+              );
+            },
           ),
-          const SizedBox(height: Fx.s24),
-        ],
+        ),
       ],
     );
   }
@@ -181,17 +197,23 @@ class _PickCard extends StatelessWidget {
     required this.info,
     required this.draft,
     required this.modelMissing,
+    this.width = 300,
   });
 
   final ViolationInfo info;
   final AnalysisDraft draft;
   final bool modelMissing;
+  final double width;
+
+  /// Every card has this height, so the grid is even: name, two lines of what it means, then what it needs.
+  static const double height = 118;
 
   @override
   Widget build(BuildContext context) {
     final on = draft.isSelected(info.key);
     return SizedBox(
-      width: 300,
+      width: width,
+      height: height,
       child: FxCard(
         selected: on,
         padding: const EdgeInsets.all(Fx.s12),
@@ -210,7 +232,13 @@ class _PickCard extends StatelessWidget {
                   child: Icon(info.icon, size: 18, color: info.color),
                 ),
                 const SizedBox(width: Fx.s12),
-                Expanded(child: Text(info.label, style: Fx.heading(context))),
+                Expanded(
+                  child: Tooltip(
+                    message: info.label,
+                    waitDuration: const Duration(milliseconds: 700),
+                    child: Text(info.label, style: Fx.heading(context), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
                 Icon(
                   on ? Icons.check_circle : Icons.radio_button_unchecked,
                   size: 20,
@@ -218,12 +246,19 @@ class _PickCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: Fx.s8),
-            Text(info.blurb, style: Fx.caption(context)),
-            const SizedBox(height: Fx.s8),
-            Wrap(
+            const SizedBox(height: 6),
+            // the whole text is in the tooltip when two lines are not enough
+            Expanded(
+              child: Tooltip(
+                message: info.blurb,
+                waitDuration: const Duration(milliseconds: 700),
+                child: Text(info.blurb, style: Fx.caption(context), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
               spacing: 6,
-              runSpacing: 4,
               children: [
                 if (info.needsZone)
                   StatusPill(
@@ -253,6 +288,7 @@ class _PickCard extends StatelessWidget {
                     dense: true,
                   ),
               ],
+            ),
             ),
           ],
         ),
@@ -285,10 +321,24 @@ class RulesStep extends StatelessWidget {
     final keys = draft.selection;
     return LayoutBuilder(
       builder: (context, box) {
-        final rail = Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [for (final k in keys) _railItem(context, k)],
-        );
+        final overlays = api != null && draft.videoPath != null
+            ? Padding(
+                padding: const EdgeInsets.only(right: Fx.s12),
+                child: OutlinedButton.icon(
+                  key: const ValueKey('scene-overlays-button'),
+                  icon: const Icon(Icons.add_road, size: 18),
+                  label: Text(draft.sceneOverlays.isEmpty ? 'Road overlays' : 'Road overlays (${draft.sceneOverlays.length})'),
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => SceneOverlayDialog(
+                      draft: draft,
+                      api: api!,
+                      frame: draft.frameUrl == null ? null : media.frame(draft.frameUrl!),
+                    ),
+                  ),
+                ),
+              )
+            : null;
         final editor =
             current == 'overloading' || !ViolationCatalog.of(current).needsZone
             ? _parametersOnly(context)
@@ -333,11 +383,27 @@ class RulesStep extends StatelessWidget {
             ],
           );
         }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        // One violation at a time: pick it in the strip, set it up below. The picture gets the whole width.
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(width: 230, child: ListView(children: [rail])),
-            const SizedBox(width: Fx.s16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final k in keys)
+                      Padding(
+                        padding: const EdgeInsets.only(right: Fx.s8),
+                        child: SizedBox(width: 236, child: _railItem(context, k)),
+                      ),
+                    if (overlays != null) Center(child: overlays),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: Fx.s8),
             Expanded(
               child: _scrollsItself(current) ? editor : ListView(children: [editor]),
             ),
@@ -436,6 +502,7 @@ class RulesStep extends StatelessWidget {
             draft: draft,
             violationKey: current,
             onChanged: () {},
+            api: api,
           ),
           if (current != 'overloading')
             Row(
@@ -476,13 +543,10 @@ void _showFlow(AnalysisDraft d, bool on) {
 
 /// Step 4: pipeline options, grouped, with plain explanations and recommended defaults.
 class SettingsStep extends StatelessWidget {
-  const SettingsStep({super.key, required this.draft, required this.models, this.api});
+  const SettingsStep({super.key, required this.draft, required this.models});
 
   final AnalysisDraft draft;
   final ModelChoices models;
-
-  /// Lets the "Time of the video" card look for the time of the video (shown when the truck ban is selected).
-  final ForensicApi? api;
 
   PipelineSettings get s => draft.settings;
 
@@ -492,11 +556,7 @@ class SettingsStep extends StatelessWidget {
       listenable: draft,
       builder: (context, _) => ListView(
         children: [
-          if (api != null && draft.hasVideoPath && draft.selection.contains('truck_ban')) ...[
-            VideoTimeCard(draft: draft, api: api!),
-            const SizedBox(height: Fx.s16),
-          ],
-          _group(context, 'Detection', Icons.radar, [
+          _group(context, 'Detection', Icons.radar, open: true, summary: _detectionSummary(), [
             _row(
               context,
               'Vehicle detector',
@@ -517,7 +577,7 @@ class SettingsStep extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: Fx.s16),
-          _group(context, 'License plates', Icons.pin_outlined, [
+          _group(context, 'License plates', Icons.pin_outlined, summary: _plateSummary(), [
             _row(
               context,
               'Plate model',
@@ -568,7 +628,7 @@ class SettingsStep extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: Fx.s16),
-          _group(context, 'Review & storage', Icons.fact_check_outlined, [
+          _group(context, 'Review & storage', Icons.fact_check_outlined, summary: _reviewSummary(), [
             _slider(
               context,
               'Duplicate sensitivity',
@@ -640,35 +700,40 @@ class SettingsStep extends StatelessWidget {
   String _active(String type) =>
       models.active(type) == null ? '' : ' (${models.active(type)})';
 
+  static const _trackers = {'bytetrack': 'ByteTrack (fast)', 'deepsort': 'DeepSORT (accurate)'};
+  static const _methods = {'smart': 'Smart', 'direct_ocr': 'Direct OCR'};
+  static const _formats = {'ph_standard': 'Philippines (ABC 1234)', 'uk_standard': 'United Kingdom (AB12 CDE)', 'raw': 'Raw, no correction'};
+  static const _engines = {'easyocr': 'EasyOCR', 'paddleocr': 'PaddleOCR'};
+  static const _enhancers = {'realesrgan': 'Real-ESRGAN (best)', 'lanczos': 'Lanczos (fast)', 'lapsrn': 'LapSRN', 'none': 'None'};
+
+  /// What a folded group shows: its current choices, so nothing has to be opened just to read it.
+  String _detectionSummary() =>
+      '${s.primaryModel.isEmpty ? 'Active model${_active('vehicles')}' : s.primaryModel} · ${_trackers[s.tracker] ?? s.tracker}';
+
+  String _plateSummary() => [
+        s.plateModel.isEmpty ? 'Active model${_active('plate')}' : s.plateModel,
+        _methods[s.plateMethod] ?? s.plateMethod,
+        _formats[s.plateFormat] ?? s.plateFormat,
+        _engines[s.ocrEngine] ?? s.ocrEngine,
+        _enhancers[s.enhancement] ?? s.enhancement,
+      ].join(' · ');
+
+  String _reviewSummary() => [
+        'Duplicates ${s.flagSensitivity} of 7',
+        'a photo every ${s.evidenceGap} frame${s.evidenceGap == 1 ? '' : 's'}',
+        s.keepInputVideo ? 'video kept' : 'video deleted after',
+        s.blurPrivacy ? 'privacy blur on' : 'PRIVACY BLUR OFF',
+      ].join(' · ');
+
   Widget _group(
     BuildContext context,
     String title,
     IconData icon,
-    List<Widget> rows,
-  ) {
-    return FxCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(Fx.s16, Fx.s12, Fx.s16, Fx.s8),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: Fx.muted(context)),
-                const SizedBox(width: Fx.s8),
-                Text(title, style: Fx.heading(context)),
-              ],
-            ),
-          ),
-          for (var i = 0; i < rows.length; i++) ...[
-            Divider(height: 1, color: Fx.border(context)),
-            rows[i],
-          ],
-        ],
-      ),
-    );
-  }
+    List<Widget> rows, {
+    String summary = '',
+    bool open = false,
+  }) =>
+      _SettingsGroup(key: ValueKey('settings-group-$title'), title: title, icon: icon, rows: rows, summary: summary, initiallyOpen: open);
 
   Widget _row(BuildContext context, String title, String help, Widget control) {
     return Padding(
@@ -787,6 +852,66 @@ class SettingsStep extends StatelessWidget {
 }
 
 /// Step 5: a last look, the start button, and the live progress once it runs.
+/// One group of settings. Folded, it is a single line: its name and the current choices. A tap opens it.
+/// The defaults suit most videos, so only the first group starts open and the page fits one screen.
+class _SettingsGroup extends StatefulWidget {
+  const _SettingsGroup({super.key, required this.title, required this.icon, required this.rows, required this.summary, required this.initiallyOpen});
+
+  final String title;
+  final IconData icon;
+  final List<Widget> rows;
+  final String summary;
+  final bool initiallyOpen;
+
+  @override
+  State<_SettingsGroup> createState() => _SettingsGroupState();
+}
+
+class _SettingsGroupState extends State<_SettingsGroup> {
+  late bool _open = widget.initiallyOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return FxCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(Fx.s16, Fx.s12, Fx.s12, Fx.s12),
+              child: Row(
+                children: [
+                  Icon(widget.icon, size: 18, color: Fx.muted(context)),
+                  const SizedBox(width: Fx.s8),
+                  Text(widget.title, style: Fx.heading(context)),
+                  const SizedBox(width: Fx.s16),
+                  Expanded(
+                    child: _open
+                        ? const SizedBox.shrink()
+                        : Text(widget.summary, style: Fx.caption(context), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right),
+                  ),
+                  const SizedBox(width: Fx.s8),
+                  Tooltip(
+                    message: _open ? 'Fold' : 'Change',
+                    child: Icon(_open ? Icons.expand_less : Icons.expand_more, size: 20, color: Fx.muted(context)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_open)
+            for (var i = 0; i < widget.rows.length; i++) ...[
+              Divider(height: 1, color: Fx.border(context)),
+              widget.rows[i],
+            ],
+        ],
+      ),
+    );
+  }
+}
+
 class RunStep extends StatelessWidget {
   const RunStep({
     super.key,

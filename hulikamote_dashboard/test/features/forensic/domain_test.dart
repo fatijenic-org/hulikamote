@@ -331,10 +331,10 @@ void main() {
       expect(d.buildConfig(activePlateModel: 'p.onnx')['blur_privacy'], false);
     });
 
-    test('the wizard offers all 25 violations, each with the right kind of zone', () {
-      expect(ViolationCatalog.all.length, 25);
-      expect(ViolationCatalog.all.map((v) => v.key).toSet().length, 25);
-      expect(ViolationCatalog.selectable.length, 25);
+    test('the wizard offers all 27 violations, each with the right kind of zone', () {
+      expect(ViolationCatalog.all.length, 27); // 25 + overtaking on the right, kuliglig passenger
+      expect(ViolationCatalog.all.map((v) => v.key).toSet().length, 27);
+      expect(ViolationCatalog.selectable.length, 27);
       for (final key in [
         'illegal_u_turn', 'blocking_intersection', 'crossing_solid_line',
         'illegal_loading', 'truck_ban', 'tricycle_on_highway', 'sidewalk_driving', 'double_parking',

@@ -44,6 +44,11 @@ VideoClock found(DateTime start, {String source = 'screen', String label = 'read
 
 VideoClock notFound([String? daylight = 'day']) => VideoClock(source: 'estimate', note: 'No time was found in the video.', daylight: daylight);
 
+class _LiveDraft extends AnalysisDraft {
+  @override
+  bool get isLive => true;
+}
+
 AnalysisDraft draftWithVideo() {
   final d = AnalysisDraft()..chooseVideo(path: 'C:/videos/street.mp4', name: 'street.mp4');
   d.toggle('truck_ban', on: true);
@@ -146,7 +151,8 @@ void main() {
       expect(find.textContaining('Off: the ban holds all day'), findsOneWidget);
       expect(find.byKey(const ValueKey('ban-hours-from-0')), findsNothing);
       expect(d.config('truck_ban')['ban_windows'], isNull);
-      expect(find.text('Truck'), findsOneWidget); // the vehicle types are still there
+      expect(find.text('Truck'), findsNothing); // the truck ban bans trucks: no vehicle types to pick
+      expect(find.text('Vehicle types NOT allowed here'), findsNothing);
     });
 
     testWidgets('turning it on gives a first window, turning it off clears them', (tester) async {
@@ -349,6 +355,60 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text('The backend is not answering.'), findsOneWidget);
+    });
+  });
+
+  group('one place for the time (the truck ban card)', () {
+    Future<void> pumpRule(WidgetTester tester, AnalysisDraft d, {ForensicApi? api}) => tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => SingleChildScrollView(
+                child: ViolationParams(draft: d, violationKey: 'truck_ban', onChanged: () => setState(() {}), api: api),
+              ),
+            ),
+          ),
+        ));
+
+    testWidgets('the time shows right under the hours, only once hours are on', (tester) async {
+      final d = draftWithVideo();
+      final api = FakeClockApi((t, _) => found(DateTime(2026, 11, 5, 7, 42)));
+      await pumpRule(tester, d, api: api);
+      expect(find.byKey(const ValueKey('video-time-card')), findsNothing); // no hours: the ban holds all day, no time needed
+      await tester.tap(find.byKey(const ValueKey('ban-hours-switch')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('video-time-card')), findsOneWidget);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('7:42 AM'), findsOneWidget);
+      expect(find.byKey(const ValueKey('video-start-field')), findsNothing); // found by itself: nothing to type
+    });
+
+    testWidgets('"Change" opens the box to type a start time', (tester) async {
+      final d = draftWithVideo()..config('truck_ban')['ban_windows'] = _rush;
+      await pumpRule(tester, d, api: FakeClockApi((t, _) => found(DateTime(2026, 11, 5, 7, 42))));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('video-time-change')));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('video-start-field')), findsOneWidget);
+    });
+
+    testWidgets('live: it says the clock of this computer is used, and asks nothing', (tester) async {
+      final d = _LiveDraft()..config('truck_ban')['ban_windows'] = _rush;
+      await pumpRule(tester, d);
+      expect(find.byKey(const ValueKey('video-time-live')), findsOneWidget);
+      expect(find.textContaining("this computer's clock"), findsOneWidget);
+      expect(find.byKey(const ValueKey('video-start-field')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('video-time-change')));
+      await tester.pump();
+      await tester.enterText(find.byKey(const ValueKey('video-start-field')), '7:30');
+      expect(d.settings.videoStart, '7:30'); // the demo time goes to the Live Monitor with the setup
+    });
+
+    testWidgets('no backend and not live: nothing is shown', (tester) async {
+      final d = draftWithVideo()..config('truck_ban')['ban_windows'] = _rush;
+      await pumpRule(tester, d);
+      expect(find.byKey(const ValueKey('video-time-card')), findsNothing);
     });
   });
 

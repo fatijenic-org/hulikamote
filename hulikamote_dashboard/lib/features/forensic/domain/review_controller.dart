@@ -236,6 +236,13 @@ class ReviewController extends ChangeNotifier {
     _afterQueueChange();
   }
 
+  /// "Show everything": drops only the violation choice (status and search stay).
+  void clearViolationFilter() {
+    if (_violationFilter.isEmpty) return;
+    _violationFilter.clear();
+    _afterQueueChange();
+  }
+
   void clearFilters() {
     _filter = QueueFilter.all;
     _query = '';

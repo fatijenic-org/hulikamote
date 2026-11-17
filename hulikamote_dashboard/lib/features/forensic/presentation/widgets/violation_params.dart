@@ -1,20 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/forensic_api.dart';
 import '../../domain/analysis_draft.dart';
 import '../../domain/violation_catalog.dart';
 import 'ban_hours_editor.dart';
 import 'fx.dart';
+import 'video_time_card.dart';
 
 /// The numbers and choices of one violation that are not drawn: time limits, which vehicle
 /// types are allowed or banned, the rider limit, how the red light is known.
 /// Edits go straight into [draft]'s config map for that violation.
 class ViolationParams extends StatelessWidget {
-  const ViolationParams({super.key, required this.draft, required this.violationKey, required this.onChanged});
+  const ViolationParams({super.key, required this.draft, required this.violationKey, required this.onChanged, this.api});
 
   final AnalysisDraft draft;
   final String violationKey;
   final VoidCallback onChanged;
+
+  /// Lets the truck ban's time card read the time of the video (without it the card shows only in the Live Monitor).
+  final ForensicApi? api;
 
   Map<String, dynamic> get cfg => draft.config(violationKey);
 
@@ -42,10 +47,15 @@ class ViolationParams extends StatelessWidget {
             options: const ['left', 'right']),
       if (violationKey == 'double_parking')
         _slider(context, 'How long may a vehicle stand in the lane?', 'time_limit', 3, 120, suffix: 'seconds'),
-      if (violationKey == 'truck_ban' || violationKey == 'sidewalk_driving')   // the tricycle rule bans tricycles only: nothing to pick
+      if (violationKey == 'sidewalk_driving')   // the truck ban bans trucks and the tricycle rule tricycles only: nothing to pick
         _chips(context, 'Vehicle types NOT allowed here', 'banned_classes'),
-      // The truck ban only holds at certain hours in most cities (Zamboanga's are in its ordinance).
-      if (violationKey == 'truck_ban') BanHoursEditor(draft: draft, violationKey: violationKey, onChanged: onChanged),
+      // The truck ban only holds at certain hours in most cities (Zamboanga's are in its ordinance). With hours it needs the time
+      // of the video, which is read from the video by itself and shown right under them: the one place the time is dealt with.
+      if (violationKey == 'truck_ban')
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          BanHoursEditor(draft: draft, violationKey: violationKey, onChanged: onChanged),
+          if (((cfg['ban_windows'] as List?) ?? const []).isNotEmpty) VideoTimeCard(draft: draft, api: api),
+        ]),
       if (violationKey == 'disregarding_signs') ...[
         _slider(context, 'No-stopping limit (for “No stopping” zones)', 'time_limit', 1, 60, suffix: 'seconds'),
         _chips(context, 'Vehicle types banned (for “Vehicle type banned” zones)', 'banned_classes'),

@@ -412,7 +412,7 @@ class _AnalysisWizardState extends State<AnalysisWizard> {
         onPick: (k) => setState(() => _rulesKey = k),
         api: widget.api,
       ),
-      3 => SettingsStep(draft: draft, models: widget.models, api: widget.api),
+      3 => SettingsStep(draft: draft, models: widget.models),
       _ => RunStep(
         draft: draft,
         runner: widget.runner,

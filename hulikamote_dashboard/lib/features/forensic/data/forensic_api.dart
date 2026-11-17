@@ -268,6 +268,18 @@ class ForensicApi implements ReviewGateway {
     return Map<String, dynamic>.from(jsonDecode(r.body) as Map);
   }
 
+  /// A frame of the video with the road and traffic overlays painted on it and what the road finder reads from it outlined:
+  /// `{'image': base64 JPEG, 'found': {...counts}, 'width', 'height'}`.
+  Future<Map<String, dynamic>> scenePreview(String videoPath, double seconds, List<Map<String, dynamic>> overlays) async {
+    final r = await _client
+        .post(_u('/api/forensic/scene-preview'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'file_path': videoPath, 'seconds': seconds, 'overlays': overlays}))
+        .timeout(const Duration(seconds: 60));
+    if (r.statusCode != 200) _fail(r, 'Painting the road overlays');
+    return Map<String, dynamic>.from(jsonDecode(r.body) as Map);
+  }
+
   Future<FrameInfo> extractFrame(String videoPath) async {
     final req = http.MultipartRequest('POST', _u('/api/forensic/extract-frame'))
       ..files.add(await http.MultipartFile.fromPath('file', videoPath));

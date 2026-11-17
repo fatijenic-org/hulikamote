@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../domain/models/detection.dart';
+import 'road_arrow.dart';
 
 class VideoFeedWidget extends StatefulWidget {
   final Stream<dynamic>? stream;
@@ -16,7 +17,10 @@ class VideoFeedWidget extends StatefulWidget {
   /// relay, so without this the boxes run ahead of the vehicles. Boxes are shown this long after they arrive.
   final int boxDelayMs;
 
-  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.boxDelayMs = 0});
+  /// Draw the learned traffic-flow arrows. The "TEST: FLOW REVERSED" banner is drawn whatever this says.
+  final bool showFlow;
+
+  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.boxDelayMs = 0, this.showFlow = true});
 
   @override
   State<VideoFeedWidget> createState() => _VideoFeedWidgetState();
@@ -27,6 +31,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
   Uint8List? _frameBytes;
   List<Detection>? _detections;
   List<RoadZone> _roadZones = const [];
+  FlowInfo? _flow;
   int? _frameWidth;
   int? _frameHeight;
   final List<DateTime> _frameTimestamps = [];
@@ -107,9 +112,11 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
               if (widget.boxDelayMs <= 0 || frame.transport != 'hls') {   // a picture sent with the boxes needs no delay
                 _detections = frame.detections;
                 _roadZones = frame.roadZones;
+                _flow = frame.flow;
               } else {
                 final boxes = frame.detections;
                 final zones = frame.roadZones;
+                final flow = frame.flow;
                 late final Timer timer;
                 timer = Timer(Duration(milliseconds: widget.boxDelayMs), () {
                   _waiting.remove(timer);
@@ -117,6 +124,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                     setState(() {
                       _detections = boxes;
                       _roadZones = zones;
+                      _flow = flow;
                     });
                   }
                 });
@@ -250,6 +258,8 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                         streamWidth: _frameWidth?.toDouble() ?? 1280.0,
                         streamHeight: _frameHeight?.toDouble() ?? 720.0,
                         roadZones: _roadZones,
+                        flow: _flow,
+                        showFlow: widget.showFlow,
                       ),
                       size: Size.infinite,
                     ),
@@ -303,36 +313,98 @@ class BoundingBoxPainter extends CustomPainter {
   final double streamWidth;
   final double streamHeight;
   final List<RoadZone> roadZones;
+  final FlowInfo? flow;
+  final bool showFlow;
 
-  BoundingBoxPainter(this.detections, {this.streamWidth = 1280.0, this.streamHeight = 720.0, this.roadZones = const []});
+  BoundingBoxPainter(
+    this.detections, {
+    this.streamWidth = 1280.0,
+    this.streamHeight = 720.0,
+    this.roadZones = const [],
+    this.flow,
+    this.showFlow = true,
+  });
 
-  /// The zones the system learned from the road paint, under the boxes: a soft fill, a dashed outline and a label.
-  /// Lines are amber and say "best effort": the finder is weaker there.
+  /// The learned traffic flow: an arrow per block (teal; amber while the demo reversal is on, like the saved photos), with a dark
+  /// edge so it shows on any road. Hidden by the Live Monitor's "Flow arrows" switch.
+  void _paintFlow(Canvas canvas, double scaleX, double scaleY) {
+    final info = flow;
+    if (info == null || !showFlow || info.arrows.isEmpty) return;
+    final ink = info.reversed ? const Color(0xFFFF8C00) : const Color(0xFF00BEAA);
+    final shadow = Paint()
+      ..color = const Color(0xFF1E1E1E).withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round;
+    final line = Paint()
+      ..color = ink.withValues(alpha: 0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round;
+    for (final a in info.arrows) {
+      final tail = Offset(a.x1 * scaleX, a.y1 * scaleY);
+      final head = Offset(a.x2 * scaleX, a.y2 * scaleY);
+      final path = Path()..moveTo(tail.dx, tail.dy)..lineTo(head.dx, head.dy);
+      final d = head - tail;
+      if (d.distance > 0) {
+        final wing = d.distance * 0.35;
+        final angle = math.atan2(d.dy, d.dx);
+        for (final side in const [math.pi / 6, -math.pi / 6]) {
+          path
+            ..moveTo(head.dx, head.dy)
+            ..lineTo(head.dx - wing * math.cos(angle - side), head.dy - wing * math.sin(angle - side));
+        }
+      }
+      canvas.drawPath(path, shadow);
+      canvas.drawPath(path, line);
+    }
+  }
+
+  /// While the demo reversal is on: tickets made now are tests. This label is always drawn, whatever the arrows switch says.
+  void _paintReversedBanner(Canvas canvas) {
+    final text = TextPainter(
+      text: const TextSpan(text: 'TEST: FLOW REVERSED', style: TextStyle(color: Color(0xFF141414), fontSize: 13, fontWeight: FontWeight.bold)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final box = RRect.fromRectAndRadius(Rect.fromLTWH(10, 10, text.width + 20, text.height + 12), const Radius.circular(4));
+    canvas.drawRRect(box, Paint()..color = const Color(0xFFFF8C00));
+    text.paint(canvas, const Offset(20, 16));
+  }
+
+  /// The zones the system learned from the road paint, and the ones the operator set up, under the boxes: a soft fill, a dashed
+  /// outline and a label. Learned lines are amber and say "best effort": the finder is weaker there. Set-up zones are orange.
   void _paintRoadZones(Canvas canvas, double scaleX, double scaleY) {
     for (final zone in roadZones) {
-      if (zone.polygon.length < 3) continue;
+      final hasArea = zone.polygon.length >= 3;
+      if (!hasArea && zone.line.length < 2) continue;          // a line alone (a drawn solid line) is shown too
       final pts = [for (final p in zone.polygon) Offset(p[0] * scaleX, p[1] * scaleY)];
+      final linePts = [for (final p in zone.line) Offset(p[0] * scaleX, p[1] * scaleY)];
       final colour = switch (zone.violation) {
-        'road' => Colors.lightBlueAccent,
+        'road' => flowColour(zone.flow),
         'sidewalk' => Colors.lightGreenAccent,
-        _ => zone.hint ? Colors.white70 : (zone.bestEffort ? Colors.amberAccent : Colors.cyanAccent),
+        _ => zone.drawn ? Colors.orangeAccent : (zone.hint ? Colors.white70 : (zone.bestEffort ? Colors.amberAccent : Colors.cyanAccent)),
       };
-      final path = Path()..addPolygon(pts, true);
-      canvas.drawPath(path, Paint()..color = colour.withValues(alpha: zone.hint ? 0.07 : 0.16)..style = PaintingStyle.fill);
       final edge = Paint()
         ..color = colour
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-      for (var i = 0; i < pts.length; i++) {
-        _dashed(canvas, pts[i], pts[(i + 1) % pts.length], edge);
+      if (hasArea) {
+        final path = Path()..addPolygon(pts, true);
+        canvas.drawPath(path, Paint()..color = colour.withValues(alpha: zone.hint ? 0.07 : 0.16)..style = PaintingStyle.fill);
+        for (var i = 0; i < pts.length; i++) {
+          _dashed(canvas, pts[i], pts[(i + 1) % pts.length], edge);
+        }
       }
-      if (zone.line.length == 2) {
-        canvas.drawLine(
-          Offset(zone.line[0][0] * scaleX, zone.line[0][1] * scaleY),
-          Offset(zone.line[1][0] * scaleX, zone.line[1][1] * scaleY),
-          edge..strokeWidth = 3.0,
-        );
+      if (linePts.length >= 2) {
+        edge.strokeWidth = 3.0;
+        for (var i = 0; i < linePts.length - 1; i++) {
+          canvas.drawLine(linePts[i], linePts[i + 1], edge);
+        }
       }
+      if (zone.flow != null && zone.arrow.length == 2) {          // the way the traffic goes on this side of the road
+        paintRoadArrow(canvas, Offset(zone.arrow[0][0] * scaleX, zone.arrow[0][1] * scaleY), Offset(zone.arrow[1][0] * scaleX, zone.arrow[1][1] * scaleY), colour, width: 5, head: 20);
+      }
+      final labelPts = hasArea ? pts : linePts;
       final text = TextPainter(
         text: TextSpan(
           text: ' ${zone.label} ',
@@ -340,8 +412,8 @@ class BoundingBoxPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      final top = pts.map((p) => p.dy).reduce(math.min);
-      final left = pts.map((p) => p.dx).reduce(math.min);
+      final top = labelPts.map((p) => p.dy).reduce(math.min);
+      final left = labelPts.map((p) => p.dx).reduce(math.min);
       text.paint(canvas, Offset(left, math.max(0, top - text.height)));
     }
   }
@@ -360,6 +432,7 @@ class BoundingBoxPainter extends CustomPainter {
     final double scaleX = size.width / streamWidth;
     final double scaleY = size.height / streamHeight;
     _paintRoadZones(canvas, scaleX, scaleY);
+    _paintFlow(canvas, scaleX, scaleY);
 
     for (final det in detections) {
       if (det.bbox.length != 4) continue;
@@ -432,6 +505,7 @@ class BoundingBoxPainter extends CustomPainter {
         markText.paint(canvas, Offset(markRect.left, math.max(0, markRect.top - markText.height)));
       }
     }
+    if (flow?.reversed == true) _paintReversedBanner(canvas);        // last, on top of everything
   }
 
   @override
