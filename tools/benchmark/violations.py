@@ -124,6 +124,13 @@ NEEDS: list[Need] = [
          "Draw the one travel lane next to the kerb, not the whole road.",
          "Needs moving traffic inside the zone; the direction of that traffic decides what \"beside\" means. "
          "Experimental until it has run on real footage."),
+    Need("overtaking_on_right", "Overtaking on the right", "zone rule",
+         "A vehicle comes from behind another moving vehicle, passes it on its right side and ends in front of it.",
+         "A pass on the left; two lanes of traffic moving at the same speed; a pass of a vehicle that turns left or stands still.",
+         "Elevated front or rear view of a two-way road, both vehicles visible during the whole pass.",
+         "Draw nothing (whole picture), or draw the road section. Do not use it on a one-way road with two or more lanes.",
+         "RA 4136 Sec. 39 (pass on the left) and Sec. 40 exceptions: the lane count cannot be seen, so the operator states it by "
+         "choosing where the rule runs. Never run on real footage."),
     Need("overloading", "Overloading (too many riders)", "frame check",
          "A motorcycle carries more riders than allowed (default 2) in most looks.",
          "Motorcycles with one or two riders; pedestrians walking past a motorcycle.",
@@ -137,6 +144,13 @@ NEEDS: list[Need] = [
          "Set how many people are tolerated (default 0).",
          "A straight top-down view cannot tell the bed from the cab. Pickups are usually detected as 'truck'. "
          "Legal basis: RA 4136 Sections 32 and 51 (the fine amounts are unconfirmed)."),
+    Need("kuliglig_passenger", "Passengers on a kuliglig", "frame check",
+         "A moving kuliglig carries one or more people besides its driver.",
+         "A kuliglig with only its driver; a person walking beside it; a parked kuliglig being loaded.",
+         "Front, rear or side view at a moderate height; every person on it visible.",
+         "Set how many passengers are tolerated (default 0).",
+         "Needs a vehicle model with a 'kuliglig' class (the current models have none), so it cannot fire yet. "
+         "Legal basis TO CONFIRM (kuligligs are farm equipment; LGU ordinances differ)."),
     Need("riding_outside_vehicle", "Riding on the roof or hanging off a vehicle", "frame check",
          "People on the roof of, or hanging off, a moving bus, jeepney or truck.",
          "People boarding a stopped bus; pedestrians beside a moving one.",

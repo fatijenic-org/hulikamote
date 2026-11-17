@@ -33,7 +33,7 @@ def clip(events, enabled=("counterflow", "no_plate"), clean=False, cid="c1"):
 # --------------------------------------------------------------------------- the 25 violations
 
 def test_the_twenty_five_keys_match_the_backend():
-    assert len(KEYS) == 25 and len(set(KEYS)) == 25
+    assert len(KEYS) == 27 and len(set(KEYS)) == 27          # 25 + overtaking_on_right and kuliglig_passenger (2026-11-15)
     backend = ROOT / "hulikamote_backend"
     sys.path.insert(0, str(backend))
     try:
