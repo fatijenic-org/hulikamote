@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS items (
     created REAL NOT NULL,
     decided REAL,
     accepted REAL,
-    dataset_name TEXT
+    dataset_name TEXT,
+    src_path TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_items_model_state ON items(model, state);
 
@@ -122,6 +123,7 @@ class Item:
     decided: float | None = None
     accepted: float | None = None
     dataset_name: str | None = None
+    src_path: str | None = None       # a picture that stays where it is (the Labeller's folder items); None = copied into the inbox
 
     def to_dict(self) -> dict:
         return {k: getattr(self, k) for k in self.__dataclass_fields__}
@@ -170,6 +172,14 @@ def clean_boxes(boxes: list, n_classes: int) -> list:
     return out
 
 
+INSERT_ITEM = """INSERT OR IGNORE INTO items (id, model, state, source, reason, boxes, suggested, group_id,
+                   split_hint, task_id, ticket_uid, violation, decision, priority, width, height, created, src_path)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
+
+# The Labeller's folder items are kept out of every "all analyses" view, so the normal Harvest tab and "Add to dataset" never touch them.
+FOLDER_SOURCE = "folder"
+
+
 class Store:
     def __init__(self, paths: Paths | None = None):
         self.paths = paths or Paths()
@@ -181,6 +191,8 @@ class Store:
             readme.write_text(README, encoding="utf-8")
         with self._connect() as con:
             con.executescript(SCHEMA)
+            if "src_path" not in {r["name"] for r in con.execute("PRAGMA table_info(items)")}:
+                con.execute("ALTER TABLE items ADD COLUMN src_path TEXT")        # databases made before the Labeller
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.db_path, timeout=10)
@@ -204,13 +216,33 @@ class Store:
         item.created = item.created or time.time()
         with closing(self._connect()) as con, con:
             cur = con.execute(
-                """INSERT OR IGNORE INTO items (id, model, state, source, reason, boxes, suggested, group_id,
-                   split_hint, task_id, ticket_uid, violation, decision, priority, width, height, created)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (item.id, item.model, item.state, item.source, item.reason, json.dumps(item.boxes),
-                 int(item.suggested), item.group_id, item.split_hint, item.task_id, item.ticket_uid,
-                 item.violation, item.decision, item.priority, item.width, item.height, item.created))
+                INSERT_ITEM, self._values(item))
             return cur.rowcount == 1
+
+    @staticmethod
+    def _values(item: Item) -> tuple:
+        return (item.id, item.model, item.state, item.source, item.reason, json.dumps(item.boxes),
+                int(item.suggested), item.group_id, item.split_hint, item.task_id, item.ticket_uid,
+                item.violation, item.decision, item.priority, item.width, item.height, item.created, item.src_path)
+
+    def add_many(self, items: list) -> int:
+        """Insert many items in one go (a folder of 100,000 pictures); the ones already known are left alone. Returns how many were new."""
+        now = time.time()
+        for item in items:
+            item.created = item.created or now
+        with closing(self._connect()) as con, con:
+            before = con.total_changes
+            con.executemany(INSERT_ITEM, [self._values(i) for i in items])
+            return con.total_changes - before
+
+    def set_size(self, item_id: str, width: int, height: int) -> None:
+        with closing(self._connect()) as con, con:
+            con.execute("UPDATE items SET width=?, height=? WHERE id=?", (width, height, item_id))
+
+    def set_source(self, item_id: str, src_path: str | None) -> None:
+        """Where the picture lives now (it moved to the dataset folder)."""
+        with closing(self._connect()) as con, con:
+            con.execute("UPDATE items SET src_path=? WHERE id=?", (src_path, item_id))
 
     def save_boxes(self, item_id: str, boxes: list) -> Item:
         """A human decided: these boxes (empty list = 'nothing here'). The item becomes ready."""
@@ -272,7 +304,7 @@ class Store:
     def items(self, model: str, states: tuple, limit: int | None = None, task: str | None = None) -> list[Item]:
         """Items of one model in the given states, most likely wrong first. `task` = only that analysis."""
         marks = ",".join("?" for _ in states)
-        sql = (f"SELECT * FROM items WHERE model=? AND state IN ({marks})" + (" AND task_id=?" if task else "") +
+        sql = (f"SELECT * FROM items WHERE model=? AND state IN ({marks})" + (" AND task_id=?" if task else f" AND source!='{FOLDER_SOURCE}'") +
                " ORDER BY priority, created, id" + (f" LIMIT {int(limit)}" if limit else ""))
         with closing(self._connect()) as con:
             rows = con.execute(sql, (model, *states, *([task] if task else []))).fetchall()
@@ -286,7 +318,8 @@ class Store:
 
     def counts(self, model: str, task: str | None = None) -> dict:
         with closing(self._connect()) as con:
-            rows = con.execute("SELECT state, COUNT(*) n FROM items WHERE model=?" + (" AND task_id=?" if task else "")
+            rows = con.execute("SELECT state, COUNT(*) n FROM items WHERE model=?" +
+                               (" AND task_id=?" if task else f" AND source!='{FOLDER_SOURCE}'")
                                + " GROUP BY state", (model, *([task] if task else []))).fetchall()
         c = {r["state"]: r["n"] for r in rows}
         return {"check": c.get("check", 0), "label": c.get("label", 0), "ready": c.get("ready", 0),
@@ -305,7 +338,7 @@ class Store:
 
     def unsuggested_labels(self, model: str) -> list[Item]:
         with closing(self._connect()) as con:
-            rows = con.execute("SELECT * FROM items WHERE model=? AND state='label' AND suggested=0",
+            rows = con.execute(f"SELECT * FROM items WHERE model=? AND state='label' AND suggested=0 AND source!='{FOLDER_SOURCE}'",
                                (model,)).fetchall()
         return [self._row(r) for r in rows]
 

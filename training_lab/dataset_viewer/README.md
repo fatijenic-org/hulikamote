@@ -47,26 +47,49 @@ and later starts take a few seconds. Changes made outside the viewer are noticed
   There is no "move to another split" and no permanent delete.
 - Names are validated; no path traversal. Nothing is written inside `hulikamote_backend/`.
 
-## Car matcher (ReID): clean the cars before training
+## Car matcher (ReID): clean the vehicles before training
 
-`datasets/reid` is not a box dataset (folders of car photos, one folder = one car), so it has its own entry at the bottom of the
-Datasets list, **Car matcher (ReID)**, and its own screen (`reid.py`). Use it when the tracker jumped (one car filed as two) or
-swapped (two cars in one folder):
+`datasets/reid` is not a box dataset (folders of vehicle photos, one folder = one vehicle: car, motorcycle, tricycle, jeepney, bus,
+truck ...), so it has its own entry at the bottom of the Datasets list, **Car matcher (ReID)**, and its own screen (`reid.py`). Use it
+when the tracker jumped (one vehicle filed as two), swapped (two vehicles in one folder), or when a vehicle has the wrong class.
 
-- **Cars list** (left): every folder, with filters (Suspects, Trained on, Repeats, Few photos), an analysis picker and a name search.
-- **Photos** (right): click photos to select them, then **Move to...** another car of the same analysis, **New car from selection**,
-  **Remove photos** (reason asked), **Merge another car into this**, **Remove whole car**. The zoom icon enlarges a photo.
-- **Scan** (button, about a minute): runs `train_reid.py --scan` with the live matcher and marks *maybe the same car* (two cars of one
-  analysis that look alike: probably a jump; shows both side by side with **Same car - merge** / **Not the same car**), *maybe two cars*
-  (a folder whose photos do not look alike), *repeats* (the same car filed by another analysis of the same clip: the trainer uses it
-  once, so there is nothing to clean there). It also says how many different cars training would use. Edits after a scan mark it stale.
-- **Undo** goes back one change at a time (kept across restarts); **Removed (n)** lists the quarantined photos so any can be restored.
+**The list** (left): every vehicle, with its class, filters (Suspects, Trained on, Temporary, Repeats, Few photos), a class filter, an
+analysis picker and a name search. Click opens a vehicle. **Shift+click** or **Ctrl+click** selects several; a bar at the bottom of the
+list then offers *Merge into one*, *Set class*, *Set aside*, *Keep* and *Remove* for all of them.
 
-Rules are the same as above: nothing is deleted (removed photos go to `datasets/_quarantine/reid/<reason>/<analysis>/<car>/`), every
-change is in `dataset_viewer_cache/reid_actions.json`, writes are refused while `train_reid.py` runs, names are validated. Each move /
-merge / "not the same" is also noted in `datasets/reid/decisions.jsonl` (`"source": "manager"`), so Harvest > Same car? does not ask
-about a pair you already answered. After cleaning here, do not edit the same cars in Harvest > Same car? (it files photos from the
-tickets again and could duplicate what you moved).
+**The photos** (right): click a photo to pick it, **Shift+click** to pick a range. Then:
+- **Move to...**: another vehicle of the same analysis, listed *most alike first* (quick colour-layout match), or a new vehicle, or a
+  temporary one;
+- **New vehicle**: the picked photos become a vehicle of their own;
+- **Set aside (temporary)**: they become a *temporary* vehicle (`datasets/reid/temporary/<analysis>/<vehicle>/`). Temporary photos are
+  **not trained on** (the trainer reads `images/` only). Later: **Keep as its own vehicle**, or **Merge this into...** a known vehicle;
+- **Remove photos** (reason asked). Other buttons: **Merge another vehicle into this**, **Merge this into...**, **Set this vehicle
+  aside**, **Remove whole vehicle**. The zoom icon enlarges a photo.
+- Open another vehicle and do the same: nothing is lost between vehicles, and temporary vehicles can take photos from several vehicles
+  (open each, pick, *Move to...* the same temporary vehicle).
+
+**Class**: each vehicle has a class (dropdown in its header). The starting class is the tickets' class when the analysis report is still
+there; otherwise **Suggest classes** (about a minute) asks the 6-class vehicle model (`scripts/reid_suggest_class.py`, newest
+`primary_anchor` run). It only suggests **car** and **motorcycle**, and only when at least 2 photos voted and 3 of 4 agree: on the real
+photos it was right for those but mixed up trucks, tricycles and buses, so the rest stay "no class" for you to set (filter *Not set*,
+Shift+click the tricycles, *Set class...*). A class you set always wins, then the ticket's, then the model's
+(marked *suggested*). "Use the ticket's class" in the menu clears yours. A bike and a truck are never shown as one vehicle: suspects
+between two vehicles whose class **you** set (or the ticket gave) differ are hidden. Classes are kept in `datasets/reid/classes.json`.
+
+**Scan** (about a minute): runs `train_reid.py --scan` with the live matcher and marks *maybe the same vehicle* (two vehicles of one
+analysis that look alike: probably a jump; shown side by side with **Same vehicle - merge** / **Not the same vehicle**), *maybe two
+vehicles* (a folder whose photos do not look alike) and *repeats* (the same vehicle filed by another analysis of the same clip: the
+trainer uses it once, so there is nothing to clean there). It also says how many different vehicles training would use. Edits after a
+scan mark it stale.
+
+**Undo** goes back one change at a time (moves, merges, class changes, set-asides; kept across restarts). **Removed (n)** lists the
+quarantined photos so any can be restored.
+
+Rules are the same as above: nothing is deleted (removed photos go to `datasets/_quarantine/reid/<reason>/<analysis>/<vehicle>/`),
+every change is in `dataset_viewer_cache/reid_actions.json`, writes are refused while `train_reid.py` runs, names are validated. Each
+move / merge / "not the same" is also noted in `datasets/reid/decisions.jsonl` (`"source": "manager"`), so Harvest > Same car? does not
+ask about a pair you already answered. After cleaning here, do not edit the same vehicles in Harvest > Same car? (it files photos from
+the tickets again and could duplicate what you moved).
 Tests: `hulikamote_backend\venv\Scripts\python.exe -m pytest training_lab/tests/test_reid_manager.py -q`, and
 `flutter test test/features/datasets` in `hulikamote_dashboard`.
 

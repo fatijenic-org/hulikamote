@@ -126,7 +126,7 @@ stay in this tool. **Harvest tab** in the box jumps to the Forensic Analyzer's H
    Several analyses of the SAME clip are fine: the trainer spots a car that was filed twice (average fingerprint above 0.95 and a
    closest photo pair above 0.98 against another analysis) and uses it once. Cars of one analysis are never merged this way.
    A ticket the Forensic Analyzer merged from two tracks ("412 & 5") opens like any other.
-2. **Clean.** Datasets > Car matcher (ReID) (see `dataset_viewer/README.md`): scan, then merge the cars the tracker split in two, move
+2. **Clean.** Datasets > Car matcher (ReID) (see `dataset_viewer/README.md`): set the vehicle classes, scan, then merge the vehicles the tracker split in two, move
    photos that landed under the wrong car, remove bad photos. Undo and Removed keep it safe.
 3. **Train.** Training Studio > Car Matching (ReID), or `python training_lab/scripts/train_reid.py --epochs 12 [--deploy]`. It reads
    `datasets/reid` directly and starts from the live `ckpt.t7`. Its check: a quarter of the CARS are never trained on; the old
@@ -146,6 +146,40 @@ Evidence that this data trains a better matcher: `training_lab/experiments/reid/
 `hulikamote_backend/engine/deep_sort/deep/train.py`. That script crashes on pictures that are not already 64x128, and without
 `--resume` it stops with a `NameError` after epoch 1 (`torch.save(checkpoint, ...)` at the end of `main()`; `checkpoint` only exists
 after a resume). Prefer the Studio trainer above.
+
+## The Labeller: every picture of a folder, one model, a clean dataset
+
+Dashboard > **Labeller**. For when you have a folder full of pictures (the backend's `snapshots/evidence`, or any folder) and
+want ALL of them labelled for one model, not only the ones a ticket points at.
+
+1. **Pick the model** (Plate, Helmet, Cabin, Vehicles) and the **folder**, press *Find the pictures*. Every picture under the folder
+   is queued (nothing is copied; a 100,000-picture folder takes about a minute). Press it again later to pick up new pictures.
+2. **Start labelling.** The same full-screen labeller as the Forensic Analyzer's Harvest (draw / move / pull a corner, wheel = zoom,
+   Enter = the boxes are right, N = nothing here, S = not sure). *Draw the model's guess first* pre-draws the deployed model's boxes.
+   Pictures taken in the same minute count as one group, so they land on the same side of the train / validation split.
+   **Blur (personal details, R.A. 10173).** Under the switches: *Heads of people* and *Number plates*. With them on, the pre-drawing also
+   puts a **Blur** box (the last class in the labelling screen) over every head and every plate it finds (`pii_blur.py`: the top 30% of
+   a person, a head zone above a bike with no rider, the plate model's box inside each vehicle or the lower part of it). You fix, delete
+   or draw Blur boxes like any other box. A Blur box is not a label: it never goes into the label files; when the picture is saved,
+   everything inside it is blurred in the SAVED copy, and the original (with the faces) is removed from the folder when moving.
+   A model never loses its own target: the Plate model keeps plates readable, the Helmet model keeps heads. It cannot catch
+   everybody (a person the finder misses stays visible), so look at every picture.
+3. **Move the finished pictures.** Choose any destination folder (an external drive works) and press the last button. It asks first, then
+   writes `<destination>/<model>/images/{train,val}`, `labels/{train,val}`, `data.yaml` and `report.json`, and MOVES the finished
+   pictures there (copy, check the size, then remove the original, also between drives).
+   Clean = only pictures a person decided ("nothing here" is a real empty-label example), only readable pictures, no picture twice
+   (an identical copy stays behind), labels checked against the class list, the test split is never written.
+   Pictures you skipped or did not finish stay in the folder.
+
+Notes
+- The Labeller's pictures are kept out of the normal Harvest views: the Harvest tab, "Add to dataset" and the gallery never see them
+  (store `source = 'folder'`; they are only visible when their folder id is asked for).
+- This is the one place the harvest tool writes outside its inbox: **moving** pictures out of `hulikamote_backend/snapshots/evidence`.
+  It happens only when you press the last button and confirm. The review screens then no longer find those photos for old tickets.
+  (Moving pictures does not restart the backend: it only reloads on code changes.)
+- A destination inside the folder being labelled is refused; so is the training dataset of a model while it trains.
+- Helper API version 5 (`/api/labeller`, `/api/labeller/scan`, `/api/labeller/suggest`, `/api/labeller/export`); the dashboard
+  replaces an older helper by itself. Code: `folder_labeller.py`, tests `tests/test_folder_labeller.py`.
 
 ## Make plate pictures from the plate photos you already have
 
