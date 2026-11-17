@@ -480,3 +480,5 @@ coverage:
   tricycle_on_highway: "No public video. Two Philippine Roboflow sets show tricycles and jeepneys (ph_vehicle_classification, philippine-traffic-detection) but only as detection pictures. Film your own. Added 2026-11-03: keke_counting (roadside frames with a tricycle class; no violation labels)."
   sidewalk_driving: "medellin_pedestrian_cctv (fixed CCTV frames of motorcycles with riders in pedestrian areas, the closest match; stills only)."
   double_parking: "No public set (only patents and violation tables). The i-LIDS parked-vehicle sets are for illegal parking in general. Film your own: a vehicle stopped beside a parked one while traffic passes."
+  overtaking_on_right: "No public set. Film your own or use the local clips in A:/huli-kamote/evaluation-testing-videos/overtaking_on_right (3 clips). Needs a front or rear view of a two-way road with both vehicles visible during the whole pass."
+  kuliglig_passenger: "No public set and no kuliglig class in any public vehicle dataset. Local clips: A:/huli-kamote/evaluation-testing-videos/kuliglig_with_passengers (3 clips). The rule cannot fire until a vehicle model knows the kuliglig class."

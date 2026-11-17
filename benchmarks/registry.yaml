@@ -1,21 +1,5729 @@
 # Ground-truth registry: the clips and what REALLY happens in them. See benchmarks/README.md.
 # Check it:  python -m tools.benchmark validate      See coverage:  python -m tools.benchmark status
 # Score it:  python -m tools.benchmark run --label baseline
+# The dashboard's Benchmark tab edits this file too (saving it from there rewrites everything below this header).
 
 defaults:
-  tolerance_s: 3.0          # a ticket counts for an event when its evidence time is within this many seconds of it
-  min_events: 10            # real events needed per violation before a verdict (PASS / FAIL) is given
-  pass: {precision: 0.80, recall: 0.80}      # targets per violation: edit to match the thesis
-
-clips: []
-# Add clips with:  python -m tools.benchmark adopt <forensic task id> <clip id>
-# or by hand:
-#   - id: counterflow_01
-#     file: clips/counterflow_01.mp4            # relative to benchmarks/
-#     settings: settings/counterflow_01.json    # the wizard's forensic_config.json for this clip
-#     clean: false                              # true = nothing happens in this clip (every ticket is a false alarm)
-#     note: "Rizal Ave, 4 m pole, daylight"
-#     events:                                   # what REALLY happens (times in seconds or m:ss)
-#       - {violation: counterflow, start: 3.0, end: 8.5}
-#       - {violation: no_plate, start: "0:12", end: "0:15"}
-#       - {violation: illegal_parking, start: 20, end: 50, plate: "ABC 1234"}      # plate and box are optional extra checks
+  tolerance_s: 3.0
+  min_events: 10
+  pass:
+    precision: 0.8
+    recall: 0.8
+clips:
+- id: mandalay_2_127
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_127.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_127_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.3
+  - violation: overloading
+    start: 0.1
+    end: 1.3
+  - violation: no_helmet
+    start: 0.8
+    end: 4.1
+  - violation: overloading
+    start: 0.8
+    end: 4.1
+  - violation: no_helmet
+    start: 1.1
+    end: 1.8
+  - violation: overloading
+    start: 1.1
+    end: 1.8
+  - violation: no_helmet
+    start: 1.9
+    end: 2.6
+  - violation: overloading
+    start: 1.9
+    end: 2.6
+  - violation: no_helmet
+    start: 2.2
+    end: 3.2
+  - violation: overloading
+    start: 2.2
+    end: 3.2
+  - violation: no_helmet
+    start: 2.3
+    end: 3.6
+  - violation: overloading
+    start: 2.3
+    end: 3.6
+  - violation: no_helmet
+    start: 3.1
+    end: 4.2
+  - violation: overloading
+    start: 3.1
+    end: 4.2
+  - violation: no_helmet
+    start: 3.2
+    end: 3.9
+  - violation: no_helmet
+    start: 3.7
+    end: 4.5
+  - violation: no_helmet
+    start: 3.9
+    end: 4.6
+  - violation: overloading
+    start: 3.9
+    end: 4.6
+  - violation: no_helmet
+    start: 3.9
+    end: 7.0
+  - violation: overloading
+    start: 3.9
+    end: 7.0
+  - violation: no_helmet
+    start: 4.0
+    end: 5.7
+  - violation: overloading
+    start: 4.0
+    end: 5.7
+  - violation: no_helmet
+    start: 4.6
+    end: 5.8
+  - violation: overloading
+    start: 4.6
+    end: 5.8
+  - violation: no_helmet
+    start: 4.8
+    end: 5.8
+  - violation: no_helmet
+    start: 5.4
+    end: 6.6
+  - violation: no_helmet
+    start: 5.7
+    end: 6.1
+  - violation: no_helmet
+    start: 5.9
+    end: 6.8
+  - violation: overloading
+    start: 5.9
+    end: 6.8
+  - violation: no_helmet
+    start: 6.1
+    end: 7.1
+  - violation: overloading
+    start: 6.1
+    end: 7.1
+  - violation: no_helmet
+    start: 6.3
+    end: 6.7
+  - violation: overloading
+    start: 6.3
+    end: 6.7
+  - violation: no_helmet
+    start: 6.9
+    end: 7.4
+  - violation: overloading
+    start: 6.9
+    end: 7.4
+  - violation: no_helmet
+    start: 7.3
+    end: 8.1
+  - violation: no_helmet
+    start: 7.4
+    end: 8.4
+  - violation: overloading
+    start: 7.4
+    end: 8.4
+  - violation: no_helmet
+    start: 8.0
+    end: 9.0
+  - violation: overloading
+    start: 8.0
+    end: 9.0
+- id: mandalay_2_175
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_175.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_175_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.1
+  - violation: overloading
+    start: 0.1
+    end: 0.1
+  - violation: no_helmet
+    start: 0.1
+    end: 0.2
+  - violation: no_helmet
+    start: 0.1
+    end: 2.0
+  - violation: overloading
+    start: 0.1
+    end: 2.0
+  - violation: no_helmet
+    start: 0.5
+    end: 1.2
+  - violation: no_helmet
+    start: 1.8
+    end: 2.3
+  - violation: no_helmet
+    start: 2.0
+    end: 3.1
+  - violation: overloading
+    start: 2.0
+    end: 3.1
+  - violation: no_helmet
+    start: 2.5
+    end: 3.1
+  - violation: overloading
+    start: 2.5
+    end: 3.1
+  - violation: no_helmet
+    start: 2.5
+    end: 3.6
+  - violation: overloading
+    start: 2.5
+    end: 3.6
+  - violation: no_helmet
+    start: 2.6
+    end: 3.9
+  - violation: overloading
+    start: 2.6
+    end: 3.9
+  - violation: no_helmet
+    start: 3.2
+    end: 3.9
+  - violation: overloading
+    start: 3.2
+    end: 3.9
+  - violation: no_helmet
+    start: 3.3
+    end: 4.4
+  - violation: no_helmet
+    start: 3.4
+    end: 4.3
+  - violation: overloading
+    start: 3.4
+    end: 4.3
+  - violation: no_helmet
+    start: 3.4
+    end: 5.4
+  - violation: overloading
+    start: 3.4
+    end: 5.4
+  - violation: no_helmet
+    start: 3.7
+    end: 4.7
+  - violation: no_helmet
+    start: 3.9
+    end: 5.1
+  - violation: overloading
+    start: 3.9
+    end: 5.1
+  - violation: no_helmet
+    start: 4.2
+    end: 4.8
+  - violation: no_helmet
+    start: 4.5
+    end: 5.7
+  - violation: no_helmet
+    start: 4.6
+    end: 7.4
+  - violation: overloading
+    start: 4.6
+    end: 7.4
+  - violation: no_helmet
+    start: 4.7
+    end: 5.8
+  - violation: overloading
+    start: 4.7
+    end: 5.8
+  - violation: no_helmet
+    start: 4.8
+    end: 5.5
+  - violation: no_helmet
+    start: 4.8
+    end: 5.7
+  - violation: no_helmet
+    start: 5.0
+    end: 6.3
+  - violation: no_helmet
+    start: 5.1
+    end: 5.3
+  - violation: overloading
+    start: 5.1
+    end: 5.3
+  - violation: no_helmet
+    start: 5.5
+    end: 6.9
+  - violation: no_helmet
+    start: 5.8
+    end: 6.7
+  - violation: overloading
+    start: 5.8
+    end: 6.7
+  - violation: no_helmet
+    start: 7.5
+    end: 7.8
+  - violation: overloading
+    start: 7.5
+    end: 7.8
+  - violation: no_helmet
+    start: 8.7
+    end: 9.9
+  - violation: overloading
+    start: 8.7
+    end: 9.9
+  - violation: no_helmet
+    start: 9.7
+    end: 10.0
+- id: mandalay_2_110
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_110.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_110_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.8
+  - violation: no_helmet
+    start: 0.1
+    end: 1.0
+  - violation: no_helmet
+    start: 0.4
+    end: 1.1
+  - violation: overloading
+    start: 0.4
+    end: 1.1
+  - violation: no_helmet
+    start: 0.4
+    end: 1.7
+  - violation: no_helmet
+    start: 1.3
+    end: 2.5
+  - violation: overloading
+    start: 1.3
+    end: 2.5
+  - violation: no_helmet
+    start: 1.6
+    end: 3.6
+  - violation: overloading
+    start: 1.6
+    end: 3.6
+  - violation: no_helmet
+    start: 1.8
+    end: 2.9
+  - violation: no_helmet
+    start: 2.1
+    end: 2.6
+  - violation: overloading
+    start: 2.1
+    end: 2.6
+  - violation: no_helmet
+    start: 2.3
+    end: 3.1
+  - violation: overloading
+    start: 2.3
+    end: 3.1
+  - violation: no_helmet
+    start: 2.5
+    end: 4.9
+  - violation: no_helmet
+    start: 2.8
+    end: 5.8
+  - violation: no_helmet
+    start: 2.9
+    end: 6.0
+  - violation: no_helmet
+    start: 3.4
+    end: 4.7
+  - violation: overloading
+    start: 3.4
+    end: 4.7
+  - violation: no_helmet
+    start: 3.9
+    end: 4.8
+  - violation: overloading
+    start: 3.9
+    end: 4.8
+  - violation: no_helmet
+    start: 4.4
+    end: 5.8
+  - violation: overloading
+    start: 4.4
+    end: 5.8
+  - violation: no_helmet
+    start: 5.0
+    end: 6.0
+  - violation: no_helmet
+    start: 5.9
+    end: 6.9
+  - violation: overloading
+    start: 5.9
+    end: 6.9
+  - violation: no_helmet
+    start: 6.0
+    end: 6.8
+  - violation: no_helmet
+    start: 6.4
+    end: 7.2
+  - violation: no_helmet
+    start: 6.5
+    end: 7.5
+  - violation: overloading
+    start: 6.5
+    end: 7.5
+  - violation: no_helmet
+    start: 7.6
+    end: 9.9
+  - violation: no_helmet
+    start: 7.7
+    end: 7.9
+  - violation: overloading
+    start: 7.7
+    end: 7.9
+  - violation: no_helmet
+    start: 7.7
+    end: 8.8
+  - violation: overloading
+    start: 7.7
+    end: 8.8
+  - violation: no_helmet
+    start: 7.9
+    end: 9.6
+  - violation: overloading
+    start: 7.9
+    end: 9.6
+  - violation: no_helmet
+    start: 8.9
+    end: 10.0
+  - violation: overloading
+    start: 8.9
+    end: 10.0
+  - violation: no_helmet
+    start: 9.1
+    end: 10.0
+  - violation: no_helmet
+    start: 9.3
+    end: 10.0
+  - violation: no_helmet
+    start: 9.4
+    end: 10.0
+- id: mandalay_2_43
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_43.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_43_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.2
+  - violation: no_helmet
+    start: 0.1
+    end: 0.3
+  - violation: overloading
+    start: 0.1
+    end: 0.3
+  - violation: no_helmet
+    start: 0.1
+    end: 1.3
+  - violation: overloading
+    start: 0.1
+    end: 1.3
+  - violation: no_helmet
+    start: 0.2
+    end: 0.9
+  - violation: no_helmet
+    start: 1.7
+    end: 2.6
+  - violation: no_helmet
+    start: 1.8
+    end: 2.4
+  - violation: overloading
+    start: 1.8
+    end: 2.4
+  - violation: no_helmet
+    start: 2.1
+    end: 3.0
+  - violation: overloading
+    start: 2.1
+    end: 3.0
+  - violation: no_helmet
+    start: 2.5
+    end: 3.6
+  - violation: overloading
+    start: 2.5
+    end: 3.6
+  - violation: no_helmet
+    start: 2.5
+    end: 4.6
+  - violation: overloading
+    start: 2.5
+    end: 4.6
+  - violation: no_helmet
+    start: 3.5
+    end: 4.0
+  - violation: no_helmet
+    start: 3.7
+    end: 5.3
+  - violation: overloading
+    start: 3.7
+    end: 5.3
+  - violation: no_helmet
+    start: 4.0
+    end: 5.3
+  - violation: overloading
+    start: 4.0
+    end: 5.3
+  - violation: no_helmet
+    start: 4.3
+    end: 4.9
+  - violation: no_helmet
+    start: 4.4
+    end: 5.2
+  - violation: overloading
+    start: 4.4
+    end: 5.2
+  - violation: no_helmet
+    start: 4.5
+    end: 5.5
+  - violation: overloading
+    start: 4.5
+    end: 5.5
+  - violation: no_helmet
+    start: 4.7
+    end: 6.1
+  - violation: overloading
+    start: 4.7
+    end: 6.1
+  - violation: no_helmet
+    start: 5.5
+    end: 6.0
+  - violation: overloading
+    start: 5.5
+    end: 6.0
+  - violation: no_helmet
+    start: 5.7
+    end: 6.3
+  - violation: no_helmet
+    start: 6.3
+    end: 7.7
+  - violation: overloading
+    start: 6.3
+    end: 7.7
+  - violation: no_helmet
+    start: 6.5
+    end: 7.0
+  - violation: no_helmet
+    start: 7.5
+    end: 8.5
+  - violation: no_helmet
+    start: 8.7
+    end: 9.8
+  - violation: overloading
+    start: 8.7
+    end: 9.8
+  - violation: no_helmet
+    start: 9.4
+    end: 10.0
+- id: mandalay_2_23
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_23.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_23_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.1
+  - violation: overloading
+    start: 0.1
+    end: 0.1
+  - violation: no_helmet
+    start: 0.1
+    end: 1.0
+  - violation: no_helmet
+    start: 0.1
+    end: 1.4
+  - violation: overloading
+    start: 0.1
+    end: 1.4
+  - violation: no_helmet
+    start: 0.1
+    end: 2.4
+  - violation: overloading
+    start: 0.1
+    end: 2.4
+  - violation: no_helmet
+    start: 0.2
+    end: 1.2
+  - violation: overloading
+    start: 0.2
+    end: 1.2
+  - violation: no_helmet
+    start: 0.8
+    end: 1.6
+  - violation: overloading
+    start: 0.8
+    end: 1.6
+  - violation: no_helmet
+    start: 1.2
+    end: 2.2
+  - violation: no_helmet
+    start: 1.8
+    end: 2.2
+  - violation: no_helmet
+    start: 1.8
+    end: 2.8
+  - violation: no_helmet
+    start: 2.7
+    end: 3.7
+  - violation: overloading
+    start: 2.7
+    end: 3.7
+  - violation: no_helmet
+    start: 2.9
+    end: 4.0
+  - violation: no_helmet
+    start: 3.2
+    end: 4.4
+  - violation: no_helmet
+    start: 4.2
+    end: 5.1
+  - violation: no_helmet
+    start: 4.3
+    end: 4.9
+  - violation: overloading
+    start: 4.3
+    end: 4.9
+  - violation: no_helmet
+    start: 4.8
+    end: 5.5
+  - violation: overloading
+    start: 4.8
+    end: 5.5
+  - violation: no_helmet
+    start: 6.0
+    end: 7.3
+  - violation: overloading
+    start: 6.0
+    end: 7.3
+  - violation: no_helmet
+    start: 6.1
+    end: 7.0
+  - violation: overloading
+    start: 6.1
+    end: 7.0
+  - violation: no_helmet
+    start: 7.9
+    end: 8.9
+  - violation: overloading
+    start: 7.9
+    end: 8.9
+  - violation: no_helmet
+    start: 8.1
+    end: 9.3
+  - violation: overloading
+    start: 8.1
+    end: 9.3
+  - violation: no_helmet
+    start: 8.6
+    end: 9.8
+  - violation: overloading
+    start: 8.6
+    end: 9.8
+  - violation: no_helmet
+    start: 9.3
+    end: 10.0
+  - violation: overloading
+    start: 9.3
+    end: 10.0
+- id: mandalay_2_50
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_50.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_50_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.0
+  - violation: no_helmet
+    start: 0.1
+    end: 2.9
+  - violation: overloading
+    start: 0.1
+    end: 2.9
+  - violation: no_helmet
+    start: 0.4
+    end: 0.7
+  - violation: overloading
+    start: 0.4
+    end: 0.7
+  - violation: no_helmet
+    start: 0.9
+    end: 2.0
+  - violation: overloading
+    start: 0.9
+    end: 2.0
+  - violation: no_helmet
+    start: 0.9
+    end: 2.6
+  - violation: no_helmet
+    start: 1.5
+    end: 3.0
+  - violation: no_helmet
+    start: 1.7
+    end: 2.3
+  - violation: overloading
+    start: 1.7
+    end: 2.3
+  - violation: no_helmet
+    start: 2.1
+    end: 3.3
+  - violation: no_helmet
+    start: 2.6
+    end: 4.0
+  - violation: no_helmet
+    start: 2.6
+    end: 5.3
+  - violation: overloading
+    start: 2.6
+    end: 5.3
+  - violation: no_helmet
+    start: 3.2
+    end: 4.1
+  - violation: overloading
+    start: 3.2
+    end: 4.1
+  - violation: no_helmet
+    start: 3.3
+    end: 3.9
+  - violation: overloading
+    start: 3.3
+    end: 3.9
+  - violation: no_helmet
+    start: 3.6
+    end: 4.4
+  - violation: overloading
+    start: 4.1
+    end: 5.5
+  - violation: no_helmet
+    start: 4.4
+    end: 5.0
+  - violation: no_helmet
+    start: 4.5
+    end: 5.6
+  - violation: overloading
+    start: 4.5
+    end: 5.6
+  - violation: no_helmet
+    start: 4.7
+    end: 5.3
+  - violation: overloading
+    start: 4.7
+    end: 5.3
+  - violation: no_helmet
+    start: 5.2
+    end: 7.5
+  - violation: no_helmet
+    start: 5.4
+    end: 6.8
+  - violation: no_helmet
+    start: 5.7
+    end: 6.3
+  - violation: overloading
+    start: 5.7
+    end: 6.3
+  - violation: no_helmet
+    start: 6.0
+    end: 7.0
+  - violation: no_helmet
+    start: 6.6
+    end: 7.3
+  - violation: no_helmet
+    start: 7.2
+    end: 8.2
+  - violation: no_helmet
+    start: 7.7
+    end: 8.4
+  - violation: no_helmet
+    start: 8.1
+    end: 10.0
+  - violation: no_helmet
+    start: 8.5
+    end: 9.7
+  - violation: overloading
+    start: 8.5
+    end: 9.7
+  - violation: no_helmet
+    start: 9.4
+    end: 10.0
+  - violation: no_helmet
+    start: 10.0
+    end: 10.0
+- id: mandalay_2_40
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_40.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_40_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.2
+  - violation: overloading
+    start: 0.1
+    end: 0.2
+  - violation: no_helmet
+    start: 0.1
+    end: 0.4
+  - violation: overloading
+    start: 0.1
+    end: 0.4
+  - violation: no_helmet
+    start: 0.1
+    end: 1.1
+  - violation: no_helmet
+    start: 0.1
+    end: 3.3
+  - violation: no_helmet
+    start: 0.3
+    end: 3.7
+  - violation: no_helmet
+    start: 0.6
+    end: 1.9
+  - violation: overloading
+    start: 0.6
+    end: 1.9
+  - violation: no_helmet
+    start: 0.8
+    end: 1.8
+  - violation: no_helmet
+    start: 1.0
+    end: 2.1
+  - violation: overloading
+    start: 1.0
+    end: 2.1
+  - violation: no_helmet
+    start: 1.4
+    end: 2.7
+  - violation: no_helmet
+    start: 2.3
+    end: 6.1
+  - violation: overloading
+    start: 2.3
+    end: 6.1
+  - violation: no_helmet
+    start: 2.9
+    end: 3.9
+  - violation: no_helmet
+    start: 3.0
+    end: 4.1
+  - violation: overloading
+    start: 3.0
+    end: 4.1
+  - violation: no_helmet
+    start: 3.1
+    end: 6.2
+  - violation: no_helmet
+    start: 3.3
+    end: 3.6
+  - violation: overloading
+    start: 3.3
+    end: 3.6
+  - violation: no_helmet
+    start: 3.4
+    end: 4.4
+  - violation: overloading
+    start: 3.4
+    end: 4.4
+  - violation: no_helmet
+    start: 5.1
+    end: 6.3
+  - violation: overloading
+    start: 5.1
+    end: 6.3
+  - violation: no_helmet
+    start: 5.2
+    end: 9.1
+  - violation: no_helmet
+    start: 6.6
+    end: 7.8
+  - violation: overloading
+    start: 6.6
+    end: 7.8
+  - violation: no_helmet
+    start: 7.7
+    end: 8.7
+  - violation: overloading
+    start: 7.7
+    end: 8.7
+  - violation: no_helmet
+    start: 8.3
+    end: 9.6
+  - violation: no_helmet
+    start: 10.0
+    end: 10.0
+- id: mandalay_2_117
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_117.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_117_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 4.7
+  - violation: overloading
+    start: 0.1
+    end: 4.7
+  - violation: no_helmet
+    start: 0.4
+    end: 2.5
+  - violation: overloading
+    start: 0.4
+    end: 2.5
+  - violation: no_helmet
+    start: 0.6
+    end: 9.3
+  - violation: overloading
+    start: 0.6
+    end: 9.3
+  - violation: no_helmet
+    start: 1.8
+    end: 7.0
+  - violation: overloading
+    start: 1.8
+    end: 7.0
+  - violation: no_helmet
+    start: 2.3
+    end: 3.2
+  - violation: no_helmet
+    start: 3.0
+    end: 3.8
+  - violation: no_helmet
+    start: 3.0
+    end: 7.6
+  - violation: no_helmet
+    start: 3.7
+    end: 4.6
+  - violation: no_helmet
+    start: 4.1
+    end: 5.2
+  - violation: no_helmet
+    start: 4.5
+    end: 5.3
+  - violation: no_helmet
+    start: 5.0
+    end: 10.0
+  - violation: overloading
+    start: 5.0
+    end: 10.0
+  - violation: no_helmet
+    start: 6.0
+    end: 6.4
+  - violation: no_helmet
+    start: 6.3
+    end: 7.2
+  - violation: overloading
+    start: 6.3
+    end: 7.2
+  - violation: no_helmet
+    start: 6.4
+    end: 7.4
+  - violation: overloading
+    start: 6.4
+    end: 7.4
+  - violation: no_helmet
+    start: 6.6
+    end: 7.7
+  - violation: overloading
+    start: 6.6
+    end: 7.7
+  - violation: no_helmet
+    start: 7.5
+    end: 8.8
+  - violation: overloading
+    start: 7.5
+    end: 8.8
+  - violation: no_helmet
+    start: 8.1
+    end: 9.8
+  - violation: no_helmet
+    start: 8.2
+    end: 9.2
+  - violation: overloading
+    start: 8.2
+    end: 9.2
+  - violation: no_helmet
+    start: 8.9
+    end: 9.6
+- id: mandalay_2_163
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_163.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_163_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.2
+  - violation: no_helmet
+    start: 0.1
+    end: 0.8
+  - violation: no_helmet
+    start: 0.3
+    end: 2.9
+  - violation: no_helmet
+    start: 0.7
+    end: 1.7
+  - violation: overloading
+    start: 0.7
+    end: 1.7
+  - violation: no_helmet
+    start: 1.0
+    end: 2.1
+  - violation: no_helmet
+    start: 2.1
+    end: 3.2
+  - violation: overloading
+    start: 2.1
+    end: 3.2
+  - violation: no_helmet
+    start: 2.5
+    end: 2.9
+  - violation: no_helmet
+    start: 3.3
+    end: 6.6
+  - violation: no_helmet
+    start: 3.5
+    end: 5.3
+  - violation: overloading
+    start: 3.5
+    end: 5.3
+  - violation: no_helmet
+    start: 3.9
+    end: 5.3
+  - violation: overloading
+    start: 3.9
+    end: 5.3
+  - violation: no_helmet
+    start: 4.2
+    end: 5.2
+  - violation: overloading
+    start: 4.2
+    end: 5.2
+  - violation: no_helmet
+    start: 5.3
+    end: 6.6
+  - violation: overloading
+    start: 5.3
+    end: 6.6
+  - violation: no_helmet
+    start: 7.8
+    end: 9.0
+  - violation: overloading
+    start: 7.8
+    end: 9.0
+  - violation: no_helmet
+    start: 8.3
+    end: 9.7
+  - violation: overloading
+    start: 8.3
+    end: 9.7
+  - violation: no_helmet
+    start: 8.4
+    end: 9.4
+  - violation: overloading
+    start: 8.4
+    end: 9.4
+  - violation: no_helmet
+    start: 8.7
+    end: 10.0
+  - violation: no_helmet
+    start: 8.9
+    end: 10.0
+  - violation: overloading
+    start: 8.9
+    end: 10.0
+- id: mandalay_2_37
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_37.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_37_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.2
+  - violation: no_helmet
+    start: 0.1
+    end: 1.9
+  - violation: no_helmet
+    start: 1.0
+    end: 2.1
+  - violation: no_helmet
+    start: 1.2
+    end: 1.9
+  - violation: no_helmet
+    start: 1.5
+    end: 2.7
+  - violation: overloading
+    start: 1.5
+    end: 2.7
+  - violation: no_helmet
+    start: 2.2
+    end: 3.2
+  - violation: no_helmet
+    start: 2.4
+    end: 3.0
+  - violation: overloading
+    start: 2.4
+    end: 3.0
+  - violation: no_helmet
+    start: 2.5
+    end: 4.2
+  - violation: overloading
+    start: 2.5
+    end: 4.2
+  - violation: no_helmet
+    start: 2.5
+    end: 5.1
+  - violation: no_helmet
+    start: 2.7
+    end: 3.6
+  - violation: overloading
+    start: 2.7
+    end: 3.6
+  - violation: no_helmet
+    start: 2.9
+    end: 3.8
+  - violation: no_helmet
+    start: 3.1
+    end: 4.3
+  - violation: no_helmet
+    start: 3.4
+    end: 4.6
+  - violation: no_helmet
+    start: 3.5
+    end: 6.4
+  - violation: overloading
+    start: 3.5
+    end: 6.4
+  - violation: no_helmet
+    start: 4.5
+    end: 7.5
+  - violation: overloading
+    start: 4.5
+    end: 7.5
+  - violation: no_helmet
+    start: 5.0
+    end: 5.8
+  - violation: overloading
+    start: 5.0
+    end: 5.8
+  - violation: no_helmet
+    start: 5.0
+    end: 7.7
+  - violation: no_helmet
+    start: 6.1
+    end: 6.9
+  - violation: no_helmet
+    start: 6.3
+    end: 7.3
+  - violation: overloading
+    start: 6.3
+    end: 7.3
+  - violation: no_helmet
+    start: 6.6
+    end: 7.8
+  - violation: no_helmet
+    start: 7.2
+    end: 8.2
+  - violation: no_helmet
+    start: 7.3
+    end: 9.5
+  - violation: no_helmet
+    start: 8.3
+    end: 8.9
+  - violation: overloading
+    start: 8.3
+    end: 8.9
+  - violation: no_helmet
+    start: 9.6
+    end: 10.0
+- id: mandalay_2_8
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_8.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_8_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 6.2
+  - violation: overloading
+    start: 0.1
+    end: 6.2
+  - violation: no_helmet
+    start: 0.5
+    end: 4.2
+  - violation: overloading
+    start: 0.5
+    end: 4.2
+  - violation: no_helmet
+    start: 1.5
+    end: 2.5
+  - violation: no_helmet
+    start: 1.6
+    end: 3.0
+  - violation: no_helmet
+    start: 1.8
+    end: 4.2
+  - violation: overloading
+    start: 1.8
+    end: 4.2
+  - violation: no_helmet
+    start: 2.3
+    end: 3.5
+  - violation: no_helmet
+    start: 2.4
+    end: 7.1
+  - violation: no_helmet
+    start: 2.9
+    end: 4.2
+  - violation: no_helmet
+    start: 3.1
+    end: 4.0
+  - violation: overloading
+    start: 3.1
+    end: 4.0
+  - violation: no_helmet
+    start: 3.4
+    end: 7.7
+  - violation: no_helmet
+    start: 3.5
+    end: 4.6
+  - violation: no_helmet
+    start: 4.1
+    end: 6.8
+  - violation: overloading
+    start: 4.1
+    end: 6.8
+  - violation: no_helmet
+    start: 4.2
+    end: 5.2
+  - violation: no_helmet
+    start: 4.4
+    end: 5.8
+  - violation: no_helmet
+    start: 4.9
+    end: 6.5
+  - violation: no_helmet
+    start: 5.0
+    end: 5.7
+  - violation: no_helmet
+    start: 5.1
+    end: 6.1
+  - violation: no_helmet
+    start: 6.0
+    end: 6.9
+  - violation: overloading
+    start: 6.0
+    end: 6.9
+  - violation: no_helmet
+    start: 6.7
+    end: 10.0
+  - violation: overloading
+    start: 6.7
+    end: 10.0
+  - violation: no_helmet
+    start: 7.4
+    end: 10.0
+  - violation: overloading
+    start: 7.4
+    end: 10.0
+  - violation: no_helmet
+    start: 7.7
+    end: 8.5
+  - violation: overloading
+    start: 7.7
+    end: 8.5
+- id: mandalay_2_122
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_122.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_122_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.4
+  - violation: no_helmet
+    start: 0.1
+    end: 0.5
+  - violation: overloading
+    start: 0.1
+    end: 0.5
+  - violation: no_helmet
+    start: 0.5
+    end: 3.7
+  - violation: no_helmet
+    start: 0.7
+    end: 4.9
+  - violation: no_helmet
+    start: 1.1
+    end: 2.2
+  - violation: overloading
+    start: 1.1
+    end: 2.2
+  - violation: no_helmet
+    start: 1.3
+    end: 4.6
+  - violation: no_helmet
+    start: 1.7
+    end: 2.3
+  - violation: overloading
+    start: 1.7
+    end: 2.3
+  - violation: no_helmet
+    start: 3.7
+    end: 4.6
+  - violation: overloading
+    start: 3.7
+    end: 4.6
+  - violation: no_helmet
+    start: 4.0
+    end: 5.2
+  - violation: overloading
+    start: 4.0
+    end: 5.2
+  - violation: no_helmet
+    start: 5.6
+    end: 6.6
+  - violation: overloading
+    start: 5.6
+    end: 6.6
+  - violation: no_helmet
+    start: 6.2
+    end: 7.4
+  - violation: no_helmet
+    start: 6.5
+    end: 7.1
+  - violation: overloading
+    start: 6.5
+    end: 7.1
+  - violation: no_helmet
+    start: 7.3
+    end: 8.3
+  - violation: no_helmet
+    start: 7.7
+    end: 8.8
+  - violation: overloading
+    start: 7.7
+    end: 8.8
+  - violation: no_helmet
+    start: 7.9
+    end: 10.0
+  - violation: overloading
+    start: 8.1
+    end: 10.0
+  - violation: no_helmet
+    start: 9.4
+    end: 10.0
+- id: mandalay_2_176
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_176.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_176_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 2.1
+  - violation: no_helmet
+    start: 0.1
+    end: 2.7
+  - violation: no_helmet
+    start: 0.1
+    end: 5.4
+  - violation: overloading
+    start: 0.1
+    end: 5.4
+  - violation: no_helmet
+    start: 0.1
+    end: 6.0
+  - violation: no_helmet
+    start: 1.2
+    end: 2.2
+  - violation: overloading
+    start: 1.2
+    end: 2.2
+  - violation: no_helmet
+    start: 2.8
+    end: 9.2
+  - violation: overloading
+    start: 2.8
+    end: 9.2
+  - violation: no_helmet
+    start: 3.0
+    end: 4.1
+  - violation: no_helmet
+    start: 3.2
+    end: 5.0
+  - violation: overloading
+    start: 3.2
+    end: 5.0
+  - violation: no_helmet
+    start: 4.8
+    end: 5.8
+  - violation: overloading
+    start: 4.8
+    end: 5.8
+  - violation: no_helmet
+    start: 7.1
+    end: 8.3
+  - violation: overloading
+    start: 7.1
+    end: 8.3
+  - violation: no_helmet
+    start: 7.3
+    end: 8.5
+  - violation: no_helmet
+    start: 7.7
+    end: 8.3
+  - violation: no_helmet
+    start: 8.2
+    end: 9.0
+  - violation: no_helmet
+    start: 8.2
+    end: 9.3
+  - violation: no_helmet
+    start: 8.9
+    end: 10.0
+  - violation: overloading
+    start: 8.9
+    end: 10.0
+  - violation: no_helmet
+    start: 9.0
+    end: 9.9
+  - violation: overloading
+    start: 9.0
+    end: 9.9
+  - violation: overloading
+    start: 9.8
+    end: 10.0
+- id: mandalay_2_58
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_58.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_58_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.1
+  - violation: overloading
+    start: 0.1
+    end: 0.1
+  - violation: no_helmet
+    start: 0.1
+    end: 0.6
+  - violation: overloading
+    start: 0.1
+    end: 0.6
+  - violation: no_helmet
+    start: 0.1
+    end: 0.7
+  - violation: no_helmet
+    start: 0.5
+    end: 1.3
+  - violation: overloading
+    start: 0.5
+    end: 1.3
+  - violation: no_helmet
+    start: 0.6
+    end: 1.4
+  - violation: no_helmet
+    start: 1.2
+    end: 2.7
+  - violation: overloading
+    start: 1.2
+    end: 2.7
+  - violation: no_helmet
+    start: 1.4
+    end: 2.0
+  - violation: no_helmet
+    start: 1.8
+    end: 3.2
+  - violation: no_helmet
+    start: 2.3
+    end: 3.2
+  - violation: no_helmet
+    start: 2.8
+    end: 3.7
+  - violation: overloading
+    start: 2.8
+    end: 4.5
+  - violation: no_helmet
+    start: 3.0
+    end: 4.1
+  - violation: overloading
+    start: 3.0
+    end: 4.1
+  - violation: no_helmet
+    start: 3.9
+    end: 5.1
+  - violation: no_helmet
+    start: 4.6
+    end: 5.6
+  - violation: overloading
+    start: 4.6
+    end: 5.6
+  - violation: no_helmet
+    start: 5.9
+    end: 7.0
+  - violation: overloading
+    start: 5.9
+    end: 7.0
+  - violation: no_helmet
+    start: 7.6
+    end: 8.6
+  - violation: overloading
+    start: 7.6
+    end: 8.6
+- id: mandalay_2_180
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_180.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_180_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.3
+  - violation: overloading
+    start: 0.1
+    end: 0.3
+  - violation: overloading
+    start: 0.1
+    end: 1.8
+  - violation: no_helmet
+    start: 0.1
+    end: 3.5
+  - violation: no_helmet
+    start: 0.8
+    end: 2.2
+  - violation: overloading
+    start: 0.8
+    end: 2.2
+  - violation: no_helmet
+    start: 1.9
+    end: 3.1
+  - violation: overloading
+    start: 1.9
+    end: 3.1
+  - violation: no_helmet
+    start: 2.3
+    end: 3.5
+  - violation: overloading
+    start: 2.3
+    end: 3.5
+  - violation: no_helmet
+    start: 2.8
+    end: 3.8
+  - violation: no_helmet
+    start: 2.9
+    end: 3.8
+  - violation: no_helmet
+    start: 3.6
+    end: 4.8
+  - violation: no_helmet
+    start: 4.0
+    end: 4.8
+  - violation: no_helmet
+    start: 4.2
+    end: 9.5
+  - violation: overloading
+    start: 4.2
+    end: 9.5
+  - violation: no_helmet
+    start: 4.5
+    end: 8.9
+  - violation: overloading
+    start: 4.5
+    end: 8.9
+  - violation: no_helmet
+    start: 5.1
+    end: 6.0
+  - violation: no_helmet
+    start: 6.0
+    end: 6.8
+  - violation: overloading
+    start: 6.6
+    end: 7.9
+  - violation: no_helmet
+    start: 9.6
+    end: 10.0
+  - violation: overloading
+    start: 9.6
+    end: 10.0
+- id: mandalay_2_177
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_177.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_177_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.4
+  - violation: no_helmet
+    start: 0.1
+    end: 0.4
+  - violation: no_helmet
+    start: 0.3
+    end: 1.3
+  - violation: overloading
+    start: 0.3
+    end: 1.3
+  - violation: no_helmet
+    start: 0.9
+    end: 1.6
+  - violation: overloading
+    start: 0.9
+    end: 1.6
+  - violation: no_helmet
+    start: 1.2
+    end: 1.7
+  - violation: overloading
+    start: 1.2
+    end: 1.7
+  - violation: no_helmet
+    start: 2.0
+    end: 3.0
+  - violation: overloading
+    start: 2.5
+    end: 3.6
+  - violation: no_helmet
+    start: 2.9
+    end: 3.9
+  - violation: no_helmet
+    start: 2.9
+    end: 4.6
+  - violation: no_helmet
+    start: 3.4
+    end: 5.9
+  - violation: overloading
+    start: 3.4
+    end: 5.9
+  - violation: no_helmet
+    start: 4.1
+    end: 5.3
+  - violation: no_helmet
+    start: 4.4
+    end: 5.4
+  - violation: no_helmet
+    start: 4.7
+    end: 5.0
+  - violation: no_helmet
+    start: 4.7
+    end: 7.8
+  - violation: no_helmet
+    start: 5.4
+    end: 6.0
+  - violation: no_helmet
+    start: 5.9
+    end: 7.0
+  - violation: overloading
+    start: 5.9
+    end: 7.0
+  - violation: no_helmet
+    start: 6.1
+    end: 7.0
+  - violation: overloading
+    start: 6.1
+    end: 7.0
+  - violation: no_helmet
+    start: 6.2
+    end: 6.8
+  - violation: no_helmet
+    start: 6.3
+    end: 7.7
+  - violation: no_helmet
+    start: 6.5
+    end: 8.0
+  - violation: no_helmet
+    start: 6.6
+    end: 7.8
+  - violation: overloading
+    start: 6.6
+    end: 7.8
+  - violation: no_helmet
+    start: 9.7
+    end: 10.0
+- id: mandalay_2_2
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_2.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_2_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.3
+  - violation: overloading
+    start: 0.1
+    end: 0.3
+  - violation: no_helmet
+    start: 0.3
+    end: 1.4
+  - violation: overloading
+    start: 0.3
+    end: 1.4
+  - violation: no_helmet
+    start: 0.7
+    end: 3.3
+  - violation: no_helmet
+    start: 1.6
+    end: 1.9
+  - violation: no_helmet
+    start: 1.6
+    end: 2.4
+  - violation: no_helmet
+    start: 1.7
+    end: 3.0
+  - violation: no_helmet
+    start: 2.3
+    end: 3.4
+  - violation: no_helmet
+    start: 2.6
+    end: 3.1
+  - violation: no_helmet
+    start: 3.1
+    end: 4.7
+  - violation: overloading
+    start: 3.4
+    end: 4.6
+  - violation: no_helmet
+    start: 3.7
+    end: 4.8
+  - violation: no_helmet
+    start: 4.2
+    end: 5.2
+  - violation: no_helmet
+    start: 4.5
+    end: 5.6
+  - violation: overloading
+    start: 4.5
+    end: 5.6
+  - violation: no_helmet
+    start: 5.1
+    end: 6.1
+  - violation: overloading
+    start: 5.1
+    end: 6.1
+  - violation: no_helmet
+    start: 5.1
+    end: 6.2
+  - violation: overloading
+    start: 5.1
+    end: 6.2
+  - violation: no_helmet
+    start: 5.9
+    end: 6.9
+  - violation: no_helmet
+    start: 6.5
+    end: 7.4
+  - violation: no_helmet
+    start: 6.5
+    end: 7.5
+  - violation: no_helmet
+    start: 7.4
+    end: 9.0
+  - violation: overloading
+    start: 7.4
+    end: 9.0
+  - violation: no_helmet
+    start: 8.1
+    end: 9.5
+  - violation: overloading
+    start: 8.1
+    end: 9.5
+  - violation: no_helmet
+    start: 8.6
+    end: 9.5
+- id: mandalay_2_10
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_10.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_10_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.3
+  - violation: no_helmet
+    start: 0.4
+    end: 1.3
+  - violation: no_helmet
+    start: 1.8
+    end: 7.0
+  - violation: overloading
+    start: 1.8
+    end: 7.0
+  - violation: no_helmet
+    start: 2.2
+    end: 8.0
+  - violation: no_helmet
+    start: 2.9
+    end: 7.7
+  - violation: overloading
+    start: 2.9
+    end: 7.7
+  - violation: no_helmet
+    start: 3.7
+    end: 5.5
+  - violation: overloading
+    start: 3.7
+    end: 5.5
+  - violation: no_helmet
+    start: 4.7
+    end: 6.1
+  - violation: no_helmet
+    start: 5.0
+    end: 6.0
+  - violation: overloading
+    start: 5.0
+    end: 6.0
+  - violation: no_helmet
+    start: 5.7
+    end: 6.9
+  - violation: no_helmet
+    start: 6.1
+    end: 7.1
+  - violation: no_helmet
+    start: 6.2
+    end: 7.1
+  - violation: overloading
+    start: 6.2
+    end: 7.1
+  - violation: no_helmet
+    start: 6.6
+    end: 7.5
+  - violation: overloading
+    start: 6.6
+    end: 7.5
+  - violation: no_helmet
+    start: 6.8
+    end: 8.1
+  - violation: no_helmet
+    start: 7.9
+    end: 10.0
+  - violation: overloading
+    start: 7.9
+    end: 10.0
+  - violation: no_helmet
+    start: 8.1
+    end: 9.2
+  - violation: overloading
+    start: 8.1
+    end: 9.2
+- id: mandalay_2_108
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_108.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_108_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.4
+  - violation: no_helmet
+    start: 0.1
+    end: 0.6
+  - violation: no_helmet
+    start: 0.4
+    end: 2.9
+  - violation: overloading
+    start: 0.4
+    end: 2.9
+  - violation: overloading
+    start: 3.5
+    end: 4.4
+  - violation: no_helmet
+    start: 4.0
+    end: 5.4
+  - violation: no_helmet
+    start: 4.5
+    end: 5.4
+  - violation: no_helmet
+    start: 4.5
+    end: 5.6
+  - violation: overloading
+    start: 4.5
+    end: 5.6
+  - violation: no_helmet
+    start: 4.9
+    end: 6.4
+  - violation: overloading
+    start: 4.9
+    end: 6.4
+  - violation: no_helmet
+    start: 5.7
+    end: 7.2
+  - violation: overloading
+    start: 5.7
+    end: 7.2
+  - violation: no_helmet
+    start: 6.5
+    end: 7.3
+  - violation: no_helmet
+    start: 6.8
+    end: 7.8
+  - violation: overloading
+    start: 6.8
+    end: 7.8
+  - violation: no_helmet
+    start: 8.5
+    end: 9.6
+  - violation: overloading
+    start: 8.5
+    end: 9.6
+  - violation: no_helmet
+    start: 9.2
+    end: 10.0
+  - violation: overloading
+    start: 9.2
+    end: 10.0
+- id: mandalay_2_174
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_174.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_174_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.0
+  - violation: overloading
+    start: 0.1
+    end: 1.0
+  - violation: no_helmet
+    start: 0.1
+    end: 1.6
+  - violation: overloading
+    start: 0.1
+    end: 1.6
+  - violation: no_helmet
+    start: 0.1
+    end: 2.3
+  - violation: overloading
+    start: 0.1
+    end: 2.3
+  - violation: no_helmet
+    start: 1.9
+    end: 6.2
+  - violation: overloading
+    start: 1.9
+    end: 6.2
+  - violation: no_helmet
+    start: 2.2
+    end: 3.1
+  - violation: no_helmet
+    start: 3.8
+    end: 5.7
+  - violation: overloading
+    start: 3.8
+    end: 5.7
+  - violation: no_helmet
+    start: 4.9
+    end: 6.0
+  - violation: no_helmet
+    start: 5.7
+    end: 6.6
+  - violation: no_helmet
+    start: 5.9
+    end: 6.7
+  - violation: no_helmet
+    start: 6.2
+    end: 6.6
+  - violation: overloading
+    start: 6.2
+    end: 6.6
+  - violation: overloading
+    start: 6.7
+    end: 7.9
+  - violation: no_helmet
+    start: 7.3
+    end: 8.3
+  - violation: no_helmet
+    start: 9.9
+    end: 10.0
+  - violation: overloading
+    start: 9.9
+    end: 10.0
+- id: mandalay_2_116
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_116.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_116_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.7
+  - violation: overloading
+    start: 0.1
+    end: 7.1
+  - violation: no_helmet
+    start: 0.6
+    end: 0.9
+  - violation: no_helmet
+    start: 1.2
+    end: 2.9
+  - violation: overloading
+    start: 1.2
+    end: 2.9
+  - violation: no_helmet
+    start: 1.3
+    end: 1.9
+  - violation: no_helmet
+    start: 1.4
+    end: 2.2
+  - violation: no_helmet
+    start: 1.6
+    end: 2.7
+  - violation: no_helmet
+    start: 1.8
+    end: 3.2
+  - violation: no_helmet
+    start: 3.2
+    end: 4.2
+  - violation: overloading
+    start: 3.2
+    end: 4.2
+  - violation: no_helmet
+    start: 3.4
+    end: 6.5
+  - violation: no_helmet
+    start: 5.6
+    end: 6.7
+  - violation: no_helmet
+    start: 5.6
+    end: 9.5
+  - violation: no_helmet
+    start: 6.6
+    end: 7.6
+  - violation: overloading
+    start: 6.6
+    end: 7.6
+  - violation: no_helmet
+    start: 6.7
+    end: 7.3
+  - violation: overloading
+    start: 6.7
+    end: 7.3
+  - violation: no_helmet
+    start: 7.2
+    end: 8.3
+  - violation: no_helmet
+    start: 7.4
+    end: 8.2
+  - violation: overloading
+    start: 7.4
+    end: 8.2
+  - violation: no_helmet
+    start: 7.6
+    end: 9.0
+  - violation: no_helmet
+    start: 7.9
+    end: 8.6
+  - violation: no_helmet
+    start: 8.5
+    end: 9.9
+  - violation: no_helmet
+    start: 9.2
+    end: 10.0
+  - violation: overloading
+    start: 9.2
+    end: 10.0
+  - violation: no_helmet
+    start: 10.0
+    end: 10.0
+- id: mandalay_2_170
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_170.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_170_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.5
+  - violation: no_helmet
+    start: 0.1
+    end: 1.8
+  - violation: no_helmet
+    start: 0.1
+    end: 2.2
+  - violation: no_helmet
+    start: 0.3
+    end: 1.3
+  - violation: overloading
+    start: 0.3
+    end: 1.3
+  - violation: no_helmet
+    start: 1.2
+    end: 2.4
+  - violation: overloading
+    start: 1.2
+    end: 2.4
+  - violation: no_helmet
+    start: 1.9
+    end: 2.8
+  - violation: overloading
+    start: 1.9
+    end: 2.8
+  - violation: no_helmet
+    start: 2.6
+    end: 7.5
+  - violation: no_helmet
+    start: 3.1
+    end: 3.9
+  - violation: overloading
+    start: 3.1
+    end: 3.9
+  - violation: no_helmet
+    start: 3.6
+    end: 7.7
+  - violation: no_helmet
+    start: 4.6
+    end: 5.6
+  - violation: overloading
+    start: 4.6
+    end: 5.6
+  - violation: no_helmet
+    start: 8.2
+    end: 10.0
+  - violation: no_helmet
+    start: 9.7
+    end: 10.0
+  - violation: overloading
+    start: 9.7
+    end: 10.0
+  - violation: no_helmet
+    start: 9.9
+    end: 10.0
+  - violation: overloading
+    start: 9.9
+    end: 10.0
+- id: mandalay_2_33
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_33.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_33_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 2.3
+  - violation: overloading
+    start: 0.1
+    end: 2.3
+  - violation: no_helmet
+    start: 0.1
+    end: 3.5
+  - violation: no_helmet
+    start: 2.1
+    end: 4.6
+  - violation: no_helmet
+    start: 2.2
+    end: 5.1
+  - violation: no_helmet
+    start: 2.9
+    end: 5.7
+  - violation: overloading
+    start: 2.9
+    end: 5.7
+  - violation: no_helmet
+    start: 3.1
+    end: 7.3
+  - violation: overloading
+    start: 3.1
+    end: 7.3
+  - violation: no_helmet
+    start: 3.6
+    end: 7.8
+  - violation: no_helmet
+    start: 3.9
+    end: 8.6
+  - violation: no_helmet
+    start: 5.4
+    end: 9.1
+  - violation: overloading
+    start: 5.4
+    end: 9.1
+  - violation: no_helmet
+    start: 6.8
+    end: 10.0
+  - violation: overloading
+    start: 6.8
+    end: 10.0
+  - violation: no_helmet
+    start: 7.6
+    end: 10.0
+  - violation: overloading
+    start: 7.6
+    end: 10.0
+  - violation: no_helmet
+    start: 8.6
+    end: 10.0
+  - violation: no_helmet
+    start: 9.4
+    end: 10.0
+  - violation: overloading
+    start: 9.4
+    end: 10.0
+- id: mandalay_2_70
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_70.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_70_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.3
+  - violation: no_helmet
+    start: 1.5
+    end: 2.4
+  - violation: overloading
+    start: 1.5
+    end: 2.4
+  - violation: no_helmet
+    start: 1.8
+    end: 2.9
+  - violation: no_helmet
+    start: 2.6
+    end: 3.4
+  - violation: overloading
+    start: 2.6
+    end: 3.4
+  - violation: no_helmet
+    start: 2.7
+    end: 4.0
+  - violation: overloading
+    start: 2.7
+    end: 4.0
+  - violation: no_helmet
+    start: 3.3
+    end: 4.3
+  - violation: no_helmet
+    start: 3.7
+    end: 6.0
+  - violation: overloading
+    start: 3.7
+    end: 6.0
+  - violation: no_helmet
+    start: 3.7
+    end: 6.6
+  - violation: no_helmet
+    start: 4.8
+    end: 7.5
+  - violation: overloading
+    start: 4.8
+    end: 7.5
+  - violation: no_helmet
+    start: 5.4
+    end: 6.2
+  - violation: overloading
+    start: 5.4
+    end: 6.2
+  - violation: no_helmet
+    start: 5.4
+    end: 8.5
+  - violation: no_helmet
+    start: 6.1
+    end: 9.0
+  - violation: no_helmet
+    start: 9.5
+    end: 10.0
+  - violation: overloading
+    start: 9.5
+    end: 10.0
+- id: mandalay_2_67
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_67.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_67_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.6
+  - violation: no_helmet
+    start: 1.0
+    end: 5.6
+  - violation: overloading
+    start: 1.0
+    end: 5.6
+  - violation: no_helmet
+    start: 1.5
+    end: 6.3
+  - violation: overloading
+    start: 1.5
+    end: 6.3
+  - violation: no_helmet
+    start: 7.2
+    end: 8.5
+  - violation: overloading
+    start: 7.2
+    end: 8.5
+  - violation: no_helmet
+    start: 7.5
+    end: 8.6
+  - violation: overloading
+    start: 7.5
+    end: 8.6
+  - violation: no_helmet
+    start: 7.5
+    end: 10.0
+  - violation: no_helmet
+    start: 8.3
+    end: 8.4
+  - violation: no_helmet
+    start: 8.5
+    end: 10.0
+  - violation: overloading
+    start: 8.5
+    end: 10.0
+  - violation: no_helmet
+    start: 9.5
+    end: 10.0
+  - violation: overloading
+    start: 9.5
+    end: 10.0
+  - violation: no_helmet
+    start: 9.6
+    end: 10.0
+  - violation: overloading
+    start: 9.6
+    end: 10.0
+- id: mandalay_2_143
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_143.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_143_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.4
+  - violation: overloading
+    start: 0.1
+    end: 1.4
+  - violation: no_helmet
+    start: 0.4
+    end: 2.4
+  - violation: overloading
+    start: 0.4
+    end: 2.4
+  - violation: no_helmet
+    start: 0.7
+    end: 4.1
+  - violation: overloading
+    start: 0.7
+    end: 4.1
+  - violation: no_helmet
+    start: 1.5
+    end: 3.7
+  - violation: overloading
+    start: 1.5
+    end: 3.7
+  - violation: no_helmet
+    start: 3.0
+    end: 6.9
+  - violation: no_helmet
+    start: 3.3
+    end: 7.8
+  - violation: overloading
+    start: 3.3
+    end: 7.8
+  - violation: no_helmet
+    start: 5.5
+    end: 9.2
+  - violation: overloading
+    start: 5.5
+    end: 9.2
+  - violation: overloading
+    start: 6.1
+    end: 10.0
+  - violation: no_helmet
+    start: 7.1
+    end: 10.0
+  - violation: no_helmet
+    start: 10.0
+    end: 10.0
+- id: mandalay_2_20
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_20.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_20_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.9
+  - violation: no_helmet
+    start: 0.6
+    end: 6.2
+  - violation: overloading
+    start: 0.6
+    end: 6.2
+  - violation: no_helmet
+    start: 2.0
+    end: 2.9
+  - violation: no_helmet
+    start: 3.2
+    end: 7.3
+  - violation: no_helmet
+    start: 3.3
+    end: 5.1
+  - violation: no_helmet
+    start: 3.5
+    end: 4.8
+  - violation: no_helmet
+    start: 3.6
+    end: 9.2
+  - violation: no_helmet
+    start: 3.8
+    end: 4.5
+  - violation: overloading
+    start: 3.8
+    end: 4.5
+  - violation: no_helmet
+    start: 4.2
+    end: 5.3
+  - violation: no_helmet
+    start: 4.9
+    end: 6.1
+  - violation: overloading
+    start: 4.9
+    end: 6.1
+  - violation: no_helmet
+    start: 5.0
+    end: 5.6
+  - violation: no_helmet
+    start: 5.3
+    end: 6.8
+  - violation: no_helmet
+    start: 5.8
+    end: 7.7
+  - violation: overloading
+    start: 5.8
+    end: 7.7
+  - violation: no_helmet
+    start: 5.9
+    end: 6.8
+  - violation: no_helmet
+    start: 6.1
+    end: 6.9
+  - violation: no_helmet
+    start: 6.8
+    end: 8.0
+  - violation: no_helmet
+    start: 7.3
+    end: 8.2
+  - violation: no_helmet
+    start: 7.6
+    end: 8.6
+  - violation: overloading
+    start: 7.6
+    end: 8.6
+  - violation: no_helmet
+    start: 8.1
+    end: 9.4
+  - violation: no_helmet
+    start: 8.5
+    end: 10.0
+  - violation: overloading
+    start: 8.5
+    end: 10.0
+- id: mandalay_1_135
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_1_135.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_1_135_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.5
+  - violation: no_helmet
+    start: 0.1
+    end: 2.8
+  - violation: no_helmet
+    start: 0.1
+    end: 3.4
+  - violation: overloading
+    start: 0.1
+    end: 3.4
+  - violation: no_helmet
+    start: 0.1
+    end: 4.7
+  - violation: overloading
+    start: 0.1
+    end: 4.7
+  - violation: no_helmet
+    start: 0.6
+    end: 5.7
+  - violation: overloading
+    start: 0.6
+    end: 5.7
+  - violation: no_helmet
+    start: 0.7
+    end: 3.4
+  - violation: overloading
+    start: 0.7
+    end: 3.4
+  - violation: no_helmet
+    start: 1.3
+    end: 4.7
+  - violation: no_helmet
+    start: 2.2
+    end: 5.9
+  - violation: no_helmet
+    start: 3.8
+    end: 8.7
+  - violation: no_helmet
+    start: 4.0
+    end: 7.8
+  - violation: no_helmet
+    start: 6.0
+    end: 8.1
+  - violation: overloading
+    start: 6.0
+    end: 8.1
+  - violation: no_helmet
+    start: 6.1
+    end: 10.0
+  - violation: no_helmet
+    start: 6.6
+    end: 8.7
+  - violation: overloading
+    start: 6.6
+    end: 8.7
+- id: mandalay_2_161
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_161.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_161_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.5
+  - violation: overloading
+    start: 0.1
+    end: 0.5
+  - violation: no_helmet
+    start: 0.1
+    end: 3.3
+  - violation: no_helmet
+    start: 0.1
+    end: 7.4
+  - violation: overloading
+    start: 0.1
+    end: 7.4
+  - violation: no_helmet
+    start: 1.0
+    end: 7.1
+  - violation: no_helmet
+    start: 3.7
+    end: 5.5
+  - violation: overloading
+    start: 3.7
+    end: 5.5
+  - violation: overloading
+    start: 4.7
+    end: 7.8
+  - violation: no_helmet
+    start: 4.9
+    end: 10.0
+  - violation: no_helmet
+    start: 5.2
+    end: 10.0
+  - violation: no_helmet
+    start: 6.2
+    end: 7.8
+  - violation: overloading
+    start: 6.2
+    end: 7.8
+  - violation: no_helmet
+    start: 6.7
+    end: 7.9
+  - violation: overloading
+    start: 6.7
+    end: 7.9
+- id: mandalay_2_172
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_172.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_172_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.1
+  - violation: overloading
+    start: 0.1
+    end: 0.1
+  - violation: no_helmet
+    start: 0.1
+    end: 2.0
+  - violation: overloading
+    start: 0.1
+    end: 2.0
+  - violation: no_helmet
+    start: 0.1
+    end: 10.0
+  - violation: no_helmet
+    start: 0.1
+    end: 10.0
+  - violation: overloading
+    start: 0.1
+    end: 10.0
+  - violation: no_helmet
+    start: 1.2
+    end: 4.6
+  - violation: overloading
+    start: 1.2
+    end: 4.6
+  - violation: no_helmet
+    start: 1.7
+    end: 8.5
+  - violation: no_helmet
+    start: 1.9
+    end: 2.4
+  - violation: overloading
+    start: 1.9
+    end: 2.4
+  - violation: no_helmet
+    start: 4.1
+    end: 9.6
+  - violation: no_helmet
+    start: 6.5
+    end: 10.0
+  - violation: overloading
+    start: 6.5
+    end: 10.0
+- id: mandalay_2_75
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_75.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_75_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 1.9
+  - violation: no_helmet
+    start: 0.1
+    end: 3.8
+  - violation: overloading
+    start: 0.1
+    end: 3.8
+  - violation: overloading
+    start: 0.5
+    end: 2.7
+  - violation: no_helmet
+    start: 4.4
+    end: 8.9
+  - violation: overloading
+    start: 4.4
+    end: 8.9
+  - violation: no_helmet
+    start: 5.8
+    end: 10.0
+  - violation: overloading
+    start: 5.8
+    end: 10.0
+  - violation: no_helmet
+    start: 7.9
+    end: 8.9
+  - violation: no_helmet
+    start: 8.0
+    end: 9.2
+  - violation: no_helmet
+    start: 8.7
+    end: 10.0
+  - violation: overloading
+    start: 8.7
+    end: 10.0
+  - violation: no_helmet
+    start: 9.0
+    end: 9.9
+  - violation: no_helmet
+    start: 9.3
+    end: 10.0
+  - violation: overloading
+    start: 9.3
+    end: 10.0
+- id: mandalay_1_50
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_1_50.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_1_50_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.7
+  - violation: overloading
+    start: 0.1
+    end: 0.7
+  - violation: no_helmet
+    start: 0.1
+    end: 5.1
+  - violation: overloading
+    start: 0.1
+    end: 5.1
+  - violation: no_helmet
+    start: 0.5
+    end: 4.9
+  - violation: overloading
+    start: 0.5
+    end: 4.9
+  - violation: no_helmet
+    start: 3.9
+    end: 8.3
+  - violation: overloading
+    start: 3.9
+    end: 8.3
+  - violation: no_helmet
+    start: 4.8
+    end: 9.3
+  - violation: overloading
+    start: 4.8
+    end: 9.3
+  - violation: no_helmet
+    start: 5.7
+    end: 10.0
+  - violation: overloading
+    start: 5.7
+    end: 10.0
+- id: mandalay_2_166
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_166.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_166_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.1
+  - violation: no_helmet
+    start: 0.1
+    end: 0.5
+  - violation: no_helmet
+    start: 2.7
+    end: 3.5
+  - violation: no_helmet
+    start: 3.3
+    end: 4.4
+  - violation: no_helmet
+    start: 4.1
+    end: 5.2
+  - violation: no_helmet
+    start: 4.6
+    end: 5.5
+  - violation: overloading
+    start: 4.6
+    end: 5.5
+  - violation: no_helmet
+    start: 4.8
+    end: 5.9
+  - violation: no_helmet
+    start: 5.1
+    end: 6.2
+  - violation: no_helmet
+    start: 6.8
+    end: 7.9
+  - violation: overloading
+    start: 6.8
+    end: 7.9
+  - violation: no_helmet
+    start: 7.0
+    end: 8.3
+  - violation: overloading
+    start: 7.0
+    end: 8.3
+  - violation: overloading
+    start: 7.2
+    end: 8.5
+  - violation: no_helmet
+    start: 7.8
+    end: 9.0
+  - violation: overloading
+    start: 7.8
+    end: 9.0
+  - violation: no_helmet
+    start: 8.5
+    end: 10.0
+  - violation: no_helmet
+    start: 8.9
+    end: 10.0
+  - violation: no_helmet
+    start: 9.3
+    end: 9.7
+  - violation: no_helmet
+    start: 10.0
+    end: 10.0
+- id: mandalay_2_118
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_118.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_118_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.8
+  - violation: overloading
+    start: 0.1
+    end: 0.8
+  - violation: no_helmet
+    start: 0.1
+    end: 1.5
+  - violation: overloading
+    start: 0.1
+    end: 1.5
+  - violation: no_helmet
+    start: 0.1
+    end: 2.1
+  - violation: no_helmet
+    start: 0.6
+    end: 1.4
+  - violation: no_helmet
+    start: 0.8
+    end: 2.3
+  - violation: no_helmet
+    start: 2.1
+    end: 4.2
+  - violation: overloading
+    start: 2.1
+    end: 4.2
+  - violation: no_helmet
+    start: 2.6
+    end: 3.7
+  - violation: no_helmet
+    start: 3.7
+    end: 4.6
+  - violation: no_helmet
+    start: 8.3
+    end: 8.9
+  - violation: overloading
+    start: 8.3
+    end: 8.9
+  - violation: no_helmet
+    start: 8.4
+    end: 9.4
+  - violation: no_helmet
+    start: 8.9
+    end: 10.0
+  - violation: no_helmet
+    start: 9.5
+    end: 10.0
+  - violation: no_helmet
+    start: 9.9
+    end: 10.0
+  - violation: no_helmet
+    start: 9.9
+    end: 10.0
+  - violation: overloading
+    start: 9.9
+    end: 10.0
+- id: mandalay_2_120
+  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_120.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_120_truth.txt
+  events:
+  - violation: no_helmet
+    start: 0.1
+    end: 0.7
+  - violation: no_helmet
+    start: 0.1
+    end: 1.3
+  - violation: no_helmet
+    start: 0.1
+    end: 2.1
+  - violation: no_helmet
+    start: 0.1
+    end: 4.4
+  - violation: no_helmet
+    start: 1.2
+    end: 2.4
+  - violation: no_helmet
+    start: 4.5
+    end: 5.4
+  - violation: overloading
+    start: 4.5
+    end: 5.4
+  - violation: no_helmet
+    start: 4.6
+    end: 6.4
+  - violation: no_helmet
+    start: 6.3
+    end: 7.6
+  - violation: overloading
+    start: 6.3
+    end: 7.6
+  - violation: no_helmet
+    start: 6.4
+    end: 8.2
+  - violation: overloading
+    start: 6.4
+    end: 8.2
+  - violation: no_helmet
+    start: 6.7
+    end: 7.8
+  - violation: overloading
+    start: 6.7
+    end: 7.8
+  - violation: no_helmet
+    start: 7.8
+    end: 9.0
+  - violation: overloading
+    start: 7.8
+    end: 9.0
+- id: dhaka_2026_07_03_dhaka_university_area_01
+  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_01.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
+    from dhaka_2026-07-03_dhaka_university_area_01_truth.txt'
+  events:
+  - violation: overloading
+    start: 0.0
+    end: 1.5
+  - violation: no_helmet
+    start: 1.5
+    end: 3.1
+  - violation: overloading
+    start: 1.5
+    end: 3.1
+  - violation: no_helmet
+    start: 3.1
+    end: 4.6
+  - violation: overloading
+    start: 3.1
+    end: 4.6
+  - violation: no_helmet
+    start: 4.6
+    end: 6.1
+  - violation: overloading
+    start: 4.6
+    end: 6.1
+  - violation: no_helmet
+    start: 6.1
+    end: 7.7
+  - violation: overloading
+    start: 6.1
+    end: 7.7
+  - violation: no_helmet
+    start: 7.7
+    end: 9.2
+  - violation: overloading
+    start: 7.7
+    end: 9.2
+  - violation: no_helmet
+    start: 9.2
+    end: 10.7
+  - violation: overloading
+    start: 9.2
+    end: 10.7
+  - violation: no_helmet
+    start: 10.7
+    end: 12.3
+  - violation: overloading
+    start: 10.7
+    end: 12.3
+  - violation: no_helmet
+    start: 12.3
+    end: 13.8
+  - violation: overloading
+    start: 12.3
+    end: 13.8
+  - violation: no_helmet
+    start: 13.8
+    end: 15.3
+  - violation: overloading
+    start: 13.8
+    end: 15.3
+  - violation: no_helmet
+    start: 15.3
+    end: 16.9
+  - violation: overloading
+    start: 15.3
+    end: 16.9
+  - violation: no_helmet
+    start: 16.9
+    end: 18.4
+  - violation: overloading
+    start: 16.9
+    end: 18.4
+  - violation: no_helmet
+    start: 18.4
+    end: 19.9
+  - violation: overloading
+    start: 18.4
+    end: 19.9
+  - violation: no_helmet
+    start: 19.9
+    end: 21.5
+  - violation: overloading
+    start: 19.9
+    end: 21.5
+  - violation: no_helmet
+    start: 21.5
+    end: 23.0
+  - violation: overloading
+    start: 21.5
+    end: 23.0
+  - violation: no_helmet
+    start: 23.0
+    end: 24.5
+  - violation: overloading
+    start: 23.0
+    end: 24.5
+  - violation: no_helmet
+    start: 24.5
+    end: 26.1
+  - violation: overloading
+    start: 24.5
+    end: 26.1
+  - violation: no_helmet
+    start: 26.1
+    end: 27.6
+  - violation: no_helmet
+    start: 27.6
+    end: 29.1
+  - violation: overloading
+    start: 27.6
+    end: 29.1
+  - violation: no_helmet
+    start: 29.1
+    end: 30.7
+  - violation: overloading
+    start: 29.1
+    end: 30.7
+  - violation: no_helmet
+    start: 30.7
+    end: 32.2
+  - violation: overloading
+    start: 30.7
+    end: 32.2
+  - violation: no_helmet
+    start: 32.2
+    end: 33.7
+  - violation: overloading
+    start: 32.2
+    end: 33.7
+  - violation: no_helmet
+    start: 33.7
+    end: 35.3
+  - violation: overloading
+    start: 33.7
+    end: 35.3
+  - violation: no_helmet
+    start: 35.3
+    end: 36.8
+  - violation: overloading
+    start: 35.3
+    end: 36.8
+  - violation: no_helmet
+    start: 36.8
+    end: 38.3
+  - violation: overloading
+    start: 36.8
+    end: 38.3
+  - violation: no_helmet
+    start: 38.3
+    end: 39.9
+  - violation: overloading
+    start: 38.3
+    end: 39.9
+  - violation: no_helmet
+    start: 39.9
+    end: 41.4
+  - violation: overloading
+    start: 39.9
+    end: 41.4
+  - violation: no_helmet
+    start: 41.4
+    end: 42.9
+  - violation: overloading
+    start: 41.4
+    end: 42.9
+  - violation: no_helmet
+    start: 42.9
+    end: 44.5
+  - violation: overloading
+    start: 42.9
+    end: 44.5
+  - violation: no_helmet
+    start: 44.5
+    end: 46.0
+  - violation: overloading
+    start: 44.5
+    end: 46.0
+  - violation: no_helmet
+    start: 46.0
+    end: 47.5
+  - violation: overloading
+    start: 46.0
+    end: 47.5
+  - violation: no_helmet
+    start: 47.5
+    end: 49.1
+  - violation: overloading
+    start: 47.5
+    end: 49.1
+  - violation: no_helmet
+    start: 49.1
+    end: 50.6
+  - violation: overloading
+    start: 49.1
+    end: 50.6
+  - violation: no_helmet
+    start: 50.6
+    end: 52.1
+  - violation: overloading
+    start: 50.6
+    end: 52.1
+  - violation: no_helmet
+    start: 52.1
+    end: 53.7
+  - violation: overloading
+    start: 52.1
+    end: 53.7
+  - violation: no_helmet
+    start: 53.7
+    end: 55.2
+  - violation: overloading
+    start: 53.7
+    end: 55.2
+  - violation: no_helmet
+    start: 55.2
+    end: 56.7
+  - violation: overloading
+    start: 55.2
+    end: 56.7
+  - violation: no_helmet
+    start: 56.7
+    end: 58.3
+  - violation: overloading
+    start: 56.7
+    end: 58.3
+  - violation: no_helmet
+    start: 58.3
+    end: 59.8
+  - violation: no_helmet
+    start: 59.8
+    end: 61.3
+  - violation: overloading
+    start: 59.8
+    end: 61.3
+  - violation: no_helmet
+    start: 61.3
+    end: 62.9
+  - violation: overloading
+    start: 61.3
+    end: 62.9
+  - violation: no_helmet
+    start: 62.9
+    end: 64.4
+  - violation: overloading
+    start: 62.9
+    end: 64.4
+  - violation: no_helmet
+    start: 64.4
+    end: 65.9
+  - violation: overloading
+    start: 64.4
+    end: 65.9
+  - violation: no_helmet
+    start: 65.9
+    end: 67.5
+  - violation: overloading
+    start: 65.9
+    end: 67.5
+  - violation: no_helmet
+    start: 67.5
+    end: 69.0
+  - violation: overloading
+    start: 67.5
+    end: 69.0
+  - violation: no_helmet
+    start: 69.0
+    end: 70.5
+  - violation: overloading
+    start: 69.0
+    end: 70.5
+  - violation: no_helmet
+    start: 70.5
+    end: 72.1
+  - violation: overloading
+    start: 70.5
+    end: 72.1
+  - violation: no_helmet
+    start: 72.1
+    end: 73.6
+  - violation: overloading
+    start: 72.1
+    end: 73.6
+  - violation: no_helmet
+    start: 73.6
+    end: 75.1
+  - violation: overloading
+    start: 73.6
+    end: 75.1
+  - violation: no_helmet
+    start: 75.1
+    end: 76.7
+  - violation: overloading
+    start: 75.1
+    end: 76.7
+  - violation: no_helmet
+    start: 76.7
+    end: 78.2
+  - violation: overloading
+    start: 76.7
+    end: 78.2
+  - violation: no_helmet
+    start: 78.2
+    end: 79.7
+  - violation: overloading
+    start: 78.2
+    end: 79.7
+  - violation: no_helmet
+    start: 79.7
+    end: 81.3
+  - violation: overloading
+    start: 79.7
+    end: 81.3
+  - violation: no_helmet
+    start: 81.3
+    end: 82.8
+  - violation: overloading
+    start: 81.3
+    end: 82.8
+  - violation: no_helmet
+    start: 82.8
+    end: 84.3
+  - violation: overloading
+    start: 82.8
+    end: 84.3
+  - violation: no_helmet
+    start: 84.3
+    end: 85.9
+  - violation: overloading
+    start: 84.3
+    end: 85.9
+  - violation: no_helmet
+    start: 85.9
+    end: 87.4
+  - violation: overloading
+    start: 85.9
+    end: 87.4
+  - violation: no_helmet
+    start: 87.4
+    end: 88.9
+  - violation: overloading
+    start: 87.4
+    end: 88.9
+  - violation: no_helmet
+    start: 88.9
+    end: 90.5
+  - violation: overloading
+    start: 88.9
+    end: 90.5
+  - violation: no_helmet
+    start: 90.5
+    end: 92.0
+  - violation: overloading
+    start: 90.5
+    end: 92.0
+  - violation: no_helmet
+    start: 92.0
+    end: 93.5
+  - violation: overloading
+    start: 92.0
+    end: 93.5
+  - violation: no_helmet
+    start: 93.5
+    end: 95.1
+  - violation: overloading
+    start: 93.5
+    end: 95.1
+  - violation: no_helmet
+    start: 95.1
+    end: 96.6
+  - violation: overloading
+    start: 95.1
+    end: 96.6
+  - violation: no_helmet
+    start: 96.6
+    end: 98.1
+  - violation: overloading
+    start: 96.6
+    end: 98.1
+  - violation: no_helmet
+    start: 99.7
+    end: 101.2
+  - violation: overloading
+    start: 99.7
+    end: 101.2
+  - violation: no_helmet
+    start: 101.2
+    end: 102.7
+  - violation: overloading
+    start: 101.2
+    end: 102.7
+  - violation: no_helmet
+    start: 102.7
+    end: 104.3
+  - violation: overloading
+    start: 102.7
+    end: 104.3
+  - violation: no_helmet
+    start: 104.3
+    end: 105.8
+  - violation: overloading
+    start: 104.3
+    end: 105.8
+  - violation: no_helmet
+    start: 105.8
+    end: 107.3
+  - violation: overloading
+    start: 105.8
+    end: 107.3
+  - violation: no_helmet
+    start: 107.3
+    end: 108.9
+  - violation: overloading
+    start: 107.3
+    end: 108.9
+  - violation: no_helmet
+    start: 108.9
+    end: 110.4
+  - violation: overloading
+    start: 108.9
+    end: 110.4
+  - violation: no_helmet
+    start: 111.9
+    end: 113.5
+  - violation: overloading
+    start: 111.9
+    end: 113.5
+  - violation: no_helmet
+    start: 113.5
+    end: 115.0
+  - violation: overloading
+    start: 113.5
+    end: 115.0
+  - violation: no_helmet
+    start: 115.0
+    end: 116.5
+  - violation: overloading
+    start: 115.0
+    end: 116.5
+  - violation: no_helmet
+    start: 116.5
+    end: 118.1
+  - violation: overloading
+    start: 116.5
+    end: 118.1
+  - violation: no_helmet
+    start: 118.1
+    end: 119.6
+  - violation: overloading
+    start: 118.1
+    end: 119.6
+  - violation: no_helmet
+    start: 119.6
+    end: 121.1
+  - violation: overloading
+    start: 119.6
+    end: 121.1
+  - violation: no_helmet
+    start: 121.1
+    end: 122.7
+  - violation: overloading
+    start: 121.1
+    end: 122.7
+  - violation: no_helmet
+    start: 122.7
+    end: 124.2
+  - violation: overloading
+    start: 122.7
+    end: 124.2
+  - violation: no_helmet
+    start: 124.2
+    end: 125.7
+  - violation: overloading
+    start: 124.2
+    end: 125.7
+  - violation: no_helmet
+    start: 125.7
+    end: 127.3
+  - violation: overloading
+    start: 125.7
+    end: 127.3
+  - violation: no_helmet
+    start: 127.3
+    end: 128.8
+  - violation: overloading
+    start: 127.3
+    end: 128.8
+  - violation: no_helmet
+    start: 128.8
+    end: 130.3
+  - violation: overloading
+    start: 128.8
+    end: 130.3
+  - violation: no_helmet
+    start: 130.3
+    end: 131.9
+  - violation: overloading
+    start: 130.3
+    end: 131.9
+  - violation: no_helmet
+    start: 131.9
+    end: 133.4
+  - violation: overloading
+    start: 131.9
+    end: 133.4
+  - violation: no_helmet
+    start: 133.4
+    end: 134.9
+  - violation: overloading
+    start: 133.4
+    end: 134.9
+  - violation: no_helmet
+    start: 134.9
+    end: 136.5
+  - violation: overloading
+    start: 134.9
+    end: 136.5
+  - violation: no_helmet
+    start: 136.5
+    end: 138.0
+  - violation: overloading
+    start: 136.5
+    end: 138.0
+  - violation: no_helmet
+    start: 138.0
+    end: 139.5
+  - violation: overloading
+    start: 138.0
+    end: 139.5
+  - violation: no_helmet
+    start: 139.5
+    end: 141.1
+  - violation: overloading
+    start: 139.5
+    end: 141.1
+  - violation: no_helmet
+    start: 141.1
+    end: 142.6
+  - violation: overloading
+    start: 141.1
+    end: 142.6
+  - violation: no_helmet
+    start: 142.6
+    end: 144.1
+  - violation: overloading
+    start: 142.6
+    end: 144.1
+  - violation: no_helmet
+    start: 144.1
+    end: 145.7
+  - violation: overloading
+    start: 144.1
+    end: 145.7
+  - violation: no_helmet
+    start: 145.7
+    end: 147.2
+  - violation: overloading
+    start: 145.7
+    end: 147.2
+  - violation: no_helmet
+    start: 147.2
+    end: 148.7
+  - violation: overloading
+    start: 147.2
+    end: 148.7
+  - violation: no_helmet
+    start: 148.7
+    end: 150.3
+  - violation: overloading
+    start: 148.7
+    end: 150.3
+  - violation: no_helmet
+    start: 150.3
+    end: 151.8
+  - violation: overloading
+    start: 150.3
+    end: 151.8
+  - violation: no_helmet
+    start: 151.8
+    end: 153.3
+  - violation: overloading
+    start: 151.8
+    end: 153.3
+  - violation: no_helmet
+    start: 153.3
+    end: 154.9
+  - violation: overloading
+    start: 153.3
+    end: 154.9
+  - violation: no_helmet
+    start: 154.9
+    end: 156.4
+  - violation: no_helmet
+    start: 156.4
+    end: 157.9
+  - violation: overloading
+    start: 156.4
+    end: 157.9
+  - violation: no_helmet
+    start: 157.9
+    end: 159.5
+  - violation: overloading
+    start: 157.9
+    end: 159.5
+  - violation: no_helmet
+    start: 159.5
+    end: 161.0
+  - violation: overloading
+    start: 159.5
+    end: 161.0
+  - violation: no_helmet
+    start: 161.0
+    end: 162.5
+  - violation: overloading
+    start: 161.0
+    end: 162.5
+  - violation: no_helmet
+    start: 162.5
+    end: 164.1
+  - violation: overloading
+    start: 162.5
+    end: 164.1
+  - violation: no_helmet
+    start: 164.1
+    end: 165.6
+  - violation: overloading
+    start: 164.1
+    end: 165.6
+  - violation: no_helmet
+    start: 165.6
+    end: 167.1
+  - violation: overloading
+    start: 165.6
+    end: 167.1
+  - violation: no_helmet
+    start: 167.1
+    end: 168.7
+  - violation: overloading
+    start: 167.1
+    end: 168.7
+  - violation: no_helmet
+    start: 168.7
+    end: 170.2
+  - violation: overloading
+    start: 168.7
+    end: 170.2
+  - violation: no_helmet
+    start: 170.2
+    end: 171.7
+  - violation: overloading
+    start: 170.2
+    end: 171.7
+  - violation: no_helmet
+    start: 171.7
+    end: 173.3
+  - violation: overloading
+    start: 171.7
+    end: 173.3
+  - violation: no_helmet
+    start: 173.3
+    end: 174.8
+  - violation: overloading
+    start: 173.3
+    end: 174.8
+  - violation: no_helmet
+    start: 174.8
+    end: 176.3
+  - violation: overloading
+    start: 174.8
+    end: 176.3
+  - violation: no_helmet
+    start: 176.3
+    end: 177.9
+  - violation: overloading
+    start: 176.3
+    end: 177.9
+  - violation: no_helmet
+    start: 177.9
+    end: 179.4
+  - violation: overloading
+    start: 177.9
+    end: 179.4
+  - violation: no_helmet
+    start: 179.4
+    end: 180.9
+  - violation: overloading
+    start: 179.4
+    end: 180.9
+  - violation: no_helmet
+    start: 180.9
+    end: 182.5
+  - violation: overloading
+    start: 180.9
+    end: 182.5
+  - violation: no_helmet
+    start: 182.5
+    end: 184.0
+  - violation: overloading
+    start: 182.5
+    end: 184.0
+  - violation: no_helmet
+    start: 184.0
+    end: 185.5
+  - violation: overloading
+    start: 184.0
+    end: 185.5
+  - violation: no_helmet
+    start: 185.5
+    end: 187.1
+  - violation: overloading
+    start: 185.5
+    end: 187.1
+  - violation: no_helmet
+    start: 187.1
+    end: 188.6
+  - violation: overloading
+    start: 187.1
+    end: 188.6
+  - violation: no_helmet
+    start: 188.6
+    end: 190.1
+  - violation: overloading
+    start: 188.6
+    end: 190.1
+  - violation: no_helmet
+    start: 190.1
+    end: 191.7
+  - violation: overloading
+    start: 190.1
+    end: 191.7
+  - violation: no_helmet
+    start: 191.7
+    end: 193.2
+  - violation: overloading
+    start: 191.7
+    end: 193.2
+  - violation: no_helmet
+    start: 193.2
+    end: 194.7
+  - violation: overloading
+    start: 193.2
+    end: 194.7
+  - violation: no_helmet
+    start: 194.7
+    end: 196.3
+  - violation: overloading
+    start: 194.7
+    end: 196.3
+  - violation: no_helmet
+    start: 196.3
+    end: 197.8
+  - violation: overloading
+    start: 196.3
+    end: 197.8
+  - violation: no_helmet
+    start: 197.8
+    end: 199.3
+  - violation: overloading
+    start: 197.8
+    end: 199.3
+  - violation: no_helmet
+    start: 199.3
+    end: 200.9
+  - violation: overloading
+    start: 199.3
+    end: 200.9
+  - violation: no_helmet
+    start: 200.9
+    end: 202.4
+  - violation: overloading
+    start: 200.9
+    end: 202.4
+  - violation: no_helmet
+    start: 202.4
+    end: 203.9
+  - violation: overloading
+    start: 202.4
+    end: 203.9
+  - violation: no_helmet
+    start: 203.9
+    end: 205.5
+  - violation: overloading
+    start: 203.9
+    end: 205.5
+  - violation: no_helmet
+    start: 205.5
+    end: 207.0
+  - violation: overloading
+    start: 205.5
+    end: 207.0
+  - violation: no_helmet
+    start: 207.0
+    end: 208.5
+  - violation: overloading
+    start: 207.0
+    end: 208.5
+  - violation: no_helmet
+    start: 208.5
+    end: 210.1
+  - violation: overloading
+    start: 208.5
+    end: 210.1
+  - violation: no_helmet
+    start: 210.1
+    end: 211.6
+  - violation: overloading
+    start: 210.1
+    end: 211.6
+  - violation: no_helmet
+    start: 211.6
+    end: 213.1
+  - violation: overloading
+    start: 211.6
+    end: 213.1
+  - violation: no_helmet
+    start: 213.1
+    end: 214.7
+  - violation: overloading
+    start: 213.1
+    end: 214.7
+  - violation: no_helmet
+    start: 214.7
+    end: 216.2
+  - violation: overloading
+    start: 214.7
+    end: 216.2
+  - violation: no_helmet
+    start: 216.2
+    end: 217.7
+  - violation: overloading
+    start: 216.2
+    end: 217.7
+- id: dhaka_2026_07_03_dhaka_university_area_03
+  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_03.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
+    from dhaka_2026-07-03_dhaka_university_area_03_truth.txt'
+  events:
+  - violation: no_helmet
+    start: 0.0
+    end: 1.5
+  - violation: overloading
+    start: 0.0
+    end: 1.5
+  - violation: no_helmet
+    start: 1.5
+    end: 3.1
+  - violation: overloading
+    start: 1.5
+    end: 3.1
+  - violation: no_helmet
+    start: 3.1
+    end: 4.6
+  - violation: overloading
+    start: 3.1
+    end: 4.6
+  - violation: no_helmet
+    start: 4.6
+    end: 6.1
+  - violation: overloading
+    start: 4.6
+    end: 6.1
+  - violation: no_helmet
+    start: 6.1
+    end: 7.7
+  - violation: overloading
+    start: 6.1
+    end: 7.7
+  - violation: no_helmet
+    start: 7.7
+    end: 9.2
+  - violation: overloading
+    start: 7.7
+    end: 9.2
+  - violation: no_helmet
+    start: 9.2
+    end: 10.7
+  - violation: overloading
+    start: 9.2
+    end: 10.7
+  - violation: no_helmet
+    start: 10.7
+    end: 12.3
+  - violation: overloading
+    start: 10.7
+    end: 12.3
+  - violation: no_helmet
+    start: 12.3
+    end: 13.8
+  - violation: no_helmet
+    start: 13.8
+    end: 15.3
+  - violation: overloading
+    start: 13.8
+    end: 15.3
+  - violation: no_helmet
+    start: 15.3
+    end: 16.9
+  - violation: overloading
+    start: 15.3
+    end: 16.9
+  - violation: no_helmet
+    start: 16.9
+    end: 18.4
+  - violation: overloading
+    start: 16.9
+    end: 18.4
+  - violation: no_helmet
+    start: 18.4
+    end: 19.9
+  - violation: overloading
+    start: 18.4
+    end: 19.9
+  - violation: no_helmet
+    start: 19.9
+    end: 21.5
+  - violation: overloading
+    start: 19.9
+    end: 21.5
+  - violation: no_helmet
+    start: 21.5
+    end: 23.0
+  - violation: overloading
+    start: 21.5
+    end: 23.0
+  - violation: no_helmet
+    start: 23.0
+    end: 24.5
+  - violation: overloading
+    start: 23.0
+    end: 24.5
+  - violation: no_helmet
+    start: 24.5
+    end: 26.1
+  - violation: overloading
+    start: 24.5
+    end: 26.1
+  - violation: no_helmet
+    start: 26.1
+    end: 27.6
+  - violation: overloading
+    start: 26.1
+    end: 27.6
+  - violation: no_helmet
+    start: 27.6
+    end: 29.1
+  - violation: overloading
+    start: 27.6
+    end: 29.1
+  - violation: no_helmet
+    start: 29.1
+    end: 30.7
+  - violation: overloading
+    start: 29.1
+    end: 30.7
+  - violation: no_helmet
+    start: 30.7
+    end: 32.2
+  - violation: overloading
+    start: 30.7
+    end: 32.2
+  - violation: no_helmet
+    start: 32.2
+    end: 33.7
+  - violation: overloading
+    start: 32.2
+    end: 33.7
+  - violation: no_helmet
+    start: 33.7
+    end: 35.3
+  - violation: overloading
+    start: 33.7
+    end: 35.3
+  - violation: no_helmet
+    start: 35.3
+    end: 36.8
+  - violation: overloading
+    start: 35.3
+    end: 36.8
+  - violation: no_helmet
+    start: 36.8
+    end: 38.3
+  - violation: overloading
+    start: 36.8
+    end: 38.3
+  - violation: no_helmet
+    start: 38.3
+    end: 39.9
+  - violation: overloading
+    start: 38.3
+    end: 39.9
+  - violation: no_helmet
+    start: 39.9
+    end: 41.4
+  - violation: overloading
+    start: 39.9
+    end: 41.4
+  - violation: no_helmet
+    start: 41.4
+    end: 42.9
+  - violation: overloading
+    start: 41.4
+    end: 42.9
+  - violation: no_helmet
+    start: 42.9
+    end: 44.5
+  - violation: overloading
+    start: 42.9
+    end: 44.5
+  - violation: no_helmet
+    start: 44.5
+    end: 46.0
+  - violation: overloading
+    start: 44.5
+    end: 46.0
+  - violation: no_helmet
+    start: 46.0
+    end: 47.5
+  - violation: overloading
+    start: 46.0
+    end: 47.5
+  - violation: no_helmet
+    start: 47.5
+    end: 49.1
+  - violation: overloading
+    start: 47.5
+    end: 49.1
+  - violation: no_helmet
+    start: 49.1
+    end: 50.6
+  - violation: overloading
+    start: 49.1
+    end: 50.6
+  - violation: no_helmet
+    start: 50.6
+    end: 52.1
+  - violation: overloading
+    start: 50.6
+    end: 52.1
+  - violation: no_helmet
+    start: 52.1
+    end: 53.7
+  - violation: overloading
+    start: 52.1
+    end: 53.7
+  - violation: no_helmet
+    start: 53.7
+    end: 55.2
+  - violation: overloading
+    start: 53.7
+    end: 55.2
+  - violation: no_helmet
+    start: 55.2
+    end: 56.7
+  - violation: overloading
+    start: 55.2
+    end: 56.7
+  - violation: no_helmet
+    start: 56.7
+    end: 58.3
+  - violation: overloading
+    start: 56.7
+    end: 58.3
+  - violation: no_helmet
+    start: 58.3
+    end: 59.8
+  - violation: no_helmet
+    start: 59.8
+    end: 61.3
+  - violation: overloading
+    start: 59.8
+    end: 61.3
+  - violation: no_helmet
+    start: 61.3
+    end: 62.9
+  - violation: overloading
+    start: 61.3
+    end: 62.9
+  - violation: no_helmet
+    start: 62.9
+    end: 64.4
+  - violation: overloading
+    start: 62.9
+    end: 64.4
+  - violation: no_helmet
+    start: 64.4
+    end: 65.9
+  - violation: overloading
+    start: 64.4
+    end: 65.9
+  - violation: no_helmet
+    start: 65.9
+    end: 67.5
+  - violation: overloading
+    start: 65.9
+    end: 67.5
+  - violation: no_helmet
+    start: 67.5
+    end: 69.0
+  - violation: no_helmet
+    start: 69.0
+    end: 70.5
+  - violation: overloading
+    start: 69.0
+    end: 70.5
+  - violation: no_helmet
+    start: 70.5
+    end: 72.1
+  - violation: overloading
+    start: 70.5
+    end: 72.1
+  - violation: no_helmet
+    start: 72.1
+    end: 73.6
+  - violation: overloading
+    start: 72.1
+    end: 73.6
+  - violation: no_helmet
+    start: 73.6
+    end: 75.1
+  - violation: overloading
+    start: 73.6
+    end: 75.1
+  - violation: no_helmet
+    start: 75.1
+    end: 76.7
+  - violation: overloading
+    start: 75.1
+    end: 76.7
+  - violation: no_helmet
+    start: 76.7
+    end: 78.2
+  - violation: overloading
+    start: 76.7
+    end: 78.2
+  - violation: no_helmet
+    start: 78.2
+    end: 79.7
+  - violation: overloading
+    start: 78.2
+    end: 79.7
+  - violation: no_helmet
+    start: 79.7
+    end: 81.3
+  - violation: overloading
+    start: 79.7
+    end: 81.3
+  - violation: no_helmet
+    start: 81.3
+    end: 82.8
+  - violation: overloading
+    start: 81.3
+    end: 82.8
+  - violation: no_helmet
+    start: 82.8
+    end: 84.3
+  - violation: overloading
+    start: 82.8
+    end: 84.3
+  - violation: no_helmet
+    start: 84.3
+    end: 85.9
+  - violation: overloading
+    start: 84.3
+    end: 85.9
+  - violation: no_helmet
+    start: 85.9
+    end: 87.4
+  - violation: overloading
+    start: 85.9
+    end: 87.4
+  - violation: no_helmet
+    start: 87.4
+    end: 88.9
+  - violation: overloading
+    start: 87.4
+    end: 88.9
+  - violation: no_helmet
+    start: 88.9
+    end: 90.5
+  - violation: overloading
+    start: 88.9
+    end: 90.5
+  - violation: no_helmet
+    start: 90.5
+    end: 92.0
+  - violation: overloading
+    start: 90.5
+    end: 92.0
+  - violation: no_helmet
+    start: 92.0
+    end: 93.5
+  - violation: overloading
+    start: 92.0
+    end: 93.5
+  - violation: no_helmet
+    start: 93.5
+    end: 95.1
+  - violation: overloading
+    start: 93.5
+    end: 95.1
+  - violation: no_helmet
+    start: 95.1
+    end: 96.6
+  - violation: overloading
+    start: 95.1
+    end: 96.6
+  - violation: no_helmet
+    start: 96.6
+    end: 98.1
+  - violation: overloading
+    start: 96.6
+    end: 98.1
+  - violation: overloading
+    start: 98.1
+    end: 99.7
+  - violation: no_helmet
+    start: 99.7
+    end: 101.2
+  - violation: overloading
+    start: 99.7
+    end: 101.2
+  - violation: no_helmet
+    start: 101.2
+    end: 102.7
+  - violation: overloading
+    start: 101.2
+    end: 102.7
+  - violation: no_helmet
+    start: 102.7
+    end: 104.3
+  - violation: overloading
+    start: 102.7
+    end: 104.3
+  - violation: no_helmet
+    start: 104.3
+    end: 105.8
+  - violation: overloading
+    start: 104.3
+    end: 105.8
+  - violation: no_helmet
+    start: 105.8
+    end: 107.3
+  - violation: overloading
+    start: 105.8
+    end: 107.3
+  - violation: no_helmet
+    start: 107.3
+    end: 108.9
+  - violation: overloading
+    start: 107.3
+    end: 108.9
+  - violation: no_helmet
+    start: 108.9
+    end: 110.4
+  - violation: overloading
+    start: 108.9
+    end: 110.4
+  - violation: no_helmet
+    start: 110.4
+    end: 111.9
+  - violation: overloading
+    start: 110.4
+    end: 111.9
+  - violation: no_helmet
+    start: 111.9
+    end: 113.5
+  - violation: overloading
+    start: 111.9
+    end: 113.5
+  - violation: no_helmet
+    start: 113.5
+    end: 115.0
+  - violation: overloading
+    start: 113.5
+    end: 115.0
+  - violation: no_helmet
+    start: 115.0
+    end: 116.5
+  - violation: overloading
+    start: 115.0
+    end: 116.5
+  - violation: no_helmet
+    start: 116.5
+    end: 118.1
+  - violation: overloading
+    start: 116.5
+    end: 118.1
+  - violation: no_helmet
+    start: 118.1
+    end: 119.6
+  - violation: overloading
+    start: 118.1
+    end: 119.6
+  - violation: no_helmet
+    start: 119.6
+    end: 121.1
+  - violation: overloading
+    start: 119.6
+    end: 121.1
+  - violation: no_helmet
+    start: 121.1
+    end: 122.7
+  - violation: overloading
+    start: 121.1
+    end: 122.7
+  - violation: no_helmet
+    start: 122.7
+    end: 124.2
+  - violation: overloading
+    start: 122.7
+    end: 124.2
+  - violation: no_helmet
+    start: 124.2
+    end: 125.7
+  - violation: overloading
+    start: 124.2
+    end: 125.7
+  - violation: no_helmet
+    start: 125.7
+    end: 127.3
+  - violation: overloading
+    start: 125.7
+    end: 127.3
+  - violation: no_helmet
+    start: 127.3
+    end: 128.8
+  - violation: overloading
+    start: 127.3
+    end: 128.8
+  - violation: no_helmet
+    start: 128.8
+    end: 130.3
+  - violation: overloading
+    start: 128.8
+    end: 130.3
+  - violation: no_helmet
+    start: 130.3
+    end: 131.9
+  - violation: overloading
+    start: 130.3
+    end: 131.9
+  - violation: no_helmet
+    start: 131.9
+    end: 133.4
+  - violation: overloading
+    start: 131.9
+    end: 133.4
+  - violation: no_helmet
+    start: 133.4
+    end: 134.9
+  - violation: overloading
+    start: 133.4
+    end: 134.9
+  - violation: no_helmet
+    start: 134.9
+    end: 136.5
+  - violation: overloading
+    start: 134.9
+    end: 136.5
+  - violation: no_helmet
+    start: 136.5
+    end: 138.0
+  - violation: overloading
+    start: 136.5
+    end: 138.0
+  - violation: no_helmet
+    start: 138.0
+    end: 139.5
+  - violation: overloading
+    start: 138.0
+    end: 139.5
+  - violation: no_helmet
+    start: 139.5
+    end: 141.1
+  - violation: overloading
+    start: 139.5
+    end: 141.1
+  - violation: no_helmet
+    start: 141.1
+    end: 142.6
+  - violation: overloading
+    start: 141.1
+    end: 142.6
+  - violation: no_helmet
+    start: 142.6
+    end: 144.1
+  - violation: overloading
+    start: 142.6
+    end: 144.1
+  - violation: no_helmet
+    start: 144.1
+    end: 145.7
+  - violation: overloading
+    start: 144.1
+    end: 145.7
+  - violation: no_helmet
+    start: 145.7
+    end: 147.2
+  - violation: overloading
+    start: 145.7
+    end: 147.2
+  - violation: no_helmet
+    start: 147.2
+    end: 148.7
+  - violation: overloading
+    start: 147.2
+    end: 148.7
+  - violation: no_helmet
+    start: 148.7
+    end: 150.3
+  - violation: overloading
+    start: 148.7
+    end: 150.3
+  - violation: no_helmet
+    start: 150.3
+    end: 151.8
+  - violation: overloading
+    start: 150.3
+    end: 151.8
+  - violation: no_helmet
+    start: 151.8
+    end: 153.3
+  - violation: overloading
+    start: 151.8
+    end: 153.3
+  - violation: no_helmet
+    start: 153.3
+    end: 154.9
+  - violation: overloading
+    start: 153.3
+    end: 154.9
+  - violation: no_helmet
+    start: 154.9
+    end: 156.4
+  - violation: overloading
+    start: 154.9
+    end: 156.4
+  - violation: no_helmet
+    start: 156.4
+    end: 157.9
+  - violation: overloading
+    start: 156.4
+    end: 157.9
+  - violation: no_helmet
+    start: 157.9
+    end: 159.5
+  - violation: overloading
+    start: 157.9
+    end: 159.5
+  - violation: no_helmet
+    start: 159.5
+    end: 161.0
+  - violation: overloading
+    start: 159.5
+    end: 161.0
+  - violation: no_helmet
+    start: 161.0
+    end: 162.5
+  - violation: overloading
+    start: 161.0
+    end: 162.5
+  - violation: no_helmet
+    start: 162.5
+    end: 164.1
+  - violation: overloading
+    start: 162.5
+    end: 164.1
+  - violation: no_helmet
+    start: 164.1
+    end: 165.6
+  - violation: overloading
+    start: 164.1
+    end: 165.6
+  - violation: no_helmet
+    start: 165.6
+    end: 167.1
+  - violation: overloading
+    start: 165.6
+    end: 167.1
+  - violation: no_helmet
+    start: 167.1
+    end: 168.7
+  - violation: overloading
+    start: 167.1
+    end: 168.7
+  - violation: no_helmet
+    start: 168.7
+    end: 170.2
+  - violation: no_helmet
+    start: 170.2
+    end: 171.7
+  - violation: overloading
+    start: 170.2
+    end: 171.7
+  - violation: no_helmet
+    start: 171.7
+    end: 173.3
+  - violation: no_helmet
+    start: 173.3
+    end: 174.8
+  - violation: overloading
+    start: 173.3
+    end: 174.8
+  - violation: no_helmet
+    start: 174.8
+    end: 176.3
+  - violation: overloading
+    start: 174.8
+    end: 176.3
+  - violation: no_helmet
+    start: 176.3
+    end: 177.9
+  - violation: overloading
+    start: 176.3
+    end: 177.9
+  - violation: no_helmet
+    start: 177.9
+    end: 179.4
+  - violation: overloading
+    start: 177.9
+    end: 179.4
+  - violation: no_helmet
+    start: 179.4
+    end: 180.9
+  - violation: overloading
+    start: 179.4
+    end: 180.9
+  - violation: no_helmet
+    start: 180.9
+    end: 182.5
+  - violation: overloading
+    start: 180.9
+    end: 182.5
+  - violation: no_helmet
+    start: 182.5
+    end: 184.0
+  - violation: overloading
+    start: 182.5
+    end: 184.0
+  - violation: no_helmet
+    start: 184.0
+    end: 185.5
+  - violation: overloading
+    start: 184.0
+    end: 185.5
+  - violation: no_helmet
+    start: 185.5
+    end: 187.1
+  - violation: overloading
+    start: 185.5
+    end: 187.1
+  - violation: no_helmet
+    start: 187.1
+    end: 188.6
+  - violation: overloading
+    start: 187.1
+    end: 188.6
+  - violation: no_helmet
+    start: 188.6
+    end: 190.1
+  - violation: overloading
+    start: 188.6
+    end: 190.1
+  - violation: no_helmet
+    start: 190.1
+    end: 191.7
+  - violation: overloading
+    start: 190.1
+    end: 191.7
+  - violation: no_helmet
+    start: 191.7
+    end: 193.2
+  - violation: overloading
+    start: 191.7
+    end: 193.2
+  - violation: no_helmet
+    start: 193.2
+    end: 194.7
+  - violation: overloading
+    start: 193.2
+    end: 194.7
+  - violation: no_helmet
+    start: 194.7
+    end: 196.3
+  - violation: overloading
+    start: 194.7
+    end: 196.3
+  - violation: no_helmet
+    start: 196.3
+    end: 197.8
+  - violation: overloading
+    start: 196.3
+    end: 197.8
+  - violation: no_helmet
+    start: 197.8
+    end: 199.3
+  - violation: overloading
+    start: 197.8
+    end: 199.3
+  - violation: no_helmet
+    start: 199.3
+    end: 200.9
+  - violation: overloading
+    start: 199.3
+    end: 200.9
+  - violation: no_helmet
+    start: 200.9
+    end: 202.4
+  - violation: overloading
+    start: 200.9
+    end: 202.4
+  - violation: no_helmet
+    start: 202.4
+    end: 203.9
+  - violation: overloading
+    start: 202.4
+    end: 203.9
+  - violation: no_helmet
+    start: 203.9
+    end: 205.5
+  - violation: overloading
+    start: 203.9
+    end: 205.5
+  - violation: no_helmet
+    start: 205.5
+    end: 207.0
+  - violation: overloading
+    start: 205.5
+    end: 207.0
+  - violation: no_helmet
+    start: 207.0
+    end: 208.5
+  - violation: overloading
+    start: 207.0
+    end: 208.5
+  - violation: no_helmet
+    start: 208.5
+    end: 210.1
+  - violation: overloading
+    start: 208.5
+    end: 210.1
+  - violation: no_helmet
+    start: 210.1
+    end: 211.6
+  - violation: overloading
+    start: 210.1
+    end: 211.6
+  - violation: no_helmet
+    start: 211.6
+    end: 213.1
+  - violation: overloading
+    start: 211.6
+    end: 213.1
+  - violation: no_helmet
+    start: 213.1
+    end: 214.7
+  - violation: overloading
+    start: 213.1
+    end: 214.7
+  - violation: no_helmet
+    start: 214.7
+    end: 216.2
+  - violation: overloading
+    start: 214.7
+    end: 216.2
+- id: dhaka_2026_07_03_dhaka_university_area_02
+  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_02.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
+    from dhaka_2026-07-03_dhaka_university_area_02_truth.txt'
+  events:
+  - violation: no_helmet
+    start: 0.0
+    end: 1.5
+  - violation: overloading
+    start: 0.0
+    end: 1.5
+  - violation: no_helmet
+    start: 1.5
+    end: 3.1
+  - violation: overloading
+    start: 1.5
+    end: 3.1
+  - violation: no_helmet
+    start: 3.1
+    end: 4.6
+  - violation: overloading
+    start: 3.1
+    end: 4.6
+  - violation: no_helmet
+    start: 4.6
+    end: 6.1
+  - violation: overloading
+    start: 4.6
+    end: 6.1
+  - violation: no_helmet
+    start: 6.1
+    end: 7.7
+  - violation: overloading
+    start: 6.1
+    end: 7.7
+  - violation: no_helmet
+    start: 7.7
+    end: 9.2
+  - violation: overloading
+    start: 7.7
+    end: 9.2
+  - violation: no_helmet
+    start: 9.2
+    end: 10.7
+  - violation: overloading
+    start: 9.2
+    end: 10.7
+  - violation: no_helmet
+    start: 10.7
+    end: 12.3
+  - violation: overloading
+    start: 10.7
+    end: 12.3
+  - violation: no_helmet
+    start: 12.3
+    end: 13.8
+  - violation: overloading
+    start: 12.3
+    end: 13.8
+  - violation: no_helmet
+    start: 13.8
+    end: 15.3
+  - violation: overloading
+    start: 13.8
+    end: 15.3
+  - violation: no_helmet
+    start: 15.3
+    end: 16.9
+  - violation: overloading
+    start: 15.3
+    end: 16.9
+  - violation: no_helmet
+    start: 16.9
+    end: 18.4
+  - violation: no_helmet
+    start: 18.4
+    end: 19.9
+  - violation: overloading
+    start: 18.4
+    end: 19.9
+  - violation: no_helmet
+    start: 19.9
+    end: 21.5
+  - violation: overloading
+    start: 19.9
+    end: 21.5
+  - violation: no_helmet
+    start: 21.5
+    end: 23.0
+  - violation: overloading
+    start: 21.5
+    end: 23.0
+  - violation: no_helmet
+    start: 23.0
+    end: 24.5
+  - violation: overloading
+    start: 23.0
+    end: 24.5
+  - violation: no_helmet
+    start: 24.5
+    end: 26.1
+  - violation: overloading
+    start: 24.5
+    end: 26.1
+  - violation: no_helmet
+    start: 26.1
+    end: 27.6
+  - violation: overloading
+    start: 26.1
+    end: 27.6
+  - violation: no_helmet
+    start: 27.6
+    end: 29.1
+  - violation: overloading
+    start: 27.6
+    end: 29.1
+  - violation: no_helmet
+    start: 29.1
+    end: 30.7
+  - violation: overloading
+    start: 29.1
+    end: 30.7
+  - violation: no_helmet
+    start: 30.7
+    end: 32.2
+  - violation: overloading
+    start: 30.7
+    end: 32.2
+  - violation: no_helmet
+    start: 32.2
+    end: 33.7
+  - violation: overloading
+    start: 32.2
+    end: 33.7
+  - violation: no_helmet
+    start: 33.7
+    end: 35.3
+  - violation: overloading
+    start: 33.7
+    end: 35.3
+  - violation: no_helmet
+    start: 35.3
+    end: 36.8
+  - violation: overloading
+    start: 35.3
+    end: 36.8
+  - violation: no_helmet
+    start: 36.8
+    end: 38.3
+  - violation: overloading
+    start: 36.8
+    end: 38.3
+  - violation: no_helmet
+    start: 38.3
+    end: 39.9
+  - violation: overloading
+    start: 38.3
+    end: 39.9
+  - violation: no_helmet
+    start: 39.9
+    end: 41.4
+  - violation: overloading
+    start: 39.9
+    end: 41.4
+  - violation: no_helmet
+    start: 41.4
+    end: 42.9
+  - violation: overloading
+    start: 41.4
+    end: 42.9
+  - violation: no_helmet
+    start: 42.9
+    end: 44.5
+  - violation: overloading
+    start: 42.9
+    end: 44.5
+  - violation: no_helmet
+    start: 44.5
+    end: 46.0
+  - violation: overloading
+    start: 44.5
+    end: 46.0
+  - violation: no_helmet
+    start: 46.0
+    end: 47.5
+  - violation: overloading
+    start: 46.0
+    end: 47.5
+  - violation: no_helmet
+    start: 47.5
+    end: 49.1
+  - violation: overloading
+    start: 47.5
+    end: 49.1
+  - violation: no_helmet
+    start: 49.1
+    end: 50.6
+  - violation: overloading
+    start: 49.1
+    end: 50.6
+  - violation: no_helmet
+    start: 50.6
+    end: 52.1
+  - violation: overloading
+    start: 50.6
+    end: 52.1
+  - violation: no_helmet
+    start: 52.1
+    end: 53.7
+  - violation: overloading
+    start: 52.1
+    end: 53.7
+  - violation: no_helmet
+    start: 53.7
+    end: 55.2
+  - violation: overloading
+    start: 53.7
+    end: 55.2
+  - violation: no_helmet
+    start: 55.2
+    end: 56.7
+  - violation: overloading
+    start: 55.2
+    end: 56.7
+  - violation: no_helmet
+    start: 56.7
+    end: 58.3
+  - violation: overloading
+    start: 56.7
+    end: 58.3
+  - violation: no_helmet
+    start: 58.3
+    end: 59.8
+  - violation: overloading
+    start: 58.3
+    end: 59.8
+  - violation: no_helmet
+    start: 59.8
+    end: 61.3
+  - violation: overloading
+    start: 59.8
+    end: 61.3
+  - violation: no_helmet
+    start: 61.3
+    end: 62.9
+  - violation: overloading
+    start: 61.3
+    end: 62.9
+  - violation: no_helmet
+    start: 62.9
+    end: 64.4
+  - violation: overloading
+    start: 62.9
+    end: 64.4
+  - violation: no_helmet
+    start: 64.4
+    end: 65.9
+  - violation: overloading
+    start: 64.4
+    end: 65.9
+  - violation: no_helmet
+    start: 65.9
+    end: 67.5
+  - violation: overloading
+    start: 65.9
+    end: 67.5
+  - violation: no_helmet
+    start: 67.5
+    end: 69.0
+  - violation: overloading
+    start: 67.5
+    end: 69.0
+  - violation: no_helmet
+    start: 69.0
+    end: 70.5
+  - violation: overloading
+    start: 69.0
+    end: 70.5
+  - violation: no_helmet
+    start: 70.5
+    end: 72.1
+  - violation: overloading
+    start: 70.5
+    end: 72.1
+  - violation: no_helmet
+    start: 72.1
+    end: 73.6
+  - violation: overloading
+    start: 72.1
+    end: 73.6
+  - violation: no_helmet
+    start: 73.6
+    end: 75.1
+  - violation: overloading
+    start: 73.6
+    end: 75.1
+  - violation: no_helmet
+    start: 75.1
+    end: 76.7
+  - violation: overloading
+    start: 75.1
+    end: 76.7
+  - violation: no_helmet
+    start: 76.7
+    end: 78.2
+  - violation: no_helmet
+    start: 78.2
+    end: 79.7
+  - violation: no_helmet
+    start: 79.7
+    end: 81.3
+  - violation: overloading
+    start: 79.7
+    end: 81.3
+  - violation: no_helmet
+    start: 81.3
+    end: 82.8
+  - violation: no_helmet
+    start: 82.8
+    end: 84.3
+  - violation: no_helmet
+    start: 84.3
+    end: 85.9
+  - violation: overloading
+    start: 84.3
+    end: 85.9
+  - violation: no_helmet
+    start: 85.9
+    end: 87.4
+  - violation: no_helmet
+    start: 87.4
+    end: 88.9
+  - violation: overloading
+    start: 87.4
+    end: 88.9
+  - violation: no_helmet
+    start: 88.9
+    end: 90.5
+  - violation: overloading
+    start: 88.9
+    end: 90.5
+  - violation: no_helmet
+    start: 90.5
+    end: 92.0
+  - violation: overloading
+    start: 90.5
+    end: 92.0
+  - violation: no_helmet
+    start: 92.0
+    end: 93.5
+  - violation: overloading
+    start: 92.0
+    end: 93.5
+  - violation: no_helmet
+    start: 93.5
+    end: 95.1
+  - violation: overloading
+    start: 93.5
+    end: 95.1
+  - violation: no_helmet
+    start: 95.1
+    end: 96.6
+  - violation: overloading
+    start: 95.1
+    end: 96.6
+  - violation: no_helmet
+    start: 96.6
+    end: 98.1
+  - violation: overloading
+    start: 96.6
+    end: 98.1
+  - violation: no_helmet
+    start: 98.1
+    end: 99.7
+  - violation: overloading
+    start: 98.1
+    end: 99.7
+  - violation: no_helmet
+    start: 99.7
+    end: 101.2
+  - violation: overloading
+    start: 99.7
+    end: 101.2
+  - violation: no_helmet
+    start: 101.2
+    end: 102.7
+  - violation: overloading
+    start: 101.2
+    end: 102.7
+  - violation: no_helmet
+    start: 102.7
+    end: 104.3
+  - violation: overloading
+    start: 102.7
+    end: 104.3
+  - violation: no_helmet
+    start: 104.3
+    end: 105.8
+  - violation: overloading
+    start: 104.3
+    end: 105.8
+  - violation: no_helmet
+    start: 105.8
+    end: 107.3
+  - violation: overloading
+    start: 105.8
+    end: 107.3
+  - violation: no_helmet
+    start: 107.3
+    end: 108.9
+  - violation: overloading
+    start: 107.3
+    end: 108.9
+  - violation: no_helmet
+    start: 108.9
+    end: 110.4
+  - violation: overloading
+    start: 108.9
+    end: 110.4
+  - violation: no_helmet
+    start: 110.4
+    end: 111.9
+  - violation: overloading
+    start: 110.4
+    end: 111.9
+  - violation: no_helmet
+    start: 111.9
+    end: 113.5
+  - violation: overloading
+    start: 111.9
+    end: 113.5
+  - violation: no_helmet
+    start: 113.5
+    end: 115.0
+  - violation: overloading
+    start: 113.5
+    end: 115.0
+  - violation: no_helmet
+    start: 115.0
+    end: 116.5
+  - violation: overloading
+    start: 115.0
+    end: 116.5
+  - violation: no_helmet
+    start: 116.5
+    end: 118.1
+  - violation: overloading
+    start: 116.5
+    end: 118.1
+  - violation: no_helmet
+    start: 118.1
+    end: 119.6
+  - violation: overloading
+    start: 118.1
+    end: 119.6
+  - violation: no_helmet
+    start: 119.6
+    end: 121.1
+  - violation: overloading
+    start: 119.6
+    end: 121.1
+  - violation: no_helmet
+    start: 121.1
+    end: 122.7
+  - violation: overloading
+    start: 121.1
+    end: 122.7
+  - violation: no_helmet
+    start: 122.7
+    end: 124.2
+  - violation: overloading
+    start: 122.7
+    end: 124.2
+  - violation: no_helmet
+    start: 124.2
+    end: 125.7
+  - violation: overloading
+    start: 124.2
+    end: 125.7
+  - violation: no_helmet
+    start: 125.7
+    end: 127.3
+  - violation: overloading
+    start: 125.7
+    end: 127.3
+  - violation: no_helmet
+    start: 127.3
+    end: 128.8
+  - violation: overloading
+    start: 127.3
+    end: 128.8
+  - violation: no_helmet
+    start: 128.8
+    end: 130.3
+  - violation: overloading
+    start: 128.8
+    end: 130.3
+  - violation: no_helmet
+    start: 130.3
+    end: 131.9
+  - violation: overloading
+    start: 130.3
+    end: 131.9
+  - violation: no_helmet
+    start: 131.9
+    end: 133.4
+  - violation: overloading
+    start: 131.9
+    end: 133.4
+  - violation: no_helmet
+    start: 133.4
+    end: 134.9
+  - violation: overloading
+    start: 133.4
+    end: 134.9
+  - violation: no_helmet
+    start: 134.9
+    end: 136.5
+  - violation: overloading
+    start: 134.9
+    end: 136.5
+  - violation: no_helmet
+    start: 136.5
+    end: 138.0
+  - violation: overloading
+    start: 136.5
+    end: 138.0
+  - violation: no_helmet
+    start: 138.0
+    end: 139.5
+  - violation: overloading
+    start: 138.0
+    end: 139.5
+  - violation: no_helmet
+    start: 139.5
+    end: 141.1
+  - violation: overloading
+    start: 139.5
+    end: 141.1
+  - violation: no_helmet
+    start: 141.1
+    end: 142.6
+  - violation: overloading
+    start: 141.1
+    end: 142.6
+  - violation: no_helmet
+    start: 142.6
+    end: 144.1
+  - violation: overloading
+    start: 142.6
+    end: 144.1
+  - violation: no_helmet
+    start: 144.1
+    end: 145.7
+  - violation: overloading
+    start: 144.1
+    end: 145.7
+  - violation: no_helmet
+    start: 145.7
+    end: 147.2
+  - violation: overloading
+    start: 145.7
+    end: 147.2
+  - violation: no_helmet
+    start: 147.2
+    end: 148.7
+  - violation: overloading
+    start: 147.2
+    end: 148.7
+  - violation: no_helmet
+    start: 148.7
+    end: 150.3
+  - violation: overloading
+    start: 148.7
+    end: 150.3
+  - violation: no_helmet
+    start: 150.3
+    end: 151.8
+  - violation: overloading
+    start: 150.3
+    end: 151.8
+  - violation: no_helmet
+    start: 151.8
+    end: 153.3
+  - violation: overloading
+    start: 151.8
+    end: 153.3
+  - violation: no_helmet
+    start: 153.3
+    end: 154.9
+  - violation: overloading
+    start: 153.3
+    end: 154.9
+  - violation: no_helmet
+    start: 154.9
+    end: 156.4
+  - violation: overloading
+    start: 154.9
+    end: 156.4
+  - violation: no_helmet
+    start: 156.4
+    end: 157.9
+  - violation: overloading
+    start: 156.4
+    end: 157.9
+  - violation: no_helmet
+    start: 157.9
+    end: 159.5
+  - violation: overloading
+    start: 157.9
+    end: 159.5
+  - violation: no_helmet
+    start: 159.5
+    end: 161.0
+  - violation: overloading
+    start: 159.5
+    end: 161.0
+  - violation: no_helmet
+    start: 161.0
+    end: 162.5
+  - violation: overloading
+    start: 161.0
+    end: 162.5
+  - violation: no_helmet
+    start: 162.5
+    end: 164.1
+  - violation: overloading
+    start: 162.5
+    end: 164.1
+  - violation: no_helmet
+    start: 164.1
+    end: 165.6
+  - violation: overloading
+    start: 164.1
+    end: 165.6
+  - violation: no_helmet
+    start: 165.6
+    end: 167.1
+  - violation: overloading
+    start: 165.6
+    end: 167.1
+  - violation: no_helmet
+    start: 167.1
+    end: 168.7
+  - violation: no_helmet
+    start: 168.7
+    end: 170.2
+  - violation: overloading
+    start: 168.7
+    end: 170.2
+  - violation: no_helmet
+    start: 170.2
+    end: 171.7
+  - violation: overloading
+    start: 170.2
+    end: 171.7
+  - violation: no_helmet
+    start: 171.7
+    end: 173.3
+  - violation: overloading
+    start: 171.7
+    end: 173.3
+  - violation: no_helmet
+    start: 173.3
+    end: 174.8
+  - violation: overloading
+    start: 173.3
+    end: 174.8
+  - violation: no_helmet
+    start: 174.8
+    end: 176.3
+  - violation: overloading
+    start: 174.8
+    end: 176.3
+  - violation: no_helmet
+    start: 176.3
+    end: 177.9
+  - violation: overloading
+    start: 176.3
+    end: 177.9
+  - violation: overloading
+    start: 177.9
+    end: 179.4
+  - violation: overloading
+    start: 179.4
+    end: 180.9
+  - violation: no_helmet
+    start: 180.9
+    end: 182.5
+  - violation: overloading
+    start: 180.9
+    end: 182.5
+  - violation: no_helmet
+    start: 182.5
+    end: 184.0
+  - violation: overloading
+    start: 182.5
+    end: 184.0
+  - violation: no_helmet
+    start: 184.0
+    end: 185.5
+  - violation: overloading
+    start: 184.0
+    end: 185.5
+  - violation: no_helmet
+    start: 185.5
+    end: 187.1
+  - violation: overloading
+    start: 185.5
+    end: 187.1
+  - violation: no_helmet
+    start: 187.1
+    end: 188.6
+  - violation: overloading
+    start: 187.1
+    end: 188.6
+  - violation: no_helmet
+    start: 188.6
+    end: 190.1
+  - violation: overloading
+    start: 188.6
+    end: 190.1
+  - violation: no_helmet
+    start: 190.1
+    end: 191.7
+  - violation: overloading
+    start: 190.1
+    end: 191.7
+  - violation: no_helmet
+    start: 191.7
+    end: 193.2
+  - violation: overloading
+    start: 191.7
+    end: 193.2
+  - violation: no_helmet
+    start: 193.2
+    end: 194.7
+  - violation: overloading
+    start: 193.2
+    end: 194.7
+  - violation: no_helmet
+    start: 194.7
+    end: 196.3
+  - violation: overloading
+    start: 194.7
+    end: 196.3
+  - violation: no_helmet
+    start: 196.3
+    end: 197.8
+  - violation: overloading
+    start: 196.3
+    end: 197.8
+  - violation: no_helmet
+    start: 197.8
+    end: 199.3
+  - violation: overloading
+    start: 197.8
+    end: 199.3
+  - violation: no_helmet
+    start: 199.3
+    end: 200.9
+  - violation: overloading
+    start: 199.3
+    end: 200.9
+  - violation: no_helmet
+    start: 200.9
+    end: 202.4
+  - violation: overloading
+    start: 200.9
+    end: 202.4
+  - violation: no_helmet
+    start: 202.4
+    end: 203.9
+  - violation: overloading
+    start: 202.4
+    end: 203.9
+  - violation: no_helmet
+    start: 203.9
+    end: 205.5
+  - violation: overloading
+    start: 203.9
+    end: 205.5
+  - violation: no_helmet
+    start: 205.5
+    end: 207.0
+  - violation: overloading
+    start: 205.5
+    end: 207.0
+  - violation: no_helmet
+    start: 207.0
+    end: 208.5
+  - violation: overloading
+    start: 207.0
+    end: 208.5
+  - violation: no_helmet
+    start: 208.5
+    end: 210.1
+  - violation: overloading
+    start: 208.5
+    end: 210.1
+  - violation: no_helmet
+    start: 210.1
+    end: 211.6
+  - violation: overloading
+    start: 210.1
+    end: 211.6
+  - violation: no_helmet
+    start: 211.6
+    end: 213.1
+  - violation: overloading
+    start: 211.6
+    end: 213.1
+  - violation: no_helmet
+    start: 213.1
+    end: 214.7
+  - violation: overloading
+    start: 213.1
+    end: 214.7
+  - violation: no_helmet
+    start: 214.7
+    end: 216.2
+  - violation: overloading
+    start: 214.7
+    end: 216.2
+  - violation: no_helmet
+    start: 216.2
+    end: 217.7
+  - violation: overloading
+    start: 216.2
+    end: 217.7
+- id: dhaka_2026_04_09_shahid_minar_02
+  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-04-09_shahid_minar_02.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
+    from dhaka_2026-04-09_shahid_minar_02_truth.txt'
+  events:
+  - violation: no_helmet
+    start: 0.0
+    end: 1.5
+  - violation: no_helmet
+    start: 1.5
+    end: 3.1
+  - violation: no_helmet
+    start: 3.1
+    end: 4.6
+  - violation: no_helmet
+    start: 4.6
+    end: 6.1
+  - violation: no_helmet
+    start: 6.1
+    end: 7.7
+  - violation: no_helmet
+    start: 7.7
+    end: 9.2
+  - violation: no_helmet
+    start: 9.2
+    end: 10.7
+  - violation: no_helmet
+    start: 10.7
+    end: 12.3
+  - violation: no_helmet
+    start: 13.8
+    end: 15.3
+  - violation: no_helmet
+    start: 15.3
+    end: 16.9
+  - violation: no_helmet
+    start: 16.9
+    end: 18.4
+  - violation: no_helmet
+    start: 18.4
+    end: 19.9
+  - violation: no_helmet
+    start: 19.9
+    end: 21.5
+  - violation: no_helmet
+    start: 27.6
+    end: 29.1
+  - violation: no_helmet
+    start: 33.7
+    end: 35.3
+  - violation: no_helmet
+    start: 55.2
+    end: 56.7
+  - violation: no_helmet
+    start: 56.7
+    end: 58.3
+  - violation: no_helmet
+    start: 58.3
+    end: 59.8
+  - violation: no_helmet
+    start: 59.8
+    end: 61.3
+  - violation: no_helmet
+    start: 61.3
+    end: 62.9
+  - violation: no_helmet
+    start: 62.9
+    end: 64.4
+  - violation: no_helmet
+    start: 65.9
+    end: 67.5
+  - violation: no_helmet
+    start: 67.5
+    end: 69.0
+  - violation: no_helmet
+    start: 69.0
+    end: 70.5
+  - violation: no_helmet
+    start: 70.5
+    end: 72.1
+  - violation: no_helmet
+    start: 72.1
+    end: 73.6
+  - violation: no_helmet
+    start: 75.1
+    end: 76.7
+  - violation: no_helmet
+    start: 76.7
+    end: 78.2
+  - violation: no_helmet
+    start: 78.2
+    end: 79.7
+  - violation: no_helmet
+    start: 79.7
+    end: 81.3
+  - violation: no_helmet
+    start: 87.4
+    end: 88.9
+  - violation: no_helmet
+    start: 88.9
+    end: 90.5
+  - violation: no_helmet
+    start: 90.5
+    end: 92.0
+  - violation: no_helmet
+    start: 92.0
+    end: 93.5
+  - violation: no_helmet
+    start: 93.5
+    end: 95.1
+  - violation: no_helmet
+    start: 95.1
+    end: 96.6
+  - violation: no_helmet
+    start: 96.6
+    end: 98.1
+  - violation: no_helmet
+    start: 98.1
+    end: 99.7
+  - violation: no_helmet
+    start: 99.7
+    end: 101.2
+  - violation: no_helmet
+    start: 101.2
+    end: 102.7
+  - violation: no_helmet
+    start: 102.7
+    end: 104.3
+  - violation: no_helmet
+    start: 118.1
+    end: 119.6
+  - violation: no_helmet
+    start: 119.6
+    end: 121.1
+  - violation: no_helmet
+    start: 121.1
+    end: 122.7
+  - violation: no_helmet
+    start: 122.7
+    end: 124.2
+  - violation: no_helmet
+    start: 124.2
+    end: 125.7
+  - violation: no_helmet
+    start: 127.3
+    end: 128.8
+  - violation: no_helmet
+    start: 131.9
+    end: 133.4
+  - violation: no_helmet
+    start: 144.1
+    end: 145.7
+  - violation: no_helmet
+    start: 145.7
+    end: 147.2
+  - violation: no_helmet
+    start: 147.2
+    end: 148.7
+  - violation: no_helmet
+    start: 148.7
+    end: 150.3
+  - violation: no_helmet
+    start: 150.3
+    end: 151.8
+  - violation: no_helmet
+    start: 164.1
+    end: 165.6
+  - violation: no_helmet
+    start: 165.6
+    end: 167.1
+  - violation: no_helmet
+    start: 167.1
+    end: 168.7
+  - violation: no_helmet
+    start: 182.5
+    end: 184.0
+  - violation: no_helmet
+    start: 184.0
+    end: 185.5
+  - violation: no_helmet
+    start: 190.1
+    end: 191.7
+  - violation: no_helmet
+    start: 191.7
+    end: 193.2
+  - violation: no_helmet
+    start: 200.9
+    end: 202.4
+  - violation: no_helmet
+    start: 203.9
+    end: 205.5
+  - violation: no_helmet
+    start: 205.5
+    end: 207.0
+  - violation: no_helmet
+    start: 214.7
+    end: 216.2
+- id: dhaka_2026_04_09_shahid_minar_01
+  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-04-09_shahid_minar_01.mp4
+  settings: settings/public_helmet.json
+  clean: false
+  note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
+    from dhaka_2026-04-09_shahid_minar_01_truth.txt'
+  events:
+  - violation: no_helmet
+    start: 0.0
+    end: 1.5
+  - violation: no_helmet
+    start: 10.7
+    end: 12.3
+  - violation: no_helmet
+    start: 12.3
+    end: 13.8
+  - violation: no_helmet
+    start: 18.4
+    end: 19.9
+  - violation: no_helmet
+    start: 27.6
+    end: 29.1
+  - violation: no_helmet
+    start: 30.7
+    end: 32.2
+  - violation: no_helmet
+    start: 32.2
+    end: 33.7
+  - violation: no_helmet
+    start: 36.8
+    end: 38.3
+  - violation: no_helmet
+    start: 41.4
+    end: 42.9
+  - violation: no_helmet
+    start: 55.2
+    end: 56.7
+  - violation: no_helmet
+    start: 59.8
+    end: 61.3
+  - violation: no_helmet
+    start: 67.5
+    end: 69.0
+  - violation: no_helmet
+    start: 70.5
+    end: 72.1
+  - violation: no_helmet
+    start: 73.6
+    end: 75.1
+  - violation: no_helmet
+    start: 78.2
+    end: 79.7
+  - violation: no_helmet
+    start: 81.3
+    end: 82.8
+  - violation: no_helmet
+    start: 82.8
+    end: 84.3
+  - violation: no_helmet
+    start: 85.9
+    end: 87.4
+  - violation: no_helmet
+    start: 87.4
+    end: 88.9
+  - violation: no_helmet
+    start: 90.5
+    end: 92.0
+  - violation: no_helmet
+    start: 98.1
+    end: 99.7
+  - violation: no_helmet
+    start: 101.2
+    end: 102.7
+  - violation: no_helmet
+    start: 108.9
+    end: 110.4
+  - violation: no_helmet
+    start: 110.4
+    end: 111.9
+  - violation: no_helmet
+    start: 111.9
+    end: 113.5
+  - violation: no_helmet
+    start: 118.1
+    end: 119.6
+  - violation: no_helmet
+    start: 121.1
+    end: 122.7
+  - violation: no_helmet
+    start: 128.8
+    end: 130.3
+  - violation: no_helmet
+    start: 145.7
+    end: 147.2
+  - violation: no_helmet
+    start: 147.2
+    end: 148.7
+  - violation: no_helmet
+    start: 153.3
+    end: 154.9
+  - violation: no_helmet
+    start: 168.7
+    end: 170.2
+  - violation: no_helmet
+    start: 173.3
+    end: 174.8
+  - violation: no_helmet
+    start: 174.8
+    end: 176.3
+  - violation: no_helmet
+    start: 177.9
+    end: 179.4
+  - violation: no_helmet
+    start: 184.0
+    end: 185.5
+  - violation: no_helmet
+    start: 185.5
+    end: 187.1
+  - violation: no_helmet
+    start: 187.1
+    end: 188.6
+  - violation: no_helmet
+    start: 188.6
+    end: 190.1
+  - violation: no_helmet
+    start: 197.8
+    end: 199.3
+  - violation: no_helmet
+    start: 199.3
+    end: 200.9
+  - violation: no_helmet
+    start: 200.9
+    end: 202.4
+  - violation: no_helmet
+    start: 202.4
+    end: 203.9
+  - violation: no_helmet
+    start: 211.6
+    end: 213.1
+  - violation: no_helmet
+    start: 213.1
+    end: 214.7
+  - violation: no_helmet
+    start: 214.7
+    end: 216.2
+  - violation: no_helmet
+    start: 216.2
+    end: 217.7
+  - violation: no_helmet
+    start: 217.7
+    end: 219.3
+  - violation: no_helmet
+    start: 219.3
+    end: 220.8
+  - violation: no_helmet
+    start: 220.8
+    end: 222.3
+  - violation: no_helmet
+    start: 223.9
+    end: 225.4
