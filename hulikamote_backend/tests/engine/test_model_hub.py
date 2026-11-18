@@ -158,3 +158,39 @@ def test_matcher_stock_is_live_and_a_trained_version_can_replace_it(fake):
     hub.use("matcher", "ckpt_original")                                         # and we can go back
     assert (fake.ckpt / "ckpt.t7").read_bytes() == b"stock"
     assert hub.use("matcher", "ckpt_original").startswith("That version is already live")
+
+
+# --- the class list a vehicle model needs next to it ------------------------------------------------
+
+def test_a_trained_vehicle_model_without_its_class_list_is_warned_about(fake):
+    folder = fake.models / "Vehicle Detectors"
+    (folder / "primary_anchor_train_20261001.onnx").write_bytes(b"x")
+    by_id = {v["id"]: v for v in job("vehicles")["versions"]}
+    warning = by_id["train"]["class_warning"]
+    assert warning and "classes.txt" in warning and "80" in warning
+    assert by_id["yolo11_primary.onnx"]["class_warning"] is None                  # the stock detector knows its own names
+    assert by_id["train-3"]["class_warning"] is None                              # never exported: nothing to check yet
+
+
+def test_a_class_list_that_is_there_and_complete_gives_no_warning(fake):
+    folder = fake.models / "Vehicle Detectors"
+    (folder / "primary_anchor_train_20261001.onnx").write_bytes(b"x")
+    (folder / "primary_anchor_train_20261001.onnx.classes.txt").write_text("motorcycle\ncar\nbus\ntruck\nperson\ntricycle\njeepney\npickup\n")
+    (fake.runs / "primary_anchor" / "train" / "per_class.json").write_text(json.dumps(
+        {"split": "test", "map50": 0.7, "classes": [{"name": "pickup", "score": 0.8, "boxes": 10}, {"name": "car", "score": 0.7, "boxes": 5}]}))
+    by_id = {v["id"]: v for v in job("vehicles")["versions"]}
+    assert by_id["train"]["class_warning"] is None
+
+
+def test_a_class_list_that_lacks_a_trained_type_is_warned_about(fake):
+    folder = fake.models / "Vehicle Detectors"
+    (folder / "primary_anchor_train_20261001.onnx").write_bytes(b"x")
+    (folder / "primary_anchor_train_20261001.onnx.classes.txt").write_text("motorcycle\ncar\nbus\ntruck\nperson\ntricycle\njeepney\n")
+    (fake.runs / "primary_anchor" / "train" / "per_class.json").write_text(json.dumps(
+        {"split": "test", "map50": 0.7, "classes": [{"name": "pickup", "score": 0.8, "boxes": 10}]}))
+    warning = {v["id"]: v for v in job("vehicles")["versions"]}["train"]["class_warning"]
+    assert warning and "does not hold every type" in warning
+
+
+def test_the_specialist_models_never_get_the_class_list_warning(fake):
+    assert all(v["class_warning"] is None for v in job("helmet")["versions"])

@@ -44,7 +44,9 @@ class RestrictedLane(Violation):
             if not z.get("polygon"):
                 continue
             inside = [s for s in signs if point_in_polygon(s["x"], s["y"], z["polygon"])]
-            zone = {"coordinates": z["polygon"], "allowed_classes": lane_signs.allowed_by(s["type"] for s in inside) if inside else default}
+            # a lane from the road markings carries its own type (a key of lane_signs.SIGNS): who may use it
+            by_type = lane_signs.allowed_by([z["lane_type"]]) if z.get("lane_type") in lane_signs.SIGNS else None
+            zone = {"coordinates": z["polygon"], "allowed_classes": lane_signs.allowed_by(s["type"] for s in inside) if inside else (by_type or default)}
             if inside:                                       # the signs on this lane: they set its rule and are drawn on it
                 zone["sign_points"] = [[s["x"], s["y"]] for s in inside]
                 zone["sign_types"] = [s["type"] for s in inside]

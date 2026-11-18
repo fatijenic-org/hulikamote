@@ -13,7 +13,7 @@ from engine.violations.overloading import riders_from_look
 from tests.helpers import BIG_ZONE, FPS, H, W, Det
 
 OVERTAKE = REGISTRY["overtaking_on_right"]
-KULIGLIG = REGISTRY["kuliglig_passenger"]
+KULIGLIG = REGISTRY["passenger_outside"]
 OVERLOAD = REGISTRY["overloading"]
 NO_PLATE = REGISTRY["no_plate"]
 
@@ -101,17 +101,17 @@ def person(ytop, track_id, dx, dy):
 
 def test_kuliglig_flags_a_passenger_besides_the_driver():
     ledger = kuliglig_frames(lambda y: [person(y, 50, 80, 10), person(y, 51, 80, 120)])
-    assert "kuliglig_passenger" in ledger.violations
+    assert "passenger_outside" in ledger.violations
 
 
 def test_kuliglig_with_only_its_driver_is_fine():
     ledger = kuliglig_frames(lambda y: [person(y, 50, 80, 10)])
-    assert "kuliglig_passenger" not in ledger.violations
+    assert "passenger_outside" not in ledger.violations
 
 
 def test_kuliglig_ignores_a_pedestrian_standing_beside_it():
     pipe_people = lambda y: [person(y, 50, 80, 10), Det(51, [1080, 900, 40, 80], "person")]     # the second one does not move
-    assert "kuliglig_passenger" not in kuliglig_frames(pipe_people).violations
+    assert "passenger_outside" not in kuliglig_frames(pipe_people).violations
 
 
 # ─── Riders counted from the helmet model's boxes (overloading) ──────────────

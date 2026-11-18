@@ -127,19 +127,19 @@ def live(tmp_path, monkeypatch):
     return TestClient(app), cfg, calls, gen, stream
 
 
-WIZARD = {"active_violations": ["counterflow", "pickup_passengers"], "tracker": "deepsort", "plate_model": "plate_specialist.onnx",
+WIZARD = {"active_violations": ["counterflow", "passenger_outside"], "tracker": "deepsort", "plate_model": "plate_specialist.onnx",
           "per_violation_configs": {
               "counterflow": {"rois": [{"polygon": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], "vector": {"x_dir": 0.0, "y_dir": 5.0}}]},
-              "pickup_passengers": {"rois": [], "bed_passengers_allowed": 1}}}
+              "passenger_outside": {"rois": [], "bed_passengers_allowed": 1}}}
 
 
 def test_live_config_writes_zones_keeps_the_cameras_and_restarts_the_live_view(live):
     client, cfg, calls, gen, stream = live
     r = client.post("/api/forensic/live-config", json=WIZARD)
-    assert r.status_code == 200 and r.json()["violations"] == ["counterflow", "pickup_passengers"]
+    assert r.status_code == 200 and r.json()["violations"] == ["counterflow", "passenger_outside"]
     saved = json.loads(cfg.read_text())
     assert saved["regions_of_interest"]["counterflow_zones"][0]["legal_flow_vector"] == {"x_dir": 0.0, "y_dir": 1.0}
-    assert saved["active_violations"] == ["counterflow", "pickup_passengers"] and saved["video_native_width"] == 1920
+    assert saved["active_violations"] == ["counterflow", "passenger_outside"] and saved["video_native_width"] == 1920
     assert saved["camera_profiles"][0]["name"] == "Laptop B" and saved["active_source"] == {"profile": "Laptop B"}   # kept
     assert saved["camera_id"] == "barangay_1"
     assert calls["reload"] == 1 and calls["inference"] == [{"force_reload": True, "tracker_type": "deepsort"}]

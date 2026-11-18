@@ -1,6 +1,6 @@
 """
 onboard.py - who is riding ON a vehicle, as opposed to standing or walking next to it. Shared by
-pickup_passengers (people in the open back) and riding_outside_vehicle (roof, hanging on).
+passenger_outside (open back, roof, hanging on, kuliglig).
 
 Two cues are combined, and both have to hold:
   1. Position: where the person's box sits on the vehicle's box (feet on the body, in the trailing part,

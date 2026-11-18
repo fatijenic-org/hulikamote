@@ -44,6 +44,7 @@ REID_STATS = [("score", "Right car found", "Finds the same car again, on cars it
 RUN_RE = re.compile(r"^train-?(\d*)$")
 _CHECKS: dict = {}            # (key, run) -> "running" | "failed: why"
 _DIGESTS: dict = {}           # (path, mtime_ns, size) -> sha1
+STOCK_NAME = re.compile(r"^yolo(v)?\d", re.I)       # the stock COCO detectors need no class list: their 80 names are built in
 
 
 # ---------------------------------------------------------------------------------------------------------- helpers
@@ -128,6 +129,24 @@ def _job_head(job: str) -> dict:
 
 
 # ------------------------------------------------------------------------------------------------------ detector jobs
+def _class_warning(job: str, folder: Path, file: str | None, per_class: dict | None) -> str | None:
+    """The vehicle detector is read by class NAME. A model trained here needs "<file>.classes.txt" next to it (export_onnx.py writes it);
+    without it the app uses the 80 stock names and every label is wrong. The specialists are read by class number, so they need none."""
+    if job != "vehicles" or not file or STOCK_NAME.match(file):
+        return None
+    try:
+        names = [n.strip() for n in (folder / f"{file}.classes.txt").read_text(encoding="utf-8").splitlines() if n.strip()]
+    except OSError:
+        names = []
+    if not names:
+        return (f"The list of class names ({file}.classes.txt) is missing next to this model. Without it the app reads the model with the "
+                "standard 80 names and every label comes out wrong. Export the model again, or choose a version that has it.")
+    known = {c["name"] for c in (per_class or {}).get("classes", [])}
+    if known and not known <= set(names):
+        return "The list of class names next to this model does not hold every type it was trained on. Export the model again."
+    return None
+
+
 def _yolo_versions(job: str) -> list[dict]:
     t = model_catalog.TYPES[job]
     key, folder = t["key"], model_catalog.MODELS_DIR / t["folder"]
@@ -144,12 +163,14 @@ def _yolo_versions(job: str) -> list[dict]:
         claimed.update(f.name for f in files)
         settings = _run_settings(d)
         best_pt = d / "weights" / "best.pt"
+        per_class = _per_class(d)
         out.append({
             "id": d.name, "kind": "run", "origin": "trained", "name": _version_name(d.name), "run": d.name,
             "when": (d / "results.csv").stat().st_mtime,
             "stats": {k: stats[k] for k in ("score", "trust", "coverage")},
             "best_epoch": stats["best_epoch"], "epochs_done": stats["epochs_done"], "epochs_planned": settings.get("epochs"),
-            "settings": settings, "classes": _per_class(d), "size_mb": _mb(files[0]) if files else _mb(best_pt),
+            "settings": settings, "classes": per_class, "size_mb": _mb(files[0]) if files else _mb(best_pt),
+            "class_warning": _class_warning(job, folder, files[0].name if files else None, per_class),
             "file": files[0].name if files else None, "live": bool(files) and files[0].name == live_file,
             "usable": bool(files) or best_pt.exists(), "checking": _CHECKS.get((key, d.name))})
     for p in sorted(folder.glob("*.onnx"), key=lambda p: p.stat().st_mtime, reverse=True) if folder.exists() else []:
@@ -158,7 +179,7 @@ def _yolo_versions(job: str) -> list[dict]:
         out.append({
             "id": p.name, "kind": "file", "origin": "stock", "name": p.stem, "run": None, "when": p.stat().st_mtime,
             "stats": {}, "settings": {}, "classes": None, "size_mb": _mb(p), "file": p.name, "live": p.name == live_file,
-            "usable": True, "checking": None})
+            "class_warning": _class_warning(job, folder, p.name, None), "usable": True, "checking": None})
     out.sort(key=lambda v: v["when"], reverse=True)
     return out
 

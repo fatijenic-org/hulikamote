@@ -18,14 +18,12 @@ from engine.violations.missing_side_mirror import MissingSideMirror
 from engine.violations.no_helmet import NoHelmet
 from engine.violations.no_plate import NoPlate
 from engine.violations.no_seatbelt import NoSeatbelt
-from engine.violations.kuliglig_passenger import KuligligPassenger
 from engine.violations.overloading import Overloading
 from engine.violations.overtaking_on_right import OvertakingOnRight
 from engine.violations.pedestrian_lane import PedestrianLane
-from engine.violations.pickup_passengers import PickupPassengers
+from engine.violations.passenger_outside import PassengerOutside
 from engine.violations.red_light import RedLight
 from engine.violations.restricted_lane import RestrictedLane
-from engine.violations.riding_outside import RidingOutside
 from engine.violations.sidewalk_driving import SidewalkDriving
 from engine.violations.signal_light import SignalLight
 from engine.violations.swerving import Swerving
@@ -41,12 +39,26 @@ ALL: list[Violation] = [
     IllegalLoading(), TruckBan(), TricycleOnHighway(), SidewalkDriving(), DoubleParking(),
     OvertakingOnRight(),
     # frame checks (what is on screen now)
-    Overloading(), PickupPassengers(), RidingOutside(), KuligligPassenger(),
+    Overloading(), PassengerOutside(),
     # model checks (a specialist model's look at the vehicle)
     NoPlate(), NoHelmet(), NoSeatbelt(), DistractedDriving(), MissingSideMirror(),
 ]
 
 REGISTRY: dict[str, Violation] = {v.key: v for v in ALL}
+
+# Keys of rules that were merged into another one: old saved configs still load (2026-11-17: three passenger rules -> one)
+LEGACY_KEYS: dict[str, str] = {"pickup_passengers": "passenger_outside", "riding_outside_vehicle": "passenger_outside",
+                               "kuliglig_passenger": "passenger_outside"}
+
+
+def current_keys(keys) -> list[str]:
+    """Violation keys with merged ones renamed, in order, without duplicates."""
+    out = []
+    for k in keys or []:
+        k = LEGACY_KEYS.get(k, k)
+        if k not in out:
+            out.append(k)
+    return out
 ZONE_VIOLATIONS: list[Violation] = [v for v in ALL if v.zone_key]
 
 # violation key -> ROI list name in camera_config, and the BGR colour its zones are drawn in

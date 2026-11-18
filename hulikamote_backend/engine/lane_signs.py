@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 
 REF = (1920, 1080)
-VEHICLE_TYPES = ("bus", "jeepney", "motorcycle", "car", "truck", "tricycle", "bicycle")
+VEHICLE_TYPES = ("bus", "jeepney", "motorcycle", "car", "truck", "pickup", "tricycle", "bicycle")
 
 SIZE_SHARE = 0.085              # width of a sign at scale 1.0, as a share of the picture's width
 HEIGHT_RATIO = 0.62
