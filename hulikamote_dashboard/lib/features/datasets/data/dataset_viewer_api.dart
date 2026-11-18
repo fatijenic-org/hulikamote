@@ -156,6 +156,8 @@ class DatasetViewerApi {
     int minBoxPx = 0,
     int offset = 0,
     int limit = 100,
+    bool unreviewed = false,
+    bool bySuggestion = false,
   }) => get('/api/labels', {
     'dataset': dataset,
     'split': split,
@@ -164,7 +166,45 @@ class DatasetViewerApi {
     'min_box_px': '$minBoxPx',
     'offset': '$offset',
     'limit': '$limit',
+    if (unreviewed) 'unreviewed': '1',
+    if (bySuggestion) 'order': 'suggest',
   });
+
+  // ── quick review (a class, decisions page by page, suggestions) ──
+
+  /// The classes, whether the target class exists, and how far the review of trucks / cars is.
+  Future<Map<String, dynamic>> reviewState(String dataset) => get('/api/review', {'dataset': dataset});
+
+  /// Adds a class as the next number; the old numbers never change.
+  Future<Map<String, dynamic>> addClass(String dataset, String name) =>
+      post('/api/class/add', {'dataset': dataset, 'name': name});
+
+  /// One page: [picked] boxes change to [toClass]; the rest of [page] (still [fromClass]) is written down as looked at.
+  Future<Map<String, dynamic>> decide(
+    String dataset, {
+    required int toClass,
+    required int fromClass,
+    required List<Map<String, Object?>> picked,
+    required List<Map<String, Object?>> page,
+    bool confirmHarvest = false,
+  }) => post('/api/decide', {
+    'dataset': dataset,
+    'to_class': toClass,
+    'from_class': fromClass,
+    'picked': picked,
+    'page': page,
+    'confirm_harvest': confirmHarvest,
+  });
+
+  /// Puts the journal's pickup decisions back into the label files (after a re-merge or a cleaning).
+  Future<Map<String, dynamic>> reapplyDecisions(String dataset) =>
+      post('/api/decisions/reapply', {'dataset': dataset});
+
+  Future<Map<String, dynamic>> suggestStatus(String dataset, int classId) =>
+      get('/api/suggest', {'dataset': dataset, 'class': '$classId'});
+
+  Future<Map<String, dynamic>> startSuggest(String dataset, int fromClass) =>
+      post('/api/suggest/start', {'dataset': dataset, 'from_class': fromClass});
 
   Future<Map<String, dynamic>> item(
     String dataset,

@@ -1,7 +1,8 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../domain/models/road_detect.dart';
@@ -13,6 +14,8 @@ import 'road_arrow.dart';
 ///   - tap an EDGE of the selected shape to add a point there; right-click a point (or select it and press Remove point) to take it away
 ///   - Smooth rounds the corners into a curve; Draw… places a new shape point by point
 ///   - a road area can have a direction (incoming = toward the camera, outgoing = away), shown by its arrow
+///   - the picture takes the whole width and the page scrolls; Ctrl + wheel (or the + / - buttons, or a pinch on a touchpad) zooms,
+///     and the shapes zoom with the picture; zoomed in, drag the empty picture with the mouse (or the middle button) to move it
 /// The finder only gives a first draft; the enforcer who knows the street has the last word.
 class RoadZoneEditor extends StatefulWidget {
   const RoadZoneEditor({
@@ -21,7 +24,9 @@ class RoadZoneEditor extends StatefulWidget {
     required this.size,
     required this.areas,
     required this.onChanged,
-    required this.onReset,
+    this.onReset,
+    this.markings = false,
+    this.actions = const [],
   });
 
   final Uint8List? frame;
@@ -31,11 +36,17 @@ class RoadZoneEditor extends StatefulWidget {
   final List<RoadArea> areas;
   final ValueChanged<List<RoadArea>> onChanged;
 
-  /// Back to what the scan found.
-  final VoidCallback onReset;
+  /// Back to what the scan found; null = no such button (the road markings page has no scan to go back to).
+  final VoidCallback? onReset;
+
+  /// The road markings of the live setup, not the correction after "Detect road": a lane has a type, a road a class, both a direction;
+  /// every solid line counts (which rule uses it depends on the violations picked); [actions] come first in the toolbar.
+  final bool markings;
+  final List<Widget> actions;
 
   static Color colourOf(RoadArea area) => switch (area.kind) {
     'road' => flowColour(area.flow),
+    'lane' => Colors.amberAccent,
     'sidewalk' => Colors.lightGreenAccent,
     'solid_line' => area.style == 'solid_white' ? Colors.white : Colors.yellowAccent,
     'stop_line' => Colors.orangeAccent,
@@ -80,11 +91,56 @@ class _Drawing {
 class _RoadZoneEditorState extends State<RoadZoneEditor> {
   static const _grab = 18.0; // how close to a point (screen pixels) a press grabs it
   static const _edge = 12.0; // how close to an edge or a line a tap must be to add a point there / select the line
+  static const _maxZoom = 8.0;
+  final ScrollController _scroll = ScrollController();
   String? _selected;
   int? _point; // the selected point of the selected shape (the one Remove point takes away)
   int? _drag; // the point being dragged
   int _added = 0;
   _Drawing? _drawing;
+
+  // The zoom: the picture and its shapes are drawn at the size of the box, then scaled by _zoom and moved by _pan (where the picture's
+  // top-left corner is, in the box's own pixels; never positive, so the picture always covers the box).
+  double _zoom = 1;
+  Offset _pan = Offset.zero;
+  Size _box = Size.zero;
+  bool _middleDrag = false; // moving the picture with the middle mouse button
+  double _zoomAtStart = 1; // touchpad pinch
+  Offset _panAtStart = Offset.zero;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  static Offset _clampPan(Offset pan, double zoom, Size box) =>
+      Offset(pan.dx.clamp(box.width - box.width * zoom, 0.0), pan.dy.clamp(box.height - box.height * zoom, 0.0));
+
+  /// Zoom to [zoom], keeping the point of the picture under [focus] (the box's own pixels) where it is.
+  void _zoomTo(double zoom, Offset focus) {
+    final next = zoom.clamp(1.0, _maxZoom);
+    setState(() {
+      _pan = _clampPan(focus - (focus - _pan) * (next / _zoom), next, _box);
+      _zoom = next;
+    });
+  }
+
+  void _zoomBy(double factor) => _zoomTo(_zoom * factor, Offset(_box.width / 2, _box.height / 2));
+
+  void _fit() => setState(() {
+    _zoom = 1;
+    _pan = Offset.zero;
+  });
+
+  void _onSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final held = HardwareKeyboard.instance;
+    if (!held.isControlPressed && !held.isMetaPressed) return; // a plain wheel scrolls the page
+    final focus = event.localPosition; // read here: the resolver hands the callback the untransformed event
+    final turn = event.scrollDelta.dy;
+    GestureBinding.instance.pointerSignalResolver.register(event, (_) => _zoomTo(_zoom * math.exp(-turn * 0.002), focus));
+  }
 
   RoadArea? get _selectedArea => widget.areas.where((a) => a.id == _selected).firstOrNull;
 
@@ -124,7 +180,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
 
   int? _pointNear(RoadArea area, Offset local, double scale) {
     for (var i = 0; i < area.polygon.length; i++) {
-      if ((area.polygon[i] * scale - local).distance <= _grab) return i;
+      if ((area.polygon[i] * scale - local).distance <= _grab / _zoom) return i;
     }
     return null;
   }
@@ -144,7 +200,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
         return;
       }
       final edge = _nearestEdge(selected, local, scale);
-      if (edge != null && edge.distance <= _edge && selected.polygon.length < RoadArea.maxPoints) {
+      if (edge != null && edge.distance <= _edge / _zoom && selected.polygon.length < RoadArea.maxPoints) {
         _replace(selected.copyWith(polygon: [...selected.polygon]..insert(edge.index + 1, _toFrame(edge.point, scale))));
         setState(() => _point = edge.index + 1);
         return;
@@ -157,7 +213,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
     final p = local / scale;
     RoadArea? hit;
     for (final a in widget.areas.reversed) {
-      final onIt = a.isLine ? (_nearestEdge(a, local, scale)?.distance ?? double.infinity) <= _edge : (a.polygon.length >= 3 && _inside(p, a.polygon));
+      final onIt = a.isLine ? (_nearestEdge(a, local, scale)?.distance ?? double.infinity) <= _edge / _zoom : (a.polygon.length >= 3 && _inside(p, a.polygon));
       if (onIt) {
         hit = a;
         break;
@@ -192,6 +248,15 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
     _replace(area.copyWith(polygon: [...area.polygon]..[i] = _toFrame(local, scale)));
   }
 
+  /// A drag that started on a point moves the point; one that started on the empty picture moves the picture (only when zoomed in).
+  void _dragOrPan(DragUpdateDetails d, double scale) {
+    if (_drag != null) {
+      _dragPoint(d.localPosition, scale);
+    } else if (_zoom > 1) {
+      setState(() => _pan = _clampPan(_pan + d.delta * _zoom, _zoom, _box)); // d.delta is in the picture's own pixels
+    }
+  }
+
   // ── removing a point ──
   void _removePoint(RoadArea area, int i) {
     if (area.polygon.length <= area.minPoints || i >= area.polygon.length) return;
@@ -214,7 +279,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
   });
 
   void _drawPoint(_Drawing d, Offset local, double scale) {
-    if (!d.isLine && d.points.length >= 3 && (d.points.first * scale - local).distance <= _grab) {
+    if (!d.isLine && d.points.length >= 3 && (d.points.first * scale - local).distance <= _grab / _zoom) {
       _finishDrawing(); // tapping the first point again closes an area
       return;
     }
@@ -285,8 +350,80 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
     setState(() => _point = null);
   }
 
+  List<Widget> _markingItems() => [
+    MenuItemButton(key: const ValueKey('draw-crosswalk'), onPressed: () => _startDrawing('crosswalk'), child: const Text('Crosswalk')),
+    MenuItemButton(key: const ValueKey('draw-solid'), onPressed: () => _startDrawing('solid_line'), child: const Text('Solid line')),
+    MenuItemButton(key: const ValueKey('draw-stop'), onPressed: () => _startDrawing('stop_line'), child: const Text('Stop line')),
+    MenuItemButton(key: const ValueKey('draw-lane'), onPressed: () => _startDrawing('lane'), child: const Text('Lane (bus lane, motorcycle lane …)')),
+    MenuItemButton(key: const ValueKey('draw-road'), onPressed: () => _startDrawing('road'), child: const Text('Road')),
+    MenuItemButton(key: const ValueKey('draw-sidewalk'), onPressed: () => _startDrawing('sidewalk'), child: const Text('Sidewalk')),
+  ];
+
+  /// What belongs to the selected shape in the road markings: its kind, paint, lane type, road class and direction.
+  List<Widget> _markingControls(RoadArea selected) {
+    RoadArea asKind(String kind) => selected.copyWith(
+      kind: kind,
+      clearFlow: kind != 'road' && kind != 'lane',
+      clearLaneType: kind != 'lane',
+      clearRoadClass: kind != 'road',
+    );
+    return [
+      if (!selected.isLine)
+        SegmentedButton<String>(
+          key: const ValueKey('road-kind'),
+          showSelectedIcon: false,
+          segments: [for (final k in RoadArea.markingKinds) ButtonSegment(value: k, label: Text(RoadArea.labelOf(k)))],
+          selected: {selected.kind},
+          onSelectionChanged: (s) => _replace(asKind(s.first)),
+        )
+      else if (selected.kind == 'solid_line')
+        DropdownButton<String>(
+          key: const ValueKey('line-style'),
+          value: selected.style,
+          items: [for (final s in RoadArea.lineStyles) DropdownMenuItem(value: s, child: Text(RoadArea.styleLabel(s)))],
+          onChanged: (s) {
+            if (s != null) _replace(selected.copyWith(style: s));
+          },
+        )
+      else
+        Text('Stop line: the Red light rule uses it.', style: Fx.caption(context)),
+      if (selected.kind == 'lane')
+        DropdownButton<String?>(
+          key: const ValueKey('lane-type'),
+          value: selected.laneType,
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Any vehicle may use it')),
+            for (final e in RoadArea.laneTypes.entries) DropdownMenuItem<String?>(value: e.key, child: Text(e.value)),
+          ],
+          onChanged: (v) => _replace(v == null ? selected.copyWith(clearLaneType: true) : selected.copyWith(laneType: v)),
+        ),
+      if (selected.kind == 'road')
+        DropdownButton<String?>(
+          key: const ValueKey('road-class'),
+          value: selected.roadClass,
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Kind of road: not said')),
+            for (final e in RoadArea.roadClasses.entries) DropdownMenuItem<String?>(value: e.key, child: Text(e.value)),
+          ],
+          onChanged: (v) => _replace(v == null ? selected.copyWith(clearRoadClass: true) : selected.copyWith(roadClass: v)),
+        ),
+      if (selected.hasDirection)
+        SegmentedButton<String>(
+          key: const ValueKey('road-flow'),
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(value: 'none', label: Text('No direction')),
+            ButtonSegment(value: 'in', label: Text('Incoming')),
+            ButtonSegment(value: 'out', label: Text('Outgoing')),
+          ],
+          selected: {selected.flow ?? 'none'},
+          onSelectionChanged: (s) => _setFlow(selected, s.first == 'none' ? null : s.first),
+        ),
+    ];
+  }
+
   Widget _drawMenu() => MenuAnchor(
-    menuChildren: [
+    menuChildren: widget.markings ? _markingItems() : [
       MenuItemButton(key: const ValueKey('draw-solid'), onPressed: () => _startDrawing('solid_line'), child: const Text('Solid line')),
       MenuItemButton(key: const ValueKey('draw-stop'), onPressed: () => _startDrawing('stop_line'), child: const Text('Stop line')),
       MenuItemButton(key: const ValueKey('draw-in'), onPressed: () => _startDrawing('road', flow: 'in'), child: const Text('Incoming road (toward the camera)')),
@@ -329,6 +466,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
     final selected = _selectedArea;
     // The buttons that are always there come first, then what belongs to the selected shape (its kind, direction, paint).
     return Wrap(spacing: Fx.s8, runSpacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      ...widget.actions,
       IconButton.outlined(key: const ValueKey('road-add'), tooltip: 'Add an area (a box to reshape)', onPressed: _add, icon: const Icon(Icons.add_box_outlined)),
       _drawMenu(),
       if (selected != null) ...[
@@ -346,12 +484,14 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
         ),
         IconButton.outlined(key: const ValueKey('road-delete'), tooltip: 'Delete this shape', onPressed: _delete, icon: const Icon(Icons.delete_outline)),
       ],
-      TextButton(key: const ValueKey('road-reset'), onPressed: widget.onReset, child: const Text('Back to the scan')),
+      if (widget.onReset != null) TextButton(key: const ValueKey('road-reset'), onPressed: widget.onReset, child: const Text('Back to the scan')),
       if (selected == null)
         Text(
           'Tap a shape to select it. Drag a point to move it. Tap an edge to add a point; right-click a point to remove it.',
           style: Fx.caption(context),
         )
+      else if (widget.markings)
+        ..._markingControls(selected)
       else if (!selected.isLine)
         SegmentedButton<String>(
           key: const ValueKey('road-kind'),
@@ -378,7 +518,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
         ),
       ] else
         Text('Stop line: only shown (a red light needs a light).', style: Fx.caption(context)),
-      if (selected != null && selected.kind == 'road')
+      if (selected != null && selected.kind == 'road' && !widget.markings)
         SegmentedButton<String>(
           key: const ValueKey('road-flow'),
           showSelectedIcon: false,
@@ -395,60 +535,171 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
 
   @override
   Widget build(BuildContext context) {
-    // The toolbar never takes more than 55% of the height (it scrolls instead), so the picture always has room and nothing overlaps the buttons below.
-    return LayoutBuilder(builder: (context, outer) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: outer.hasBoundedHeight ? outer.maxHeight * 0.55 : double.infinity),
-        child: SingleChildScrollView(child: _toolbar(context)),
-      ),
-      const SizedBox(height: Fx.s8),
-      Expanded(
-        child: Center(
-          child: AspectRatio(
+    // A page that scrolls: the toolbar at its own height, then the picture at the FULL width (as tall as that makes it).
+    // Nothing is squeezed into what is left over; scroll down to see all of the picture.
+    return Scrollbar(
+      controller: _scroll,
+      thumbVisibility: true,
+      child: SingleChildScrollView(
+        controller: _scroll,
+        padding: const EdgeInsets.only(right: Fx.s12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _toolbar(context),
+          const SizedBox(height: Fx.s8),
+          AspectRatio(
             aspectRatio: widget.size.width / widget.size.height,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(Fx.radiusSm),
-              child: LayoutBuilder(builder: (context, box) {
-                final scale = box.maxWidth / widget.size.width;
-                return MouseRegion(
-                  cursor: _drawing != null ? SystemMouseCursors.precise : MouseCursor.defer,
-                  child: GestureDetector(
-                    key: const ValueKey('road-canvas'),
-                    behavior: HitTestBehavior.opaque,
-                    onTapUp: (d) => _tap(d.localPosition, scale),
-                    onSecondaryTapUp: (d) => _removeNear(d.localPosition, scale),
-                    onPanDown: (d) => _grabPoint(d.localPosition, scale),
-                    onPanUpdate: (d) => _dragPoint(d.localPosition, scale),
-                    onPanEnd: (_) => _drag = null,
-                    onPanCancel: () => _drag = null,
-                    child: Stack(fit: StackFit.expand, children: [
-                      const ColoredBox(color: Colors.black),
-                      if (widget.frame != null) Image.memory(widget.frame!, fit: BoxFit.fill, gaplessPlayback: true),
-                      CustomPaint(painter: _ShapesPainter(widget.areas, _selected, _point, scale, _drawing)),
-                    ]),
+              child: LayoutBuilder(builder: (context, box) => _viewport(box)),
+            ),
+          ),
+          const SizedBox(height: Fx.s16),
+        ]),
+      ),
+    );
+  }
+
+  /// The picture with its shapes, zoomed and moved as one: the shapes scale in real time with the picture. Taps and drags reach the
+  /// canvas already in the picture's own pixels (a Transform maps them back), so editing works the same at any zoom.
+  Widget _viewport(BoxConstraints box) {
+    _box = Size(box.maxWidth, box.maxHeight);
+    final scale = box.maxWidth / widget.size.width;
+    final pan = _clampPan(_pan, _zoom, _box);
+    final zoomed = Matrix4.identity()
+      ..setEntry(0, 0, _zoom)
+      ..setEntry(1, 1, _zoom)
+      ..setEntry(0, 3, pan.dx)
+      ..setEntry(1, 3, pan.dy);
+    return Listener(
+      onPointerSignal: _onSignal,
+      onPointerDown: (e) => _middleDrag = e.kind == PointerDeviceKind.mouse && e.buttons == kMiddleMouseButton,
+      onPointerMove: (e) {
+        if (_middleDrag) setState(() => _pan = _clampPan(_pan + e.delta, _zoom, _box));
+      },
+      onPointerUp: (_) => _middleDrag = false,
+      onPointerCancel: (_) => _middleDrag = false,
+      onPointerPanZoomStart: (_) {
+        _zoomAtStart = _zoom;
+        _panAtStart = _pan;
+      },
+      onPointerPanZoomUpdate: (e) {
+        if ((e.scale - 1).abs() < 0.01) return; // a two-finger scroll without a pinch: the page scrolls
+        final next = (_zoomAtStart * e.scale).clamp(1.0, _maxZoom);
+        setState(() {
+          _pan = _clampPan(e.localPosition - (e.localPosition - _panAtStart) * (next / _zoomAtStart), next, _box);
+          _zoom = next;
+        });
+      },
+      child: Stack(children: [
+        Positioned.fill(
+          child: MouseRegion(
+            cursor: _drawing != null ? SystemMouseCursors.precise : MouseCursor.defer,
+            child: Transform(
+              transform: zoomed,
+              child: RawGestureDetector(
+                key: const ValueKey('road-canvas'),
+                behavior: HitTestBehavior.opaque,
+                gestures: {
+                  TapGestureRecognizer: GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+                    TapGestureRecognizer.new,
+                    (tap) => tap
+                      ..onTapUp = ((d) => _tap(d.localPosition, scale))
+                      ..onSecondaryTapUp = ((d) => _removeNear(d.localPosition, scale)),
                   ),
-                );
-              }),
+                  _GrabbingPan: GestureRecognizerFactoryWithHandlers<_GrabbingPan>(
+                    // A drag that starts on a point is the canvas's, not the page's: it wins at once.
+                    () => _GrabbingPan(() => _drag != null),
+                    (pan) => pan
+                      ..onDown = ((d) => _grabPoint(d.localPosition, scale))
+                      ..onUpdate = ((d) => _dragOrPan(d, scale))
+                      ..onEnd = ((_) => _drag = null)
+                      ..onCancel = (() => _drag = null),
+                  ),
+                },
+                child: Stack(fit: StackFit.expand, children: [
+                  const ColoredBox(color: Colors.black),
+                  if (widget.frame != null) Image.memory(widget.frame!, fit: BoxFit.fill, filterQuality: FilterQuality.medium, gaplessPlayback: true),
+                  CustomPaint(painter: _ShapesPainter(widget.areas, _selected, _point, scale, _zoom, _drawing, widget.markings)),
+                ]),
+              ),
             ),
           ),
         ),
-      ),
-    ]));
+        Positioned(top: Fx.s8, right: Fx.s8, child: _zoomBar()),
+      ]),
+    );
+  }
+
+  Widget _zoomBar() {
+    const tint = Colors.white;
+    return Material(
+      color: Colors.black.withValues(alpha: 0.65),
+      borderRadius: BorderRadius.circular(Fx.radiusSm),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          key: const ValueKey('road-zoom-out'),
+          tooltip: 'Zoom out',
+          visualDensity: VisualDensity.compact,
+          color: tint,
+          onPressed: _zoom > 1 ? () => _zoomBy(1 / 1.4) : null,
+          icon: const Icon(Icons.remove),
+        ),
+        SizedBox(
+          width: 46,
+          child: Text('${(_zoom * 100).round()}%', key: const ValueKey('road-zoom-level'), textAlign: TextAlign.center, style: const TextStyle(color: tint, fontSize: 12)),
+        ),
+        IconButton(
+          key: const ValueKey('road-zoom-in'),
+          tooltip: 'Zoom in (or Ctrl + wheel). Zoomed in, drag the empty picture with the mouse to move it.',
+          visualDensity: VisualDensity.compact,
+          color: tint,
+          onPressed: _zoom < _maxZoom ? () => _zoomBy(1.4) : null,
+          icon: const Icon(Icons.add),
+        ),
+        IconButton(
+          key: const ValueKey('road-zoom-fit'),
+          tooltip: 'Show the whole picture',
+          visualDensity: VisualDensity.compact,
+          color: tint,
+          onPressed: _zoom > 1 ? _fit : null,
+          icon: const Icon(Icons.fit_screen),
+        ),
+      ]),
+    );
+  }
+}
+
+/// A pan that takes the drag at once when [claims] says the press landed on something to drag (a point). Without it the page's own
+/// scrolling can win a vertical drag made by touch and the point would not move. A mouse never scrolls the page by dragging, so it is
+/// not affected either way. (It must not claim every press: a press that wins at once can never become a tap.)
+class _GrabbingPan extends PanGestureRecognizer {
+  _GrabbingPan(this.claims);
+
+  final bool Function() claims;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    super.addAllowedPointer(event); // runs onDown, which decides what was grabbed
+    if (claims()) resolve(GestureDisposition.accepted);
   }
 }
 
 class _ShapesPainter extends CustomPainter {
-  _ShapesPainter(this.areas, this.selected, this.point, this.scale, this.drawing);
+  _ShapesPainter(this.areas, this.selected, this.point, this.scale, this.zoom, this.drawing, this.markings);
 
   final List<RoadArea> areas;
   final String? selected;
   final int? point;
   final double scale;
+  final double zoom; // the picture is drawn zoomed: handles, lines and labels are made smaller by it, so they keep their size on screen
   final _Drawing? drawing;
+  final bool markings; // the road markings of the live setup (lane type, road class, no rule / hint wording)
 
-  static void _text(Canvas canvas, String text, Color colour, Offset at) {
+  double get _k => 1 / zoom;
+
+  void _text(Canvas canvas, String text, Color colour, Offset at) {
     final painter = TextPainter(
-      text: TextSpan(text: ' $text ', style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.bold, backgroundColor: colour)),
+      text: TextSpan(text: ' $text ', style: TextStyle(color: Colors.black, fontSize: 12 * _k, fontWeight: FontWeight.bold, backgroundColor: colour)),
       textDirection: TextDirection.ltr,
     )..layout();
     painter.paint(canvas, at);
@@ -458,20 +709,22 @@ class _ShapesPainter extends CustomPainter {
       Offset(pts.map((p) => p.dx).reduce(math.min), pts.map((p) => p.dy).reduce(math.min));
 
   void _handles(Canvas canvas, List<Offset> pts, Color colour, {required bool closed}) {
+    final k = _k;
     final segments = closed ? pts.length : pts.length - 1;
     for (var i = 0; i < segments; i++) {                                    // a small dot in the middle of each edge: tap there to add a point
       final mid = (pts[i] + pts[(i + 1) % pts.length]) / 2;
-      canvas.drawCircle(mid, 4, Paint()..color = colour.withValues(alpha: 0.7));
+      canvas.drawCircle(mid, 4 * k, Paint()..color = colour.withValues(alpha: 0.7));
     }
     for (final (i, p) in pts.indexed) {
       final chosen = i == point;
-      canvas.drawCircle(p, chosen ? 10 : 8, Paint()..color = chosen ? colour : Colors.white);
-      canvas.drawCircle(p, chosen ? 10 : 8, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawCircle(p, (chosen ? 10 : 8) * k, Paint()..color = chosen ? colour : Colors.white);
+      canvas.drawCircle(p, (chosen ? 10 : 8) * k, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3 * k);
     }
   }
 
   @override
   void paint(Canvas canvas, Size size) {
+    final k = _k;
     for (final area in areas) {
       if (area.polygon.length < (area.isLine ? 2 : 3)) continue;
       final isSelected = area.id == selected;
@@ -480,21 +733,26 @@ class _ShapesPainter extends CustomPainter {
       if (area.isLine) {
         final path = Path()..addPolygon(pts, false);
         if (area.style == 'double_yellow') {
-          canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 8 : 6);
-          canvas.drawPath(path, Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 2);
+          canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = (isSelected ? 8 : 6) * k);
+          canvas.drawPath(path, Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 2 * k);
         } else {
-          canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 6 : 4);
+          canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = (isSelected ? 6 : 4) * k);
         }
-        final what = area.kind == 'stop_line' ? 'Stop line' : 'Solid line · ${area.rule ? 'rule' : 'hint'}';
-        _text(canvas, what, colour, _topLeft(pts) + const Offset(2, -18));
+        final what = area.kind == 'stop_line' ? 'Stop line' : (markings ? 'Solid line' : 'Solid line · ${area.rule ? 'rule' : 'hint'}');
+        _text(canvas, what, colour, _topLeft(pts) + Offset(2, -18) * k);
       } else {
         final path = Path()..addPolygon(pts, true);
         canvas.drawPath(path, Paint()..color = colour.withValues(alpha: isSelected ? 0.34 : 0.2));
-        canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = isSelected ? 3.5 : 2);
+        canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = (isSelected ? 3.5 : 2) * k);
         final flow = flowLabel(area.flow);
-        _text(canvas, flow == null || area.kind != 'road' ? RoadArea.labelOf(area.kind) : 'Road · $flow', colour, _topLeft(pts) + const Offset(4, 4));
-        if (area.kind == 'road' && area.flow != null && area.arrow.length == 2) {
-          paintRoadArrow(canvas, area.arrow[0] * scale, area.arrow[1] * scale, colour, width: isSelected ? 6 : 4, head: 22);
+        final name = switch (area.kind) {
+          'road' => ['Road', if (markings && area.roadClass != null) RoadArea.roadClasses[area.roadClass] ?? area.roadClass!, ?flow].join(' · '),
+          'lane' => ['Lane', if (area.laneType != null) RoadArea.laneTypes[area.laneType] ?? area.laneType!, ?flow].join(' · '),
+          _ => RoadArea.labelOf(area.kind),
+        };
+        _text(canvas, name, colour, _topLeft(pts) + Offset(4, 4) * k);
+        if (area.hasDirection && area.flow != null && area.arrow.length == 2) {
+          paintRoadArrow(canvas, area.arrow[0] * scale, area.arrow[1] * scale, colour, width: (isSelected ? 6 : 4) * k, head: 22 * k);
         }
       }
       if (isSelected) _handles(canvas, pts, colour, closed: !area.isLine);
@@ -505,15 +763,16 @@ class _ShapesPainter extends CustomPainter {
         'solid_line' => d.style == 'solid_white' ? Colors.white : Colors.yellowAccent,
         'stop_line' => Colors.orangeAccent,
         'road' => flowColour(d.flow),
+        'lane' => Colors.amberAccent,
         'sidewalk' => Colors.lightGreenAccent,
         _ => Colors.cyanAccent,
       };
       final pts = [for (final p in d.points) p * scale];
       if (!d.isLine && pts.length >= 3) canvas.drawPath(Path()..addPolygon(pts, true), Paint()..color = colour.withValues(alpha: 0.18));
-      canvas.drawPath(Path()..addPolygon(pts, false), Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
+      canvas.drawPath(Path()..addPolygon(pts, false), Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3 * k);
       for (final (i, p) in pts.indexed) {
-        canvas.drawCircle(p, i == 0 ? 10 : 7, Paint()..color = i == 0 ? colour : Colors.white);
-        canvas.drawCircle(p, i == 0 ? 10 : 7, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3);
+        canvas.drawCircle(p, (i == 0 ? 10 : 7) * k, Paint()..color = i == 0 ? colour : Colors.white);
+        canvas.drawCircle(p, (i == 0 ? 10 : 7) * k, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 3 * k);
       }
     }
   }

@@ -219,7 +219,7 @@ class ReferenceData {
       says: 'People on a moving truck, in its back part along the direction of travel, and moving with it. '
           'Cab occupants sit in the front part, so they do not count.',
       code: [
-        CodeAnchor('${_viol}pickup_passengers.py', 'def check_frame(', label: 'The rule'),
+        CodeAnchor('${_viol}passenger_outside.py', 'def check_frame(', label: 'The rule'),
         CodeAnchor('${_viol}onboard.py', 'def in_trailing_body(', label: 'Where the back is'),
       ],
     ),

@@ -565,7 +565,7 @@ const List<DetectionRecipe> kRecipes = [
     family: JudgeFamily.frame,
     name: 'Riding on a vehicle, not beside it',
     covers: ['Passengers in a pickup bed', 'Riding on the roof / hanging on'],
-    source: 'violations/pickup_passengers.py + riding_outside.py + onboard.py',
+    source: 'violations/passenger_outside.py + onboard.py',
     plain:
         'Two things must both be true: the person is in the right place on the '
         'vehicle (the open back of a truck, a roof, hanging off an edge) and '

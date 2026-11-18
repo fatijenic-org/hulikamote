@@ -38,15 +38,40 @@ class RoadArea {
     this.arrow = const [],
     this.style = 'solid_white',
     this.rule = false,
+    this.laneType,
+    this.roadClass,
   });
 
-  static const kinds = ['crosswalk', 'road', 'sidewalk']; // what an area can be
+  static const kinds = ['crosswalk', 'road', 'sidewalk']; // what an area can be after "Detect road"
+  /// What an area can be in the road markings of the live setup: the same, and the lane (it has a type: who may use it).
+  static const markingKinds = ['crosswalk', 'road', 'lane', 'sidewalk'];
   static const lineKinds = ['solid_line', 'stop_line'];
+
+  /// Lane types: the keys of the backend's engine/lane_signs.py SIGNS (keep the two lists the same) and what is said about them.
+  /// "Restricted lane" flags every vehicle the type does not allow.
+  static const laneTypes = <String, String>{
+    'bus_only': 'Bus lane',
+    'puv_only': 'PUV lane (bus, jeepney)',
+    'motorcycle_only': 'Motorcycle lane',
+    'bicycle_only': 'Bike lane',
+    'no_trucks': 'No trucks',
+    'no_tricycles': 'No tricycles',
+    'no_motorcycles': 'No motorcycles',
+  };
+
+  /// What kind of road a road area is. "Tricycle on a national highway" takes the national highways.
+  static const roadClasses = <String, String>{
+    'national_highway': 'National highway',
+    'city_road': 'City or provincial road',
+    'barangay_road': 'Barangay road',
+    'other': 'Other road',
+  };
   static const lineStyles = ['solid_white', 'solid_yellow', 'double_yellow'];
   static const maxPoints = 64; // what the backend accepts for one shape
 
   static String labelOf(String kind) => switch (kind) {
     'road' => 'Road',
+    'lane' => 'Lane',
     'sidewalk' => 'Sidewalk',
     'solid_line' => 'Solid line',
     'stop_line' => 'Stop line',
@@ -67,6 +92,8 @@ class RoadArea {
   final List<Offset> arrow; // two points: the way the traffic goes (only with a flow)
   final String style; // solid_white | solid_yellow | double_yellow, for a solid line
   final bool rule; // a solid line that counts crossings as violations (a found line starts as a hint)
+  final String? laneType; // a lane: a key of [laneTypes]; null = any vehicle may use it (the lane only gives a direction)
+  final String? roadClass; // a road: a key of [roadClasses]; null = not said
 
   bool get isLine => lineKinds.contains(kind);
 
@@ -89,6 +116,8 @@ class RoadArea {
       arrow: points(json['arrow']),
       style: json['style'] as String? ?? 'solid_white',
       rule: json['rule'] as bool? ?? false,
+      laneType: json['lane_type'] as String?,
+      roadClass: json['road_class'] as String?,
     );
   }
 
@@ -97,10 +126,15 @@ class RoadArea {
     'kind': kind,
     isLine ? 'line' : 'polygon': [for (final p in polygon) [p.dx, p.dy]],
     if (side != null) 'side': side,
-    if (kind == 'road' && flow != null) 'flow': flow,
-    if (kind == 'road' && flow != null && arrow.length == 2) 'arrow': [for (final p in arrow) [p.dx, p.dy]],
+    if (hasDirection && flow != null) 'flow': flow,
+    if (hasDirection && flow != null && arrow.length == 2) 'arrow': [for (final p in arrow) [p.dx, p.dy]],
     if (kind == 'solid_line') ...{'style': style, 'rule': rule},
+    if (kind == 'lane' && laneType != null) 'lane_type': laneType,
+    if (kind == 'road' && roadClass != null) 'road_class': roadClass,
   };
+
+  /// A road area or a lane can have a direction.
+  bool get hasDirection => kind == 'road' || kind == 'lane';
 
   /// A changed copy. [clearFlow] removes the direction and its arrow (what a road area that is no longer a road has).
   RoadArea copyWith({
@@ -110,7 +144,11 @@ class RoadArea {
     List<Offset>? arrow,
     String? style,
     bool? rule,
+    String? laneType,
+    String? roadClass,
     bool clearFlow = false,
+    bool clearLaneType = false,
+    bool clearRoadClass = false,
   }) => RoadArea(
     id: id,
     kind: kind ?? this.kind,
@@ -120,6 +158,36 @@ class RoadArea {
     arrow: clearFlow ? const [] : (arrow ?? this.arrow),
     style: style ?? this.style,
     rule: rule ?? this.rule,
+    laneType: clearLaneType ? null : (laneType ?? this.laneType),
+    roadClass: clearRoadClass ? null : (roadClass ?? this.roadClass),
+  );
+
+  /// The same shape with every point multiplied by [fx] and [fy] (from the picture's pixels to the 1920x1080 reference space and back).
+  RoadArea scaled(double fx, double fy) => RoadArea(
+    id: id,
+    kind: kind,
+    polygon: [for (final p in polygon) Offset(p.dx * fx, p.dy * fy)],
+    side: side,
+    flow: flow,
+    arrow: [for (final p in arrow) Offset(p.dx * fx, p.dy * fy)],
+    style: style,
+    rule: rule,
+    laneType: laneType,
+    roadClass: roadClass,
+  );
+
+  /// The same shape under another name.
+  RoadArea withId(String newId) => RoadArea(
+    id: newId,
+    kind: kind,
+    polygon: polygon,
+    side: side,
+    flow: flow,
+    arrow: arrow,
+    style: style,
+    rule: rule,
+    laneType: laneType,
+    roadClass: roadClass,
   );
 
   /// The middle of the shape's points, left to right (to say "incoming on the left").

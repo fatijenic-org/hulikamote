@@ -74,10 +74,15 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
   bool _busy = false;
 
   int _i = 0;
-  List<_Box> _boxes = [];
+  List<_Box> _labelBoxes = [];
+  List<_Box> _blurBoxes = []; // areas to blur in the saved picture: the Labeller's separate layer, never labels
+  bool _blurMode = false; // the Blur tool is on: drawing, moving and deleting act on the blur layer
+  List<_Box> get _boxes => _blurMode ? _blurBoxes : _labelBoxes; // the layer being edited
+
   int _selected = -1;
   int _cls = 0;
   final Map<String, List<_Box>> _edited = {}; // what was on screen for a picture when we left it
+  final Map<String, List<_Box>> _editedBlur = {};
   final Set<String> _answered = {};
 
   // dragging
@@ -99,6 +104,11 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
   LabelItem? get _item => _i >= 0 && _i < _items.length ? _items[_i] : null;
   List<String> get _classes => _queue?.classes ?? widget.model.classes;
   bool get _finished => _queue != null && _i >= _items.length;
+
+  /// The Blur tool is only for the Labeller (its tasks are folders).
+  bool get _blurTool => (widget.taskId ?? '').startsWith('folder_');
+
+  List<HarvestBox>? get _blurAreas => _blurTool ? [for (final b in _blurBoxes) b.toHarvest()] : null;
 
   @override
   void initState() {
@@ -140,16 +150,22 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
     _error = null;
     _resetZoom(); // every new picture starts fitted
     if (item == null) {
-      _boxes = [];
+      _labelBoxes = [];
+      _blurBoxes = [];
       return;
     }
     final edited = _edited[item.id];
-    _boxes = edited != null ? [for (final b in edited) b.copy()] : [for (final b in item.boxes) _Box.from(b)];
+    _labelBoxes = edited != null ? [for (final b in edited) b.copy()] : [for (final b in item.boxes) _Box.from(b)];
+    final editedBlur = _editedBlur[item.id];
+    _blurBoxes = editedBlur != null ? [for (final b in editedBlur) b.copy()] : [for (final b in item.blur) _Box.from(b)];
   }
 
   void _leave() {
     final item = _item;
-    if (item != null) _edited[item.id] = [for (final b in _boxes) b.copy()];
+    if (item != null) {
+      _edited[item.id] = [for (final b in _labelBoxes) b.copy()];
+      _editedBlur[item.id] = [for (final b in _blurBoxes) b.copy()];
+    }
   }
 
   void _go(int step) {
@@ -194,13 +210,13 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
   }
 
   void _looksRight() {
-    if (_boxes.isEmpty) return;
-    _answer((item) => widget.labeling.save(item.id, [for (final b in _boxes) b.toHarvest()]));
+    if (_labelBoxes.isEmpty) return;
+    _answer((item) => widget.labeling.save(item.id, [for (final b in _labelBoxes) b.toHarvest()], blur: _blurAreas));
   }
 
   void _nothingHere() => _answer((item) async {
-        _boxes = [];
-        await widget.labeling.save(item.id, const []);
+        _labelBoxes = [];
+        await widget.labeling.save(item.id, const [], blur: _blurAreas);
       });
 
   void _notSure() => _answer((item) => widget.labeling.skip(item.id));
@@ -213,8 +229,21 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
     });
   }
 
+  void _toggleBlur() {
+    if (!_blurTool) return;
+    setState(() {
+      _blurMode = !_blurMode;
+      _selected = -1;
+      _drag = _Drag.none;
+    });
+  }
+
   void _pickClass(int cls) {
     setState(() {
+      if (_blurMode) {
+        _blurMode = false; // picking a class goes back to labelling
+        _selected = -1;
+      }
       _cls = cls;
       if (_selected >= 0 && _selected < _boxes.length) _boxes[_selected].cls = cls;
     });
@@ -235,6 +264,8 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
       _nothingHere();
     } else if (key == LogicalKeyboardKey.keyS) {
       _notSure();
+    } else if (key == LogicalKeyboardKey.keyH && _blurTool) {
+      _toggleBlur();
     } else if (key == LogicalKeyboardKey.delete || key == LogicalKeyboardKey.backspace) {
       _deleteSelected();
     } else if (key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyB) {
@@ -358,7 +389,7 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
     _drag = _Drag.draw;
     _anchor = _clamp(p);
     setState(() {
-      _boxes.add(_Box(_cls, _anchor.dx, _anchor.dy, 0, 0));
+      _boxes.add(_Box(_blurMode ? 0 : _cls, _anchor.dx, _anchor.dy, 0, 0));
       _selected = _boxes.length - 1;
     });
   }
@@ -417,7 +448,7 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
     }
     setState(() {
       _selected = hit;
-      if (hit >= 0) _cls = _boxes[hit].cls;
+      if (hit >= 0 && !_blurMode) _cls = _boxes[hit].cls;
     });
   }
 
@@ -564,7 +595,7 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
                         onTapUp: _tapUp,
                         child: Stack(fit: StackFit.expand, children: [
                           Image(image: widget.labeling.image(widget.model.key, item.id), fit: BoxFit.fill, gaplessPlayback: true),
-                          CustomPaint(painter: _BoxesPainter(boxes: _boxes, selected: _selected, classes: _classes, zoom: _zoom)),
+                          CustomPaint(painter: _BoxesPainter(labels: _labelBoxes, blurs: _blurBoxes, blurMode: _blurMode, selected: _selected, classes: _classes, zoom: _zoom)),
                         ]),
                       ),
                     ),
@@ -604,6 +635,15 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(_error!, key: const Key('labeler-error'), style: const TextStyle(color: Color(0xFFFF8A80))),
           ),
+        if (_blurMode)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Blur tool: draw boxes over faces, plates or anything private. Everything inside is blurred when the picture is saved. These boxes are not labels.',
+              key: Key('blur-hint'),
+              style: TextStyle(color: _blurColor, fontSize: 13),
+            ),
+          ),
         Wrap(
           alignment: WrapAlignment.spaceBetween,
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -635,13 +675,23 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
                 for (var k = 0; k < _classes.length; k++)
                   ChoiceChip(
                     key: Key('class-$k'),
-                    selected: _cls == k,
+                    selected: !_blurMode && _cls == k,
                     onSelected: (_) => _pickClass(k),
                     avatar: Container(width: 10, height: 10, decoration: BoxDecoration(color: HarvestStyle.boxColor(k), shape: BoxShape.circle)),
                     label: Text('${k + 1}  ${friendlyClass(_classes[k])}', style: const TextStyle(fontSize: 13)),
                     visualDensity: VisualDensity.compact,
                   ),
               if (multi) const SizedBox(width: 4),
+              if (_blurTool)
+                FilterChip(
+                  key: const Key('blur-tool'),
+                  selected: _blurMode,
+                  onSelected: (_) => _toggleBlur(),
+                  avatar: Icon(Icons.blur_on, size: 16, color: _blurMode ? Colors.black87 : _blurColor),
+                  label: Text(_blurMode ? 'Blur tool ON  (H)' : 'Blur tool  (H)', style: const TextStyle(fontSize: 13)),
+                  selectedColor: _blurColor,
+                  visualDensity: VisualDensity.compact,
+                ),
               TextButton(
                 key: const Key('not-sure'),
                 onPressed: _busy ? null : _notSure,
@@ -654,7 +704,7 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
               ),
               FilledButton.icon(
                 key: const Key('looks-right'),
-                onPressed: (_busy || _boxes.isEmpty) ? null : _looksRight,
+                onPressed: (_busy || _labelBoxes.isEmpty) ? null : _looksRight,
                 icon: const Icon(Icons.check, size: 20),
                 label: const Text('Looks right  (Enter)'),
                 style: FilledButton.styleFrom(
@@ -672,10 +722,16 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
   }
 }
 
-class _BoxesPainter extends CustomPainter {
-  _BoxesPainter({required this.boxes, required this.selected, required this.classes, this.zoom = 1});
+const Color _blurColor = Color(0xFFB065F0);
 
-  final List<_Box> boxes;
+class _BoxesPainter extends CustomPainter {
+  _BoxesPainter({required this.labels, required this.blurs, required this.blurMode, required this.selected, required this.classes, this.zoom = 1});
+
+  final List<_Box> labels;
+  final List<_Box> blurs;
+
+  /// The Blur tool is on: the blur areas are the ones being edited and the labels are shown dimmed (and the other way round).
+  final bool blurMode;
   final int selected;
   final List<String> classes;
 
@@ -684,12 +740,19 @@ class _BoxesPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    _layer(canvas, size, blurMode ? labels : blurs, blur: !blurMode, selected: -1, dim: true);
+    _layer(canvas, size, blurMode ? blurs : labels, blur: blurMode, selected: selected, dim: false);
+  }
+
+  void _layer(Canvas canvas, Size size, List<_Box> boxes, {required bool blur, required int selected, required bool dim}) {
     final s = 1 / zoom;
     for (var k = 0; k < boxes.length; k++) {
       final b = boxes[k];
-      final color = HarvestStyle.boxColor(b.cls);
+      final base = blur ? _blurColor : HarvestStyle.boxColor(b.cls);
+      final color = dim ? base.withValues(alpha: 0.5) : base;
       final r = Rect.fromLTRB(b.rect.left * size.width, b.rect.top * size.height, b.rect.right * size.width, b.rect.bottom * size.height);
       final isSelected = k == selected;
+      if (blur) canvas.drawRect(r, Paint()..color = base.withValues(alpha: dim ? 0.10 : 0.25));
       if (isSelected) {
         canvas.drawRect(r.inflate(2 * s), Paint()
           ..color = Colors.white
@@ -700,10 +763,11 @@ class _BoxesPainter extends CustomPainter {
         ..color = color
         ..style = PaintingStyle.stroke
         ..strokeWidth = (isSelected ? 4 : 3) * s);
-      // the class name, on the top-left corner
-      if (b.cls >= 0 && b.cls < classes.length && classes.length > 1) {
+      // the name, on the top-left corner: the class, or "Blur"
+      final name = blur ? 'Blur' : ((b.cls >= 0 && b.cls < classes.length && classes.length > 1) ? friendlyClass(classes[b.cls]) : null);
+      if (name != null) {
         final tp = TextPainter(
-          text: TextSpan(text: friendlyClass(classes[b.cls]), style: TextStyle(color: Colors.white, fontSize: 12 * s, fontWeight: FontWeight.w600)),
+          text: TextSpan(text: name, style: TextStyle(color: Colors.white, fontSize: 12 * s, fontWeight: FontWeight.w600)),
           textDirection: TextDirection.ltr,
         )..layout();
         final chip = Rect.fromLTWH(r.left, (r.top - tp.height - 4 * s).clamp(0.0, size.height), tp.width + 8 * s, tp.height + 4 * s);

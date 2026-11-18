@@ -78,6 +78,7 @@ class VersionRow extends StatelessWidget {
             ]),
           ),
         ),
+        if (v.classWarning != null) ClassListWarning(text: v.classWarning!),
         if (confirming) _confirm(context),
         if (expanded) VersionDetails(job: job, version: v, onCheck: onCheck),
       ]),
@@ -283,6 +284,33 @@ class _Tag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: Fx.raised(context), borderRadius: BorderRadius.circular(999)),
       child: Text(text, style: Fx.caption(context)),
+    );
+  }
+}
+
+/// "The list of class names is missing next to this model": shown on the version and on the live card.
+class ClassListWarning extends StatelessWidget {
+  const ClassListWarning({super.key, required this.text, this.margin = const EdgeInsets.fromLTRB(Fx.s12, 0, Fx.s12, Fx.s8)});
+
+  final String text;
+  final EdgeInsets margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('class-warning'),
+      margin: margin,
+      padding: const EdgeInsets.all(Fx.s8),
+      decoration: BoxDecoration(
+        color: Fx.warning.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(Fx.radiusSm),
+        border: Border.all(color: Fx.warning.withValues(alpha: 0.5)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded, size: 18, color: Fx.warning),
+        const SizedBox(width: Fx.s8),
+        Expanded(child: Text(text, style: Fx.caption(context))),
+      ]),
     );
   }
 }

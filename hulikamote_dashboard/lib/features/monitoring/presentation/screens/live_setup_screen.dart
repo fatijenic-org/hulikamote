@@ -4,40 +4,39 @@ import 'package:flutter/material.dart';
 
 import '../../../forensic/data/forensic_api.dart';
 import '../../../forensic/data/forensic_media.dart';
-import '../../../forensic/domain/analysis_draft.dart';
 import '../../../forensic/domain/violation_catalog.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../../forensic/presentation/widgets/wizard_steps.dart';
 import '../../data/camera_api.dart';
+import '../../domain/live_setup_draft.dart';
+import '../../domain/models/road_detect.dart';
+import '../widgets/frame_picker_step.dart';
+import '../widgets/road_markings_panel.dart';
 
-/// The violations picked on a live picture. A live camera has no recording to search, so a solid line cannot be
-/// "found in the video when the analysis starts": it must be drawn.
-class LiveSetupDraft extends AnalysisDraft {
-  @override
-  bool get isLive => true;
-
-  @override
-  bool findsLinesItself(String key) => false;
-
-  /// The solid-line editor's "find the lines automatically" switch starts OFF on a live picture.
-  @override
-  Map<String, dynamic> config(String key) {
-    final cfg = super.config(key);
-    if (key == 'crossing_solid_line') cfg.putIfAbsent('auto_lines', () => false);
-    return cfg;
-  }
-}
-
-/// "Set up violations" of the Live Monitor: the Forensic Analyzer's own steps (the same violations, zones and settings),
-/// drawn on ONE frozen picture of the running camera. Apply sends them to the Live Monitor, which goes on with the new rules.
+/// "Set up violations" of the Live Monitor: the Forensic Analyzer's own steps (the same violations, zones and settings), drawn on ONE
+/// picture of the source. Apply sends them to the Live Monitor.
+///
+/// Two ways in:
+///  - the feed is running: [shot] is the picture that was just frozen from it, and the steps start at Violations;
+///  - [chooseFrame] (Start was pressed, nothing plays yet): a first step collects pictures of the source (a file: spread over the video;
+///    a camera: one a second) and the operator picks one.
+///
 /// Pops with the number of violations that are now on, or null when it was closed without applying.
 class LiveSetupScreen extends StatefulWidget {
-  const LiveSetupScreen({super.key, required this.cameraApi, required this.shot, this.api, this.media = const ForensicMedia()});
+  const LiveSetupScreen({
+    super.key,
+    required this.cameraApi,
+    this.shot,
+    this.chooseFrame = false,
+    this.api,
+    this.media = const ForensicMedia(),
+  }) : assert(chooseFrame || shot != null, 'Give the frozen picture, or let the operator choose one');
 
   final CameraApi cameraApi;
 
-  /// What [CameraApi.captureReference] answered: version, width, height, fps of the frozen picture.
-  final Map<String, dynamic> shot;
+  /// What [CameraApi.captureReference] answered: version, width, height, fps of the frozen picture. Null with [chooseFrame].
+  final Map<String, dynamic>? shot;
+  final bool chooseFrame;
   final ForensicApi? api;
   final ForensicMedia media;
 
@@ -46,7 +45,9 @@ class LiveSetupScreen extends StatefulWidget {
 }
 
 class _LiveSetupScreenState extends State<LiveSetupScreen> {
-  static const _steps = ['Violations', 'Rules & zones', 'Settings', 'Apply'];
+  late final List<String> _steps = widget.chooseFrame
+      ? const ['Frame', 'Road', 'Violations', 'Rules & zones', 'Settings', 'Apply']
+      : const ['Road', 'Violations', 'Rules & zones', 'Settings', 'Apply'];
 
   late final ForensicApi _api = widget.api ?? ForensicApi();
   final LiveSetupDraft _draft = LiveSetupDraft();
@@ -59,17 +60,18 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   bool _applying = false;
   String? _error;
 
+  Map<String, dynamic> _saved = const {};   // what the Live Monitor uses now
+  late final Future<void> _savedLoad;
+  int? _pickedFrame;                        // the picture picked in the Frame step
+  bool _busyFrame = false;
+  String? _frameError;
+
+  String get _stepName => _steps[_step];
+
   @override
   void initState() {
     super.initState();
-    final shot = widget.shot;
-    _draft.setVideo(
-      path: 'live',
-      name: 'Live camera',
-      frame: widget.cameraApi.referenceFrameUrl((shot['version'] as num?)?.toInt() ?? 0),
-      fps: (shot['fps'] as num?)?.toDouble(),
-    );
-    _loadSaved();
+    _savedLoad = _loadSaved();
     _loadModels();
   }
 
@@ -84,15 +86,27 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     if (mounted) setState(() => _models = models);
   }
 
-  /// Opens with what the Live Monitor uses now, so a second setup changes it instead of starting from nothing.
+  /// Reads what the Live Monitor uses now, so a second setup changes it instead of starting from nothing.
   Future<void> _loadSaved() async {
-    Map<String, dynamic> saved = {};
     try {
-      saved = await widget.cameraApi.liveSetup();
+      _saved = await widget.cameraApi.liveSetup();
     } catch (_) {}
     if (!mounted) return;
-    _applySaved(saved);
+    if (!widget.chooseFrame) _attachFrame(widget.shot!);     // the picture is already frozen
     setState(() => _loading = false);
+  }
+
+  /// A frozen picture becomes the one the steps work on. The first time it also brings back the current live setup; a second
+  /// pick (the operator went back to the Frame step) only changes the picture and keeps every choice.
+  void _attachFrame(Map<String, dynamic> shot) {
+    final url = widget.cameraApi.referenceFrameUrl((shot['version'] as num?)?.toInt() ?? 0);
+    final fps = (shot['fps'] as num?)?.toDouble();
+    if (_draft.hasVideo) {
+      _draft.setFrame(url: url, seconds: 0, fps: fps);
+    } else {
+      _draft.setVideo(path: 'live', name: 'Live camera', frame: url, fps: fps);   // setVideo starts empty ...
+      _applySaved(_saved);                                                           // ... so the current setup comes back here
+    }
   }
 
   void _applySaved(Map<String, dynamic> saved) {
@@ -125,21 +139,28 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
           ..clear()
           ..addAll(copy);
       }
+      _draft.rememberPulled(key);                               // zones that came from markings may be refreshed by a new sync
+    }
+    final marks = saved['road_markings'];
+    if (marks is List) {
+      _draft.markings = [for (final m in marks) if (m is Map) RoadArea.fromJson(Map<String, dynamic>.from(m))];
     }
     _draft.touch();
   }
 
   // ── navigation ──
-  String? get _blockedReason => switch (_step) {
-    0 => _draft.selection.isEmpty ? 'Pick at least one violation.' : null,
-    1 => _draft.missingZones.isEmpty ? null : 'Still needs a zone: ${_draft.missingZones.map((k) => ViolationCatalog.of(k).label).join(', ')}',
+  String? get _blockedReason => switch (_stepName) {
+    'Frame' => _pickedFrame == null ? 'Wait for the first picture, then pick one.' : null,
+    'Violations' => _draft.selection.isEmpty ? 'Pick at least one violation.' : null,
+    'Rules & zones' => _draft.missingZones.isEmpty ? null : 'Still needs a zone: ${_draft.missingZones.map((k) => ViolationCatalog.of(k).label).join(', ')}',
     _ => null,
   };
 
   void _goto(int i) => setState(() {
+    if (i > _step && _stepName == 'Violations') _draft.syncMarkings();   // the picked violations take the markings they need (also those picked before)
     _step = i;
     if (i > _reached) _reached = i;
-    if (i == 1) _ensureRulesKey();
+    if (_stepName == 'Rules & zones') _ensureRulesKey();
   });
 
   void _ensureRulesKey() {
@@ -147,6 +168,28 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     if (sel.isEmpty) return;
     if (_rulesKey == null || !sel.contains(_rulesKey)) {
       _rulesKey = sel.firstWhere((k) => !_draft.zonesReady(k), orElse: () => sel.first);
+    }
+  }
+
+  /// Frame step, Continue: the picked picture becomes the setup picture, then on to the violations.
+  Future<void> _useFrame() async {
+    final id = _pickedFrame;
+    if (id == null || _busyFrame) return;
+    setState(() {
+      _busyFrame = true;
+      _frameError = null;
+    });
+    try {
+      await _savedLoad;
+      final shot = await widget.cameraApi.useFrame(id);
+      if (shot['ok'] != true) throw Exception('${shot['reason'] ?? 'That picture could not be used.'}');
+      if (!mounted) return;
+      _attachFrame(shot);
+      _goto(_step + 1);
+    } catch (e) {
+      if (mounted) setState(() => _frameError = '$e'.replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busyFrame = false);
     }
   }
 
@@ -174,9 +217,9 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     return Scaffold(
       backgroundColor: Fx.page(context),
       appBar: AppBar(
-        title: const Text('Set up violations on the live camera'),
+        title: const Text('Set up violations'),
         leading: IconButton(
-          tooltip: 'Back to the live picture',
+          tooltip: 'Close without changes',
           icon: const Icon(Icons.close),
           onPressed: _applying ? null : () => Navigator.of(context).pop(),
         ),
@@ -186,7 +229,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
           : ListenableBuilder(
               listenable: _draft,
               builder: (context, _) {
-                if (_step == 1) _ensureRulesKey();
+                if (_stepName == 'Rules & zones') _ensureRulesKey();
                 return Column(children: [
                   Padding(padding: const EdgeInsets.fromLTRB(Fx.s24, Fx.s12, Fx.s24, Fx.s12), child: _stepper(context)),
                   Divider(height: 1, color: Fx.border(context)),
@@ -204,7 +247,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
       for (var i = 0; i < _steps.length; i++) ...[
         InkWell(
           borderRadius: BorderRadius.circular(Fx.radiusSm),
-          onTap: (i <= _reached && i != _step && !_applying) ? () => _goto(i) : null,
+          onTap: (i <= _reached && i != _step && !_applying && !_busyFrame) ? () => _goto(i) : null,
           child: Padding(
             padding: const EdgeInsets.all(4),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -227,21 +270,46 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   }
 
   Widget _body(BuildContext context) {
-    final title = switch (_step) {
-      0 => ('What should the live camera look for?', _hadSetup ? 'Your current live setup is loaded. Change it as you need.' : 'Pick every violation to watch. Each one is set up in the next step.'),
-      1 => ('Set up the rules', 'Draw each area on this picture of the live camera, and set the limits. A rule marked as needing no drawing watches the whole picture.'),
-      2 => ('Fine-tune the pipeline', 'The defaults suit most cameras. Change a setting only when you know why.'),
-      _ => ('Review and apply', 'The live picture restarts for a few seconds with the new rules, then goes on.'),
+    final title = switch (_stepName) {
+      'Frame' => ('Pick a picture of the video', 'The violations are set up on this one picture. Pictures appear while they are collected: pick one at any time.'),
+      'Road' => ('Set up the road', 'Mark the road once, on this picture: crosswalks, lines, lanes, direction. Let the system find it, then correct it. Each violation you pick next takes only what it needs.'),
+      'Violations' => ('What should the monitor look for?', _hadSetup ? 'Your current live setup is loaded. Change it as you need.' : 'Pick every violation to watch. Each one is set up in the next step.'),
+      'Rules & zones' => ('Set up the rules', 'Draw each area on this picture, and set the limits. A rule marked as needing no drawing watches the whole picture.'),
+      'Settings' => ('Fine-tune the pipeline', 'The defaults suit most cameras. Change a setting only when you know why.'),
+      _ => ('Review and apply', widget.chooseFrame ? 'Monitoring starts as soon as you apply.' : 'The live picture restarts for a few seconds with the new rules, then goes on.'),
     };
-    final Widget content = switch (_step) {
-      0 => ViolationsStep(draft: _draft, models: _models),
-      1 => RulesStep(
+    // The Frame step stays alive (hidden) behind the other steps, so going back to it does not collect new pictures.
+    final Widget? picker = widget.chooseFrame
+        ? Offstage(
+            offstage: _stepName != 'Frame',
+            child: Column(children: [
+              Expanded(
+                child: FramePickerStep(
+                  key: const ValueKey('frame-picker'),
+                  api: widget.cameraApi,
+                  onPicked: (id) => setState(() => _pickedFrame = id),
+                ),
+              ),
+              if (_frameError != null) ...[const SizedBox(height: Fx.s8), FxBanner(message: _frameError!)],
+            ]),
+          )
+        : null;
+    final Widget? content = switch (_stepName) {
+      'Frame' => null,
+      'Road' => RoadMarkingsPanel(
+        key: const ValueKey('road-panel'),
+        cameraApi: widget.cameraApi,
+        markings: _draft.markings,
+        onChanged: _draft.setMarkings,       // the violations that are picked already take what they need at once
+      ),
+      'Violations' => ViolationsStep(draft: _draft, models: _models),
+      'Rules & zones' => RulesStep(
         draft: _draft,
         media: widget.media,
         current: _rulesKey ?? (_draft.selection.isEmpty ? '' : _draft.selection.first),
         onPick: (k) => setState(() => _rulesKey = k),
       ),
-      2 => SettingsStep(draft: _draft, models: _models),
+      'Settings' => SettingsStep(draft: _draft, models: _models),
       _ => _review(context),
     };
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -249,7 +317,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
       const SizedBox(height: 4),
       Text(title.$2, style: Fx.caption(context)),
       const SizedBox(height: Fx.s16),
-      Expanded(child: content),
+      Expanded(child: Stack(fit: StackFit.expand, children: [?picker, ?content])),
     ]);
   }
 
@@ -298,7 +366,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
               key: const ValueKey('live-setup-apply'),
               onPressed: _applying || sel.isEmpty ? null : _apply,
               icon: _applying ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.check),
-              label: Text(_applying ? 'Applying…' : 'Apply to the Live Monitor'),
+              label: Text(_applying ? 'Applying…' : (widget.chooseFrame ? 'Apply and start monitoring' : 'Apply to the Live Monitor')),
               style: FilledButton.styleFrom(minimumSize: const Size(0, 48), padding: const EdgeInsets.symmetric(horizontal: 28)),
             ),
           ]),
@@ -318,11 +386,12 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   Widget _footer(BuildContext context) {
     final reason = _blockedReason;
     final last = _step == _steps.length - 1;
+    final onFrame = _stepName == 'Frame';
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: Fx.s24, vertical: Fx.s12),
       child: Row(children: [
         TextButton.icon(
-          onPressed: (_step == 0 || _applying) ? null : () => _goto(_step - 1),
+          onPressed: (_step == 0 || _applying || _busyFrame) ? null : () => _goto(_step - 1),
           icon: const Icon(Icons.arrow_back, size: 16),
           label: const Text('Back'),
         ),
@@ -338,9 +407,10 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
           ),
         if (!last)
           FilledButton.icon(
-            onPressed: reason == null ? () => _goto(_step + 1) : null,
-            icon: const Icon(Icons.arrow_forward, size: 16),
-            label: Text(_step == 2 ? 'Review' : 'Continue'),
+            key: const ValueKey('live-setup-continue'),
+            onPressed: (reason == null && !_busyFrame) ? (onFrame ? _useFrame : () => _goto(_step + 1)) : null,
+            icon: _busyFrame ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.arrow_forward, size: 16),
+            label: Text(onFrame ? 'Use this picture' : (_stepName == 'Settings' ? 'Review' : (_stepName == 'Road' && _draft.markings.isEmpty ? 'Skip' : 'Continue'))),
             iconAlignment: IconAlignment.end,
             style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
           ),

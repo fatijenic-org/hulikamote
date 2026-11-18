@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hulikamote_dashboard/features/datasets/data/dataset_viewer_api.dart';
 
+import 'dataset_quick_review.dart';
+
 class DatasetRelabelTab extends StatefulWidget {
   final DatasetViewerApi api;
   final String dataset;
@@ -47,6 +49,10 @@ class _DatasetRelabelTabState extends State<DatasetRelabelTab> {
   int? _lastSelected;
   final Map<String, Map<String, dynamic>> _selected = {};
   final Map<String, GlobalKey> _tileKeys = {};
+  late bool _quick = _canQuick;
+
+  /// The quick review (trucks -> pickups) is for the vehicle dataset, where a truck class exists.
+  bool get _canQuick => widget.dataset == 'primary_anchor' && widget.classNames.contains('truck');
 
   @override
   void initState() {
@@ -464,6 +470,39 @@ class _DatasetRelabelTabState extends State<DatasetRelabelTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_canQuick) return _buildAllTools(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SegmentedButton<bool>(
+            key: const Key('relabel-mode'),
+            showSelectedIcon: false,
+            segments: const [
+              ButtonSegment(value: true, label: Text('Quick review: pickups')),
+              ButtonSegment(value: false, label: Text('All tools')),
+            ],
+            selected: {_quick},
+            onSelectionChanged: (value) => setState(() => _quick = value.first),
+          ),
+        ),
+      ),
+      Expanded(
+        child: _quick
+            ? DatasetQuickReview(
+                api: widget.api,
+                dataset: widget.dataset,
+                classNames: widget.classNames,
+                training: widget.training,
+                onChanged: widget.onChanged,
+              )
+            : _buildAllTools(context),
+      ),
+    ]);
+  }
+
+  Widget _buildAllTools(BuildContext context) {
     final selected = _selected.values.toList();
     return Focus(
       autofocus: true,

@@ -90,7 +90,7 @@ class FakeRoadBackend {
   );
 }
 
-Widget _host(FakeRoadBackend backend, void Function({required bool applied}) onClose) => MaterialApp(
+Widget _host(FakeRoadBackend backend, void Function({required bool applied}) onClose, {ValueChanged<bool>? onEditing}) => MaterialApp(
   home: Scaffold(
     body: SizedBox(
       width: 1100,
@@ -98,6 +98,7 @@ Widget _host(FakeRoadBackend backend, void Function({required bool applied}) onC
       child: RoadDetectView(
         api: backend.api,
         onClose: onClose,
+        onEditingChanged: onEditing,
         reserveTopRight: const Size(300, 169),
         pollEvery: const Duration(milliseconds: 50),
         sweepTime: const Duration(milliseconds: 120),
@@ -256,6 +257,30 @@ void main() {
       expect(sent.last['kind'], 'road');
       expect(sent.last['polygon'].length, 4);
       expect(closed, [true]);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('correcting gives the picture the whole page: the step header goes, the screen is told, and it all comes back', (tester) async {
+      final backend = FakeRoadBackend()
+        ..status = _statusJson('done', zones: draft, steps: {for (final id in _titles.keys) id: 'done'});
+      final editing = <bool>[];
+      await tester.pumpWidget(_host(backend, ({required bool applied}) {}, onEditing: editing.add));
+      await _settle(tester, 3500);
+      expect(find.byKey(const ValueKey('road-caption')), findsOneWidget);
+      expect(find.byKey(const ValueKey('road-step-steady')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('road-correct')));
+      await _settle(tester, 100);
+      expect(editing, [true]);
+      expect(find.byKey(const ValueKey('road-caption')), findsNothing);
+      expect(find.byKey(const ValueKey('road-step-steady')), findsNothing);
+      expect(find.byKey(const ValueKey('road-canvas')), findsOneWidget);
+      expect(find.byKey(const ValueKey('road-apply')), findsOneWidget, reason: 'Apply stays in reach below the scrolling picture');
+
+      await tester.tap(find.byKey(const ValueKey('road-correct')));          // Done correcting
+      await _settle(tester, 100);
+      expect(editing, [true, false]);
+      expect(find.byKey(const ValueKey('road-caption')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
     });
 

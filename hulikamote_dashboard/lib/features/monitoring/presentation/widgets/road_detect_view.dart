@@ -19,6 +19,9 @@ class RoadDetectView extends StatefulWidget {
     required this.api,
     required this.onClose,
     this.reserveTopRight,
+    this.onEditingChanged,
+    this.scan = false,
+    this.onFound,
     this.pollEvery = const Duration(milliseconds: 600),
     this.sweepTime = const Duration(milliseconds: 1500),
     this.dwell = const Duration(milliseconds: 700),
@@ -26,8 +29,17 @@ class RoadDetectView extends StatefulWidget {
 
   final CameraApi api;
 
+  /// The setup's road scan (started with [CameraApi.startRoadScan]) instead of the Live Monitor's "Detect road". The button then reads
+  /// "Use these" and hands what was found to [onFound] (in the picture's pixels, with the picture's size) instead of applying it.
+  final bool scan;
+  final void Function(List<RoadArea> areas, Size size)? onFound;
+
   /// The corner the live video takes (the screen draws it there): the header leaves that room free.
   final Size? reserveTopRight;
+
+  /// Told when the operator starts or stops correcting. While correcting, the picture gets the whole page (no step header, no room kept
+  /// for the live video): the screen hides the small live window then.
+  final ValueChanged<bool>? onEditingChanged;
 
   /// Called when the walkthrough is over: [applied] says whether the result was applied (false: discarded or failed).
   final void Function({required bool applied}) onClose;
@@ -79,10 +91,10 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
 
   Future<void> _tick() async {
     try {
-      final status = await widget.api.roadDetectStatus();
+      final status = await widget.api.roadDetectStatus(scan: widget.scan);
       if (!mounted) return;
       if (_frame == null && status.state != 'none') {
-        _frame = await widget.api.roadDetectFrame();
+        _frame = await widget.api.roadDetectFrame(scan: widget.scan);
         if (!mounted) return;
       }
       setState(() {
@@ -110,7 +122,7 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
       while (_queue.isNotEmpty && mounted) {
         final id = _queue.removeAt(0);
         final step = _status!.steps.firstWhere((s) => s.id == id);
-        final bytes = step.hasOverlay ? await widget.api.roadDetectStep(id) : null;
+        final bytes = step.hasOverlay ? await widget.api.roadDetectStep(id, scan: widget.scan) : null;
         if (!mounted) return;
         setState(() {
           _current = id;
@@ -144,6 +156,13 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
   }
 
   Future<void> _apply() async {
+    if (widget.scan) {
+      // the setup's scan: the markings go to the setup's Road step, nothing is saved for the camera here
+      final size = _status != null && _status!.size.length == 2 ? Size(_status!.size[0].toDouble(), _status!.size[1].toDouble()) : const Size(1280, 720);
+      widget.onFound?.call(_areas, size);
+      widget.onClose(applied: true);
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
@@ -183,7 +202,7 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
   Future<void> _discard() async {
     setState(() => _busy = true);
     try {
-      await widget.api.discardRoadDetect();
+      await widget.api.discardRoadDetect(scan: widget.scan);
     } catch (_) {
       // closing is what matters
     }
@@ -208,18 +227,20 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _stepChips(status),
-                const SizedBox(height: Fx.s8),
-                _caption(status),
-              ]),
-            ),
-            if (widget.reserveTopRight != null)
-              SizedBox.fromSize(size: Size(widget.reserveTopRight!.width + Fx.s16, widget.reserveTopRight!.height)),
-          ]),
-          const SizedBox(height: Fx.s12),
+          if (!_editing) ...[
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _stepChips(status),
+                  const SizedBox(height: Fx.s8),
+                  _caption(status),
+                ]),
+              ),
+              if (widget.reserveTopRight != null)
+                SizedBox.fromSize(size: Size(widget.reserveTopRight!.width + Fx.s16, widget.reserveTopRight!.height)),
+            ]),
+            const SizedBox(height: Fx.s12),
+          ],
           Expanded(child: _editing ? _editor(status) : _picture(status)),
           const SizedBox(height: Fx.s12),
           _footer(status),
@@ -254,8 +275,10 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
     if (status == null || status.state == 'none') {
       text = 'Capturing the frame...';
     } else if (status.state == 'collecting') {
-      text = 'Watching the traffic ${status.progressS.round()}/${status.needS.round()} s. The road is read from the last '
-          '${status.needS.round()} seconds, because it is found from how vehicles move.';
+      text = widget.scan
+          ? 'Taking ${status.needS.round()} seconds of the video (${status.progressS.round()}/${status.needS.round()} s). The road is found from how vehicles move.'
+          : 'Watching the traffic ${status.progressS.round()}/${status.needS.round()} s. The road is read from the last '
+              '${status.needS.round()} seconds, because it is found from how vehicles move.';
     } else if (current != null && (_sweeping || !_playedAll)) {
       text = '${steps.indexOf(current) + 1}/${steps.length}  ${current.title}: ${current.about}';
     } else if (status.state == 'analysing') {
@@ -380,10 +403,14 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
     if (status.state == 'done' && _playedAll) {
       final crosswalks = _areas.where((a) => a.kind == 'crosswalk').length;
       final others = _areas.where((a) => a.kind == 'road' || a.kind == 'sidewalk').length;
-      final usable = status.rules.isNotEmpty || _areas.isNotEmpty;
+      final usable = widget.scan ? _areas.isNotEmpty : (status.rules.isNotEmpty || _areas.isNotEmpty);
       final directions = roadDirectionsText(_areas);
       final lines = <String>[
-        if (_editing)
+        if (widget.scan) ...[
+          if (_areas.isNotEmpty) 'Found: ${[if (status.foundText.isNotEmpty) status.foundText, if (others > 0) '$others road or sidewalk area${others == 1 ? '' : 's'}'].join(', ')}.' else 'No clear crosswalk or line was found. Mark the road by hand.',
+          if (directions.isNotEmpty) directions,
+          'These are proposals. After "Use these" you can move, delete and add markings, and set the direction and type of each.',
+        ] else if (_editing)
           'Drag a point to move it. Tap an edge to add a point. Right-click a point to remove it. Apply saves your version for this camera.'
         else ...[
           if (status.foundText.isNotEmpty || _areas.isNotEmpty) 'Found: ${[if (status.foundText.isNotEmpty) status.foundText, if (others > 0) '$others road or sidewalk area${others == 1 ? '' : 's'}'].join(', ')}.' else 'No clear crosswalk or line was found.',
@@ -398,7 +425,7 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
             Text(lines.join(' '), key: const ValueKey('road-result'), maxLines: 3, overflow: TextOverflow.ellipsis, style: Fx.body(context)),
-            if (_hasDirections)
+            if (_hasDirections && !widget.scan)
               Tooltip(
                 message: 'Traffic that goes against the arrow of its side of the road is flagged as Counterflow. Check the arrows in Correct first.',
                 child: InkWell(
@@ -417,20 +444,27 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
           ]),
         ),
         const SizedBox(width: Fx.s12),
-        OutlinedButton.icon(
-          key: const ValueKey('road-correct'),
-          onPressed: _busy ? null : () => setState(() => _editing = !_editing),
-          icon: Icon(_editing ? Icons.visibility_outlined : Icons.edit_outlined),
-          label: Text(_editing ? 'Done correcting' : 'Correct'),
-        ),
-        const SizedBox(width: Fx.s8),
+        if (!widget.scan) ...[
+          OutlinedButton.icon(
+            key: const ValueKey('road-correct'),
+            onPressed: _busy
+                ? null
+                : () {
+                    setState(() => _editing = !_editing);
+                    widget.onEditingChanged?.call(_editing);
+                  },
+            icon: Icon(_editing ? Icons.visibility_outlined : Icons.edit_outlined),
+            label: Text(_editing ? 'Done correcting' : 'Correct'),
+          ),
+          const SizedBox(width: Fx.s8),
+        ],
         OutlinedButton(key: const ValueKey('road-discard'), onPressed: _busy ? null : _discard, child: const Text('Discard')),
         const SizedBox(width: Fx.s8),
         FilledButton.icon(
           key: const ValueKey('road-apply'),
           onPressed: (_busy || !usable) ? null : _apply,
           icon: const Icon(Icons.check),
-          label: const Text('Apply'),
+          label: Text(widget.scan ? 'Use these' : 'Apply'),
         ),
       ]);
     }

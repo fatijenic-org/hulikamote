@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hulikamote_dashboard/features/forensic/data/harvest_labeling.dart';
+import 'package:hulikamote_dashboard/features/forensic/domain/harvest_models.dart' show HarvestBox;
 import 'package:hulikamote_dashboard/features/forensic/presentation/screens/forensic_analyzer_screen.dart';
 import 'package:hulikamote_dashboard/features/forensic/presentation/widgets/harvest_categories_view.dart';
 import 'package:hulikamote_dashboard/features/forensic/presentation/widgets/harvest_labeler.dart';
@@ -112,6 +113,69 @@ void main() {
       expect(box[2], closeTo(.35, .02));
       expect(box[3], closeTo(.4, .02));
       expect(box[4], closeTo(.3, .02));
+    });
+
+    testWidgets('the Blur tool exists only in the Labeller (folder tasks), not in the normal harvest', (tester) async {
+      await _openLabeler(tester, FakeLabeling(), 'plate_specialist', taskId: 't1');
+      expect(find.byKey(const Key('blur-tool')), findsNothing);
+    });
+
+    testWidgets('blur areas are their own layer: drawn with the Blur tool, saved apart from the labels, never as a class', (tester) async {
+      final l = FakeLabeling();
+      await _openLabeler(tester, l, 'plate_specialist', taskId: 'folder_ab12cd34');
+      expect(find.byKey(const Key('blur-tool')), findsOneWidget);
+      expect(find.byKey(const Key('blur-hint')), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH); // H = Blur tool on
+      await tester.pump();
+      expect(find.byKey(const Key('blur-hint')), findsOneWidget);
+
+      final r = _canvas(tester);
+      await tester.dragFrom(r.topLeft + Offset(r.width * .1, r.height * .1), Offset(r.width * .2, r.height * .2));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH); // back to labelling
+      await tester.pump();
+      expect(find.byKey(const Key('blur-hint')), findsNothing);
+
+      await _tap(tester, find.byKey(const Key('looks-right')));
+      expect(l.saved['a1'], [
+        [0, .5, .5, .4, .3], // the plate label is untouched: the blur area did not become a label
+      ]);
+      final area = l.savedBlur['a1']!.single;
+      expect(area[0], closeTo(.2, .02));
+      expect(area[1], closeTo(.2, .02));
+      expect(area[2], closeTo(.2, .02));
+      expect(area[3], closeTo(.2, .02));
+    });
+
+    testWidgets('a picture with nothing to label can still carry blur areas: Nothing here saves both', (tester) async {
+      final l = FakeLabeling();
+      l.pictures['plate_specialist'] = [FakeLabeling.item('b1', blur: const [HarvestBox(cls: 0, cx: .3, cy: .3, w: .2, h: .2)])];
+      await _openLabeler(tester, l, 'plate_specialist', taskId: 'folder_ab12cd34');
+      await _tap(tester, find.byKey(const Key('nothing-here')));
+      expect(l.saved['b1'], isEmpty);
+      expect(l.savedBlur['b1'], [
+        [.3, .3, .2, .2],
+      ]);
+    });
+
+    testWidgets('with the Blur tool on, a drag edits blur areas only: a delete removes the blur box, the label stays', (tester) async {
+      final l = FakeLabeling();
+      l.pictures['plate_specialist'] = [
+        FakeLabeling.item('c1',
+            boxes: const [HarvestBox(cls: 0, cx: .7, cy: .7, w: .2, h: .2)], blur: const [HarvestBox(cls: 0, cx: .3, cy: .3, w: .2, h: .2)]),
+      ];
+      await _openLabeler(tester, l, 'plate_specialist', taskId: 'folder_ab12cd34');
+      await _tap(tester, find.byKey(const Key('blur-tool')));
+      final r = _canvas(tester);
+      await tester.tapAt(r.topLeft + Offset(r.width * .3, r.height * .3)); // pick the blur box
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pump();
+      await _tap(tester, find.byKey(const Key('blur-tool'))); // off again
+      await _tap(tester, find.byKey(const Key('looks-right')));
+      expect(l.savedBlur['c1'], isEmpty);
+      expect(l.saved['c1']!.length, 1);
     });
 
     testWidgets('pulling a corner fixes a box, dragging inside moves it, and Delete removes it', (tester) async {

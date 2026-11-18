@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../../../core/constants/api_constants.dart';
+import '../domain/models/frame_job.dart';
 import '../domain/models/road_detect.dart';
 
 /// A saved camera address. The backend never sends passwords back: they show as `***`.
@@ -109,14 +110,25 @@ class CameraApi {
     return RoadDetectStatus.fromJson(Map<String, dynamic>.from(body['detect'] as Map));
   }
 
-  Future<RoadDetectStatus> roadDetectStatus() async =>
-      RoadDetectStatus.fromJson(await _json(await _client.get(_uri('/settings/video/road/detect'))));
+  // With [scan] the same calls read the setup's road scan (see [startRoadScan]) instead of "Detect road".
+  String _detectPath(bool scan) => scan ? '/settings/video/scan' : '/settings/video/road/detect';
+
+  Future<RoadDetectStatus> roadDetectStatus({bool scan = false}) async =>
+      RoadDetectStatus.fromJson(await _json(await _client.get(_uri(_detectPath(scan)))));
 
   /// The frozen picture (JPEG), or null when there is no detection.
-  Future<Uint8List?> roadDetectFrame() => _bytes('/settings/video/road/detect/frame');
+  Future<Uint8List?> roadDetectFrame({bool scan = false}) => _bytes('${_detectPath(scan)}/frame');
 
   /// A finished step's picture (PNG with see-through parts), or null when that step has none.
-  Future<Uint8List?> roadDetectStep(String id) => _bytes('/settings/video/road/detect/step/$id');
+  Future<Uint8List?> roadDetectStep(String id, {bool scan = false}) => _bytes('${_detectPath(scan)}/step/$id');
+
+  /// The setup's "Find the road automatically": the same walkthrough as Detect road, on a few seconds of the source that start at the
+  /// setup picture. Poll it with `roadDetectStatus(scan: true)`. Throws with the backend's reason.
+  Future<RoadDetectStatus> startRoadScan() async {
+    final body = await _json(await _client.post(_uri('/settings/video/scan')));
+    if (body['ok'] != true) throw Exception(body['reason'] ?? 'Could not start reading the road');
+    return RoadDetectStatus.fromJson(Map<String, dynamic>.from(body['detect'] as Map));
+  }
 
   Future<Uint8List?> _bytes(String path) async {
     final res = await _client.get(_uri(path));
@@ -135,7 +147,7 @@ class CameraApi {
     body: jsonEncode({'zones': [for (final a in areas) a.toJson()]}),
   ));
 
-  Future<void> discardRoadDetect() async => _json(await _client.post(_uri('/settings/video/road/detect/discard')));
+  Future<void> discardRoadDetect({bool scan = false}) async => _json(await _client.post(_uri('${_detectPath(scan)}/discard')));
 
   // ── "Set up violations": freeze one picture of the running camera, then set the violations up on it ──
 
@@ -145,8 +157,26 @@ class CameraApi {
   /// Where the frozen picture is served; [version] keeps the image cache from showing an older one.
   String referenceFrameUrl(int version) => '$baseUrl/settings/video/reference/frame?v=$version';
 
+  /// The frozen setup picture itself (JPEG), or null when there is none (the road markings are drawn on it).
+  Future<Uint8List?> referenceFrameBytes() => _bytes('/settings/video/reference/frame');
+
   /// The violations and settings the Live Monitor uses now, in the wizard's own shape ({} when none were set up).
   Future<Map<String, dynamic>> liveSetup() async => _json(await _client.get(_uri('/settings/live/setup')));
+
+  // ── The "pick a frame" step: a few pictures of the source, then one of them becomes the setup picture ──
+
+  /// Starts collecting pictures of the current source (a file: spread over the video; a camera: one a second for a few seconds).
+  Future<FrameJob> startFrames({int count = 8}) async =>
+      FrameJob.fromJson(await _json(await _client.post(_uri('/settings/video/frames/start', {'count': '$count'}))));
+
+  /// The pictures collected so far (they arrive one by one while [FrameJob.working]).
+  Future<FrameJob> frames() async => FrameJob.fromJson(await _json(await _client.get(_uri('/settings/video/frames'))));
+
+  /// Where a collected picture is served; [job] keeps the image cache from showing a picture of an older grab.
+  String frameUrl(int job, int id) => '$baseUrl/settings/video/frames/$id?job=$job';
+
+  /// Makes a collected picture the one the violations are set up on. {ok: true, version, width, height, fps} or {ok: false, reason}.
+  Future<Map<String, dynamic>> useFrame(int id) async => _json(await _client.post(_uri('/settings/video/frames/$id/use')));
 
   // ── Traffic flow: Counterflow demo ──
 
@@ -156,6 +186,12 @@ class CameraApi {
 
   /// Forget the learned traffic flow and learn it again.
   Future<Map<String, dynamic>> relearnFlow() async => _json(await _client.post(_uri('/settings/live/flow/relearn')));
+
+  /// "Connect phone": finds the HULI-KAMOTE Camera app by itself (USB tethering, the phone's hotspot, the same Wi-Fi or a USB cable),
+  /// saves it as the camera "Phone" and makes it the live source. {ok, via, url, message, steps: [{text, ok}]}.
+  /// ok == false is a normal answer: [message] says what to do. Can take half a minute (the whole network is looked at).
+  Future<Map<String, dynamic>> connectPhone() async =>
+      _json(await _client.post(_uri('/settings/phone/connect')).timeout(const Duration(seconds: 90)));
 
   /// state: live | connecting | offline | file | idle ...
   Future<Map<String, dynamic>> status() async => _json(await _client.get(_uri('/settings/video/status')));

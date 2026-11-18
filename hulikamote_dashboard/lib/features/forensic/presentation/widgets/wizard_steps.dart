@@ -123,10 +123,13 @@ class VideoStep extends StatelessWidget {
 
 /// Step 2: which violations to look for, grouped, with what each one needs.
 class ViolationsStep extends StatelessWidget {
-  const ViolationsStep({super.key, required this.draft, required this.models});
+  const ViolationsStep({super.key, required this.draft, required this.models, this.actions = const []});
 
   final AnalysisDraft draft;
   final ModelChoices models;
+
+  /// Extra buttons at the start of the header row (the live setup adds "Add road markings" here).
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +143,8 @@ class ViolationsStep extends StatelessWidget {
           children: [
             Text('$n of ${all.length} selected', style: Fx.heading(context)),
             const Spacer(),
+            ...actions,
+            if (actions.isNotEmpty) const SizedBox(width: Fx.s8),
             TextButton(
               onPressed: () => draft.selectAll([
                 for (final v in all)

@@ -52,8 +52,10 @@ class _LabellerScreenState extends State<LabellerScreen> {
   LabellerStatus? _scan;
   LabellerStatus? _export;
   bool _predraw = true;
-  bool _blurHeads = true;
-  bool _blurPlates = true;
+  bool _move = false; // false = COPY: the folder keeps its pictures, so other models can still use them
+  bool _live = false; // send each picture to the destination the moment it is finished
+  bool _blurHeads = false; // blurring is manual: you draw the blur areas; the switches only add guesses
+  bool _blurPlates = false;
   String? _busyText;
   String? _error;
 
@@ -125,14 +127,45 @@ class _LabellerScreenState extends State<LabellerScreen> {
       await _run('Drawing the first guesses with the ${m.title} model...', () => _l.predraw(m.key, t, heads: heads, plates: plates));
     }
     if (!mounted || _error != null) return;
+    final dest = _dest.text.trim();
+    if (_live) {
+      if (dest.isEmpty) {
+        setState(() => _error = 'Choose the folder to send the pictures to first (step 4).');
+        return;
+      }
+      if (_move && !await _confirmLive(m, dest)) return;
+      await _run('Getting the destination ready...', () => _l.startLive(m.key, t, dest, move: _move));
+      if (!mounted || _error != null) return;
+    }
     await openHarvestLabeler(context, labeling: _l, model: m, taskId: t);
+    if (_live && mounted) {
+      await _run('Closing the dataset...', () async => _export = await _l.stopLive(m.key, t));
+    }
     await _run('Updating the numbers...', _refresh);
   }
+
+  Future<bool> _confirmLive(LabelModelInfo m, String dest) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Send each picture right away?'),
+          content: Text(
+            'Every picture you finish (Looks right, or Nothing here) is MOVED to\n$dest/${m.key}\nat once. '
+            'You cannot change it afterwards, and tickets that used the photo lose it in the review screens. '
+            'Pictures marked "Not sure" stay where they are.',
+          ),
+          actions: [
+            TextButton(key: const Key('labeller-live-cancel'), onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            FilledButton(key: const Key('labeller-live-confirm'), onPressed: () => Navigator.pop(context, true), child: const Text('Start sending')),
+          ],
+        ),
+      ) ??
+      false;
 
   Future<void> _exportAndMove() async {
     final m = _model, t = _task, ready = _counts?.ready ?? 0;
     if (m == null || t == null) return;
-    final sure = await showDialog<bool>(
+    final sure = !_move ? true : await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Move the finished pictures?'),
@@ -148,8 +181,8 @@ class _LabellerScreenState extends State<LabellerScreen> {
       ),
     );
     if (sure != true) return;
-    await _run('Writing the dataset and moving the pictures...', () async {
-      _export = await _l.exportFolder(m.key, t, _dest.text.trim());
+    await _run(_move ? 'Writing the dataset and moving the pictures...' : 'Writing the dataset and copying the pictures...', () async {
+      _export = await _l.exportFolder(m.key, t, _dest.text.trim(), move: _move);
       await _refresh();
     });
   }
@@ -171,8 +204,8 @@ class _LabellerScreenState extends State<LabellerScreen> {
                 Text('Labeller', style: Fx.title(context)),
                 const SizedBox(height: Fx.s8),
                 Text(
-                  'Label every picture of a folder for one model. The finished pictures are moved, as a clean dataset ready for '
-                  'training, to a folder you choose (an external drive too).',
+                  'Label every picture of a folder for one model. The finished pictures go, as a clean dataset ready for '
+                  'training, to a folder you choose (an external drive too). They are copied unless you choose to move them.',
                   style: Fx.caption(context),
                 ),
                 const SizedBox(height: Fx.s24),
@@ -216,7 +249,15 @@ class _LabellerScreenState extends State<LabellerScreen> {
                       label: const Text('Find the pictures'),
                     ),
                     const SizedBox(width: Fx.s12),
-                    if (_scan != null) Flexible(child: Text('${_scan!.found} pictures found', key: const Key('labeller-found'), style: Fx.caption(context))),
+                    if (_scan != null)
+                      Flexible(
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text('${_scan!.found} pictures found', key: const Key('labeller-found'), style: Fx.caption(context)),
+                          if (_scan!.alreadyLabelled > 0)
+                            Text('${_scan!.alreadyLabelled} already labelled for this model: left out',
+                                key: const Key('labeller-already'), style: Fx.caption(context)),
+                        ]),
+                      ),
                   ]),
                   if (counts != null) ...[
                     const SizedBox(height: Fx.s12),
@@ -224,7 +265,7 @@ class _LabellerScreenState extends State<LabellerScreen> {
                       _count(context, 'To label', counts.needsEyes),
                       _count(context, 'Finished', counts.ready),
                       _count(context, 'Not sure', counts.skipped),
-                      _count(context, 'Moved', counts.accepted),
+                      _count(context, 'Sent', counts.accepted),
                     ]),
                   ],
                 ]),
@@ -248,14 +289,34 @@ class _LabellerScreenState extends State<LabellerScreen> {
                   Text('Enter = the boxes are right · drag = draw a box · wheel = zoom · N = nothing here · S = not sure',
                       style: Fx.caption(context)),
                 ]),
-                _card(context, '4. Move the finished pictures', [
-                  _folderRow(context, 'labeller-dest', _dest, 'Folder to move them to (an external drive works)'),
+                _card(context, '4. Save the finished pictures', [
+                  _folderRow(context, 'labeller-dest', _dest, 'Folder to save them to (an external drive works)'),
+                  SwitchListTile(
+                    key: const Key('labeller-move'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Remove the originals from the folder (move)'),
+                    subtitle: const Text(
+                        'Off = copy. The folder keeps its pictures, so the other models can still label them, and tickets keep their photos. '
+                        'This model will not ask for the same picture again either way. On = the folder loses them: you cannot label them for another model.'),
+                    value: _move,
+                    onChanged: _busy ? null : (v) => setState(() => _move = v),
+                  ),
+                  SwitchListTile(
+                    key: const Key('labeller-live'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Send each picture right away'),
+                    subtitle: const Text(
+                        'As soon as you finish a picture (Looks right, or Nothing here) it is copied (or moved) to this folder. No waiting for the whole list. '
+                        'You cannot change it afterwards. Takes effect when you press Start labelling.'),
+                    value: _live,
+                    onChanged: _busy ? null : (v) => setState(() => _live = v),
+                  ),
                   const SizedBox(height: Fx.s12),
                   FilledButton.icon(
                     key: const Key('labeller-export'),
                     onPressed: _busy || m == null || (counts?.ready ?? 0) == 0 || _dest.text.trim().isEmpty ? null : _exportAndMove,
                     icon: const Icon(Icons.drive_file_move_outline),
-                    label: const Text('Build the dataset and move the pictures'),
+                    label: Text(_move ? 'Build the dataset and move the pictures' : 'Build the dataset and copy the pictures'),
                   ),
                   if (_export != null) ...[const SizedBox(height: Fx.s12), _result(context, _export!)],
                 ]),
@@ -276,17 +337,23 @@ class _LabellerScreenState extends State<LabellerScreen> {
     );
   }
 
-  /// "Blur" boxes: what is inside one is blurred in the saved picture. The guesses come with the pre-drawn boxes.
+  /// Blur areas (a layer apart from the labels): what is inside one is blurred in the saved picture. The switches only add first guesses.
   List<Widget> _blurSwitches(BuildContext context, String model) {
     final allowed = piiAllowed(model);
     return [
       const Divider(),
       Text('Hide personal details when saving', style: Fx.label(context)),
+      Text(
+        'You blur by hand: in the labelling screen turn on the Blur tool (H) and draw a box over a face or plate. '
+        'Blur areas are a separate layer: they are never labels. The switches below are optional: they only draw first guesses for you to fix.',
+        key: const Key('labeller-blur-manual'),
+        style: Fx.caption(context),
+      ),
       SwitchListTile(
         key: const Key('labeller-blur-heads'),
         contentPadding: EdgeInsets.zero,
         title: const Text('Heads of people'),
-        subtitle: Text(allowed.heads ? 'Draws a Blur box over every head the finder sees.' : (allowed.note ?? '')),
+        subtitle: Text(allowed.heads ? 'Automatic: guesses a blur area over every head the finder sees.' : (allowed.note ?? '')),
         value: _blurHeads && allowed.heads,
         onChanged: _busy || !allowed.heads ? null : (v) => setState(() => _blurHeads = v),
       ),
@@ -294,14 +361,14 @@ class _LabellerScreenState extends State<LabellerScreen> {
         key: const Key('labeller-blur-plates'),
         contentPadding: EdgeInsets.zero,
         title: const Text('Number plates'),
-        subtitle: Text(allowed.plates ? 'Draws a Blur box over every plate (or where it should be).' : (allowed.note ?? '')),
+        subtitle: Text(allowed.plates ? 'Automatic: guesses a blur area over every plate (or where it should be).' : (allowed.note ?? '')),
         value: _blurPlates && allowed.plates,
         onChanged: _busy || !allowed.plates ? null : (v) => setState(() => _blurPlates = v),
       ),
       if (allowed.note != null && allowed.heads && allowed.plates) Text(allowed.note!, key: const Key('labeller-blur-note'), style: Fx.caption(context)),
       Text(
-        'The Blur boxes use the last class in the labelling screen. Fix, delete or add them: everything inside a Blur box is blurred in the '
-        'saved picture, and the original is removed from the folder. This cannot catch everybody, so look at every picture.',
+        'Fix, delete or add blur boxes with the Blur tool: everything inside one is blurred in the saved picture. The original keeps its faces '
+        'unless you choose to move (step 4). The automatic guess cannot catch everybody, so look at every picture.',
         style: Fx.caption(context),
       ),
       const SizedBox(height: Fx.s12),
@@ -351,7 +418,7 @@ class _LabellerScreenState extends State<LabellerScreen> {
 
   Widget _result(BuildContext context, LabellerStatus s) {
     final lines = <String>[
-      '${s.exported} pictures moved: ${s.train} for training, ${s.val} for checking.',
+      '${s.exported} pictures ${s.moved ? 'moved' : 'copied'}: ${s.train} for training, ${s.val} for checking.',
       if (s.emptyLabels > 0) '${s.emptyLabels} of them are "nothing here" examples.',
       if (s.blurredPictures > 0) '${s.blurredPictures} pictures were blurred (${s.blurredRegions} places).',
       if (s.duplicates > 0) '${s.duplicates} copies of a picture were left out.',

@@ -190,6 +190,7 @@ class LabelItem {
     required this.height,
     required this.task,
     required this.ticket,
+    this.blur = const [],
   });
 
   final String id;
@@ -207,6 +208,9 @@ class LabelItem {
   final String? task;
   final String? ticket;
 
+  /// Areas to blur when the picture is saved (the Labeller): a layer apart from the labels. The class is always 0.
+  final List<HarvestBox> blur;
+
   double get aspect => (width > 0 && height > 0) ? width / height : 4 / 3;
 
   factory LabelItem.fromJson(Map<String, dynamic> j) => LabelItem(
@@ -220,6 +224,7 @@ class LabelItem {
         height: (j['height'] as num?)?.toInt() ?? 0,
         task: j['task'] as String?,
         ticket: j['ticket'] as String?,
+        blur: [for (final b in ((j['blur'] as List?) ?? const [])) ?HarvestBox.fromJson(b)],
       );
 }
 
@@ -341,7 +346,9 @@ class LabellerStatus {
 
   int _n(String key) => (summary[key] as num?)?.toInt() ?? 0;
   int get found => _n('found');
+  int get alreadyLabelled => _n('already_labelled'); // left out of a scan: the ledger says they are labelled for this model
   int get exported => _n('exported');
+  bool get moved => summary['moved'] != false; // false = the pictures were copied and the folder still has them
   int get train => _n('train');
   int get val => _n('val');
   int get emptyLabels => _n('empty_labels');

@@ -3,6 +3,7 @@ import 'package:hulikamote_dashboard/features/forensic/presentation/widgets/fx.d
 
 import '../../domain/hub_models.dart';
 import '../hub_format.dart';
+import 'version_row.dart' show ClassListWarning;
 
 /// The model that is live for a job, and its numbers in plain words.
 class LiveCard extends StatelessWidget {
@@ -53,6 +54,7 @@ class LiveCard extends StatelessWidget {
               Expanded(child: _Tile(label: shown[i].label, hint: shown[i].hint, value: fmtStat(job, shown[i].key, v.stats[shown[i].key]!))),
             ],
           ]),
+        if (v.classWarning != null) ClassListWarning(text: v.classWarning!, margin: const EdgeInsets.only(top: Fx.s12)),
       ]),
     );
   }

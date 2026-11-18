@@ -25,7 +25,7 @@ class FakeFolderLabeling extends FakeLabeling implements FolderLabelling {
     calls.add('scan $model $folder');
     if (scanError != null) throw scanError!;
     counts = const HarvestCounts(label: 5);
-    return LabellerStatus(task: 'folder_ab12cd34', summary: const {'found': 5, 'new': 5}, counts: counts);
+    return LabellerStatus(task: 'folder_ab12cd34', summary: const {'found': 5, 'new': 5, 'already_labelled': 2}, counts: counts);
   }
 
   @override
@@ -35,6 +35,20 @@ class FakeFolderLabeling extends FakeLabeling implements FolderLabelling {
   Future<int> predraw(String model, String taskId, {int n = 40, bool heads = false, bool plates = false}) async {
     calls.add('predraw $model $taskId heads=$heads plates=$plates');
     return 3;
+  }
+
+  LabellerStatus liveTotals = const LabellerStatus(
+    task: 'folder_ab12cd34',
+    summary: {'exported': 2, 'train': 2, 'val': 0, 'empty_labels': 0, 'dest': 'D:/labelled/plate_specialist'},
+  );
+
+  @override
+  Future<void> startLive(String model, String taskId, String dest, {bool move = true}) async => calls.add('live-on $model $taskId $dest move=$move');
+
+  @override
+  Future<LabellerStatus> stopLive(String model, String taskId) async {
+    calls.add('live-off $model $taskId');
+    return liveTotals;
   }
 
   @override
@@ -82,6 +96,7 @@ void main() {
     await _scan(tester);
     expect(l.calls, ['scan plate_specialist C:/evidence']);
     expect(find.text('5 pictures found'), findsOneWidget);
+    expect(find.text('2 already labelled for this model: left out'), findsOneWidget); // the ledger remembers them
     expect(find.byKey(const Key('labeller-counts')), findsOneWidget);
     expect(tester.widget<FilledButton>(find.byKey(const Key('labeller-start'))).onPressed, isNotNull);
     expect(tester.widget<FilledButton>(find.byKey(const Key('labeller-export'))).onPressed, isNull); // none finished, no destination
@@ -111,7 +126,7 @@ void main() {
     await tester.tap(find.byKey(const Key('labeller-start')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
-    expect(l.calls, contains('predraw plate_specialist folder_ab12cd34 heads=true plates=false')); // the plate model keeps its plates
+    expect(l.calls, contains('predraw plate_specialist folder_ab12cd34 heads=false plates=false')); // blur guesses are off unless asked for
     expect(find.byType(HarvestLabeler), findsOneWidget);
     expect(l.asked.last, 'folder_ab12cd34'); // the labeller asked for this folder's pictures only
   });
@@ -121,8 +136,6 @@ void main() {
     await _open(tester, l);
     await _scan(tester);
     await tester.tap(find.byKey(const Key('labeller-predraw')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('labeller-blur-heads')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('labeller-start')));
     await tester.pump();
@@ -148,6 +161,8 @@ void main() {
 
     expect(tester.widget<FilledButton>(find.byKey(const Key('labeller-export'))).onPressed, isNull); // no destination yet
     await tester.enterText(find.byKey(const Key('labeller-dest')), 'D:/labelled');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('labeller-move'))); // moving is a choice: copying is the default
     await tester.pump();
     await tester.tap(find.byKey(const Key('labeller-export')));
     await tester.pumpAndSettle();
@@ -179,9 +194,10 @@ void main() {
     expect(tester.widget<FilledButton>(find.byKey(const Key('labeller-start'))).onPressed, isNull);
   });
 
-  testWidgets('the plate model keeps its plates: only heads can be blurred, and the plate switch is locked off', (tester) async {
+  testWidgets('blur is manual by default; the plate model keeps its plates, so its plate switch is locked off', (tester) async {
     await _open(tester, FakeFolderLabeling());
-    expect(tester.widget<SwitchListTile>(find.byKey(const Key('labeller-blur-heads'))).value, isTrue);
+    expect(find.byKey(const Key('labeller-blur-manual')), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('labeller-blur-heads'))).value, isFalse);
     final plates = tester.widget<SwitchListTile>(find.byKey(const Key('labeller-blur-plates')));
     expect(plates.value, isFalse);
     expect(plates.onChanged, isNull);
@@ -197,7 +213,9 @@ void main() {
     final heads = tester.widget<SwitchListTile>(find.byKey(const Key('labeller-blur-heads')));
     expect(heads.value, isFalse);
     expect(heads.onChanged, isNull);
-    expect(tester.widget<SwitchListTile>(find.byKey(const Key('labeller-blur-plates'))).value, isTrue);
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('labeller-blur-plates'))).value, isFalse);
+    await tester.tap(find.byKey(const Key('labeller-blur-plates')));
+    await tester.pump();
     await _scan(tester);
     await tester.tap(find.byKey(const Key('labeller-start')));
     await tester.pump();
@@ -205,7 +223,7 @@ void main() {
     expect(l.calls, contains('predraw helmet_specialist folder_ab12cd34 heads=false plates=true'));
   });
 
-  testWidgets('switching a blur off is passed on to the helper', (tester) async {
+  testWidgets('switching an automatic blur on is passed on to the helper', (tester) async {
     final l = FakeFolderLabeling();
     await _open(tester, l);
     await _scan(tester);
@@ -214,7 +232,108 @@ void main() {
     await tester.tap(find.byKey(const Key('labeller-start')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
-    expect(l.calls, contains('predraw plate_specialist folder_ab12cd34 heads=false plates=false'));
+    expect(l.calls, contains('predraw plate_specialist folder_ab12cd34 heads=true plates=false'));
+  });
+
+  testWidgets('send each picture right away needs a destination first', (tester) async {
+    final l = FakeFolderLabeling();
+    await _open(tester, l);
+    await _scan(tester);
+    await tester.tap(find.byKey(const Key('labeller-live')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('labeller-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byKey(const Key('labeller-error')), findsOneWidget);
+    expect(l.calls.where((c) => c.startsWith('live')), isEmpty);
+    expect(find.byType(HarvestLabeler), findsNothing);
+  });
+
+  testWidgets('send each picture right away: asks first, then sends, and reports the totals when the labelling screen closes', (tester) async {
+    final l = FakeFolderLabeling();
+    await _open(tester, l);
+    await _scan(tester);
+    await tester.enterText(find.byKey(const Key('labeller-dest')), 'D:/labelled');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('labeller-move')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('labeller-live')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('labeller-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Send each picture right away?'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('labeller-live-cancel')));
+    await tester.pumpAndSettle();
+    expect(l.calls.where((c) => c.startsWith('live')), isEmpty); // Cancel sends nothing and opens nothing
+    expect(find.byType(HarvestLabeler), findsNothing);
+
+    await tester.tap(find.byKey(const Key('labeller-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byKey(const Key('labeller-live-confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(l.calls, contains('live-on plate_specialist folder_ab12cd34 D:/labelled move=true'));
+    expect(find.byType(HarvestLabeler), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // leave the labelling screen
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(l.calls, contains('live-off plate_specialist folder_ab12cd34'));
+    expect(find.textContaining('2 pictures moved: 2 for training, 0 for checking.'), findsOneWidget);
+  });
+
+  testWidgets('without the switch nothing is sent while labelling', (tester) async {
+    final l = FakeFolderLabeling();
+    await _open(tester, l);
+    await _scan(tester);
+    await tester.tap(find.byKey(const Key('labeller-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(l.calls.where((c) => c.startsWith('live')), isEmpty);
+  });
+
+  testWidgets('copying is the default: building the dataset does not ask and keeps the originals', (tester) async {
+    final l = FakeFolderLabeling();
+    l.exported = const LabellerStatus(task: 'folder_ab12cd34', summary: {'exported': 4, 'train': 3, 'val': 1, 'moved': false, 'dest': 'D:/labelled/plate_specialist'});
+    await _open(tester, l);
+    await _scan(tester);
+    l.counts = const HarvestCounts(label: 1, ready: 4); // four finished
+    await tester.tap(find.byKey(const Key('labeller-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // back on the Labeller page, numbers refreshed
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.enterText(find.byKey(const Key('labeller-dest')), 'D:/labelled');
+    await tester.pump();
+    expect(tester.widget<SwitchListTile>(find.byKey(const Key('labeller-move'))).value, isFalse);
+    await tester.tap(find.byKey(const Key('labeller-export')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Move the finished pictures?'), findsNothing); // nothing is lost, so nothing to confirm
+    expect(l.calls.last, 'export plate_specialist folder_ab12cd34 D:/labelled move=false');
+    expect(find.textContaining('4 pictures copied: 3 for training, 1 for checking.'), findsOneWidget);
+  });
+
+  testWidgets('send each picture right away also copies by default, without a warning', (tester) async {
+    final l = FakeFolderLabeling();
+    await _open(tester, l);
+    await _scan(tester);
+    await tester.enterText(find.byKey(const Key('labeller-dest')), 'D:/labelled');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('labeller-live')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('labeller-start')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Send each picture right away?'), findsNothing);
+    expect(l.calls, contains('live-on plate_specialist folder_ab12cd34 D:/labelled move=false'));
   });
 
   test('every model has a rule for what may be blurred, and no model loses its own target', () {
