@@ -33,13 +33,20 @@ void main() {
     expect(find.text('Detect road'), findsNothing);
   });
 
-  testWidgets('"Change source" offers a camera or phone and a video file in one place', (tester) async {
+  testWidgets('"Change source" offers the phone in one click, a camera address and a video file in one place', (tester) async {
     await pumpAt(tester, const Size(1400, 800));
-    expect(find.text('Camera or phone…'), findsNothing);
+    expect(find.text('Camera or address…'), findsNothing);
     await tester.tap(find.text('Change source'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Camera or phone…'), findsOneWidget);
+    expect(find.text('Connect phone (one click)'), findsOneWidget);
+    expect(find.text('Camera or address…'), findsOneWidget);
     expect(find.text('Video file…'), findsOneWidget);
+  });
+
+  testWidgets('the paused screen has a Connect phone button next to Set up violations', (tester) async {
+    await pumpAt(tester, const Size(1400, 800));
+    expect(find.byKey(const ValueKey('connect-phone-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('live-setup-button')), findsOneWidget);
   });
 
   testWidgets('the demo switch is tucked in the More menu', (tester) async {

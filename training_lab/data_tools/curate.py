@@ -284,4 +284,22 @@ def curate_model(model: str, apply: bool = False, max_side: int = 1280, workers:
         dump_json(rp, report)
     log(f"  kept {len(kept):,}, quarantined {sum(dropped.values()):,} {dict(dropped)}, labels fixed {fixed}, re-saved {resaved} "
         f"({report['seconds']}s)")
+    if apply:
+        reapply_decisions(model, log)
     return report
+
+
+def reapply_decisions(model: str, log=print) -> dict | None:
+    """Cleaning rewrites labels: put back what a person decided box by box (the journal, data_tools/decisions.py)."""
+    from . import decisions
+    if not decisions.journal_file(DATASETS, model).exists():
+        return None
+    try:
+        out = decisions.reapply(DATASETS, model)
+    except decisions.DecisionError as e:
+        log(f"  your box decisions were not put back: {e}")
+        return None
+    lost = out["image_missing"] + out["box_missing"] + out["different_class"]
+    log(f"  your box decisions: {out['applied']} put back as '{out['class']}', {out['already']} were already there"
+        + (f", {lost} could not be placed (picture or box gone, or its class changed)" if lost else ""))
+    return out

@@ -157,13 +157,27 @@ want ALL of them labelled for one model, not only the ones a ticket points at.
 2. **Start labelling.** The same full-screen labeller as the Forensic Analyzer's Harvest (draw / move / pull a corner, wheel = zoom,
    Enter = the boxes are right, N = nothing here, S = not sure). *Draw the model's guess first* pre-draws the deployed model's boxes.
    Pictures taken in the same minute count as one group, so they land on the same side of the train / validation split.
-   **Blur (personal details, R.A. 10173).** Under the switches: *Heads of people* and *Number plates*. With them on, the pre-drawing also
-   puts a **Blur** box (the last class in the labelling screen) over every head and every plate it finds (`pii_blur.py`: the top 30% of
-   a person, a head zone above a bike with no rider, the plate model's box inside each vehicle or the lower part of it). You fix, delete
-   or draw Blur boxes like any other box. A Blur box is not a label: it never goes into the label files; when the picture is saved,
-   everything inside it is blurred in the SAVED copy, and the original (with the faces) is removed from the folder when moving.
-   A model never loses its own target: the Plate model keeps plates readable, the Helmet model keeps heads. It cannot catch
-   everybody (a person the finder misses stays visible), so look at every picture.
+   **Blur (personal details, R.A. 10173).** Blur is its own layer, apart from the labels (it is not a class). In the labelling screen
+   press **H** (or the *Blur tool* button) and draw boxes over faces, plates or anything private; press H again to go back to labelling.
+   Blur areas are saved next to the labels (`blur` column) but never written to the label files. When the picture is saved, everything
+   inside a blur area is blurred in the SAVED copy, and the original (with the faces) is removed from the folder when moving.
+   *Optional, off by default:* under the switches on the page, *Heads of people* and *Number plates* make the pre-drawing also guess
+   blur areas (`pii_blur.py`: the top 30% of a person, a head zone above a bike with no rider, the plate model's box inside each vehicle
+   or the lower part of it); you then fix or delete them with the Blur tool. A model never loses its own target: the Plate model keeps
+   plates readable, the Helmet model keeps heads. The guess cannot catch everybody, so look at every picture.
+   **Already labelled (the ledger).** Every finished picture is also written to `training_lab/labelled_ledger/<model>.jsonl` (outside the
+   inbox, so cleaning the inbox does not lose it), and the export writes a copy `labelled_ledger.jsonl` next to the dataset. A scan
+   matches pictures by their content, so a picture renamed or moved by hand is still recognised and left out ("N already labelled
+   for this model"). It is per model: labelled for plates is not hidden from the helmet model. To rebuild a lost central ledger, copy
+   the ledger files from the dataset folders into `training_lab/labelled_ledger/`.
+   **Send each picture right away.** Step 4 has a switch. With it on (and a destination chosen), every picture you finish in the
+   labelling screen (Looks right, or Nothing here) is written to `<destination>/<model>/` and moved there at once, instead of waiting
+   for the button. It asks first; it cannot be undone from the screen (a later save of the same picture says "Already added"); "Not sure"
+   pictures stay put. Closing the labelling screen shows the totals and writes `report.json`. The helper keeps one exporter per model and
+   folder (`POST /api/labeller/live`, API 6); the button in step 4 still moves anything finished while the switch was off.
+   **Copy or move.** Step 4 has a switch, off by default = COPY: the folder keeps its pictures, so another model can still label them,
+   tickets keep their photos, and the original keeps its faces. The ledger stops THIS model from asking for a picture twice either way.
+   Move = the folder loses the pictures (asks first).
 3. **Move the finished pictures.** Choose any destination folder (an external drive works) and press the last button. It asks first, then
    writes `<destination>/<model>/images/{train,val}`, `labels/{train,val}`, `data.yaml` and `report.json`, and MOVES the finished
    pictures there (copy, check the size, then remove the original, also between drives).

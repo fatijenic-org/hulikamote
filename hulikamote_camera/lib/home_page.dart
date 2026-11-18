@@ -25,7 +25,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   SourceMode _mode = SourceMode.camera;
   bool _front = false;
   String _quality = 'medium';
-  bool _wifi = false;
+  bool _wifi = true;       // the laptop finds the phone by itself over Wi-Fi or USB tethering: the network must be open
   PickedVideo? _video;
 
   BroadcastStatus _status = const BroadcastStatus();
@@ -44,7 +44,49 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       if (mounted) setState(() => _frame = bytes);
     }, onError: (_) {});
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _poll());
-    _poll();
+    _boot();
+  }
+
+  /// Opens like a camera that was never switched off: the last choice comes back and the broadcast starts by itself.
+  /// (Press Stop to rest it; it starts again the next time the app is opened.)
+  Future<void> _boot() async {
+    try {
+      final prefs = await _bridge.loadPrefs();
+      final uri = prefs['videoUri'] as String?;
+      if (mounted) {
+        setState(() {
+          _mode = prefs['mode'] == 'video' && uri != null ? SourceMode.video : SourceMode.camera;
+          _front = prefs['front'] == true;
+          _quality = (prefs['quality'] as String?) ?? 'medium';
+          _wifi = prefs['wifi'] != false;
+          if (uri != null) _video = PickedVideo(uri: uri, name: (prefs['videoName'] as String?) ?? 'video');
+        });
+      }
+    } catch (_) {}
+    await _poll();
+    if (!mounted || _running) return;
+    await _toggle();
+    if (mounted && _problem != null && _mode == SourceMode.video) {      // the saved video cannot be opened any more: use the camera
+      setState(() {
+        _mode = SourceMode.camera;
+        _video = null;
+      });
+      await _toggle();
+    }
+  }
+
+  Future<void> _save() async {
+    try {
+      final video = _video;
+      await _bridge.savePrefs({
+        'mode': _mode == SourceMode.video ? 'video' : 'camera',
+        'front': _front,
+        'quality': _quality,
+        'wifi': _wifi,
+        if (video != null) 'videoUri': video.uri,
+        if (video != null) 'videoName': video.name,
+      });
+    } catch (_) {}
   }
 
   @override
@@ -81,6 +123,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       _busy = true;
       _problem = null;
     });
+    await _save();                                   // this choice is what comes back (and starts) the next time
     try {
       final error = await _bridge.start(mode: _mode, front: _front, quality: _quality, wifi: _wifi, video: _video?.uri);
       if (mounted) setState(() => _problem = error);
@@ -95,7 +138,10 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   Future<void> _chooseVideo() async {
     try {
       final picked = await _bridge.pickVideo();
-      if (picked != null && mounted) setState(() => _video = picked);
+      if (picked != null && mounted) {
+        setState(() => _video = picked);
+        await _save();
+      }
     } catch (e) {
       if (mounted) setState(() => _problem = 'The gallery could not be opened: $e');
     }
@@ -292,28 +338,32 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(16), border: Border.all(color: _line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
-          Icon(Icons.usb_rounded, color: _ok, size: 20),
+          Icon(Icons.wifi_tethering_rounded, color: _ok, size: 20),
           SizedBox(width: 8),
-          Text('Connect to the laptop by USB', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5)),
+          Text('Connect to the laptop', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15.5)),
         ]),
         const SizedBox(height: 10),
-        _step('1', 'Plug the phone into the laptop. Turn on USB debugging and allow the laptop.'),
-        _step('2', 'On the laptop, double-click "Connect Phone.bat" in the hulikamote_camera folder.'),
-        _step('3', 'Open the dashboard, Live Monitor, and press Start monitoring.'),
-        const SizedBox(height: 10),
-        _address('What the laptop opens', _status.usbUrl),
+        _step('1', 'Put the phone on the same Wi-Fi as the laptop, or turn on USB tethering.'),
+        _step('2', 'Keep this app open with the screen on. It broadcasts by itself.'),
+        _step('3', 'On the laptop: dashboard, Live Monitor, press "Connect phone". Nothing to type.'),
+        if (_running && _wifi) ...[
+          const SizedBox(height: 6),
+          const Text('The laptop finds one of these by itself:', style: TextStyle(color: Colors.white54, fontSize: 12.5)),
+          for (final a in _status.addresses) _address(a.label, a.url),
+          if (_status.addresses.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('No network found yet. Connect the phone to Wi-Fi or turn on USB tethering.', style: TextStyle(color: Colors.orangeAccent, fontSize: 12.5)),
+            ),
+        ],
         const Divider(height: 28, color: _line),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Also allow Wi-Fi / USB tethering', style: TextStyle(fontSize: 14.5)),
-          subtitle: const Text('Off: only the USB cable can reach the camera (private). On: anyone on the same network can open it.', style: TextStyle(fontSize: 12.5)),
+          title: const Text('Let the laptop reach the camera over the network', style: TextStyle(fontSize: 14.5)),
+          subtitle: const Text('On (needed for Wi-Fi and USB tethering): anyone on the same network can open the picture, so use your own Wi-Fi or hotspot. Off: only a USB cable with USB debugging can reach it.', style: TextStyle(fontSize: 12.5)),
           value: _wifi,
           onChanged: _running ? null : (v) => setState(() => _wifi = v),
         ),
-        if (_running && _wifi)
-          for (final a in _status.addresses) _address(a.label, a.url),
-        if (_running && _wifi && _status.addresses.isEmpty)
-          const Text('No network address found. Connect the phone to Wi-Fi or turn on USB tethering.', style: TextStyle(color: Colors.white54, fontSize: 12.5)),
       ]),
     );
   }

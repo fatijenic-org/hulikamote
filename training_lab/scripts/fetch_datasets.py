@@ -245,6 +245,12 @@ def ensure_test_split(model: str) -> None:
         path.write_text(text.rstrip() + f"\ntest: {rel}\n", encoding="utf-8")
 
 
+def reapply_decisions(model: str) -> None:
+    """A re-merge rewrites label files: put back what a person decided box by box (data_tools/decisions.py)."""
+    from data_tools import curate
+    curate.reapply_decisions(model, print)
+
+
 OCR_MODELS = {"plate_ocr"}      # text-labelled plate crops, not boxes: merged by data_tools.ocr
 
 
@@ -338,6 +344,7 @@ def main() -> None:
             moved = remove_leaks(model)
             if moved:
                 print(f"  moved {moved} val/test images into train (same photo was also in train)")
+            reapply_decisions(model)
             for split in ("train", "val", "test"):
                 per_class = {id_to_name[c]: n for (s, c), n in sorted(total.items(), key=str)
                              if s == split and c != "images"}

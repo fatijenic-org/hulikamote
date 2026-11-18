@@ -38,7 +38,7 @@ IconData iconForViolation(String cls) {
     'illegal_parking' || 'double_parking' => Icons.local_parking_rounded,
     'no_seatbelt' => Icons.airline_seat_recline_normal_outlined,
     'no_plate' => Icons.credit_card_off_outlined,
-    'overloading' || 'pickup_passengers' || 'riding_outside_vehicle' => Icons.groups_outlined,
+    'overloading' || 'passenger_outside' || 'pickup_passengers' || 'riding_outside_vehicle' || 'kuliglig_passenger' => Icons.groups_outlined,
     'illegal_turn' || 'illegal_u_turn' => Icons.u_turn_left_rounded,
     'restricted_lane' || 'truck_ban' || 'banned_in_zone' => Icons.block_rounded,
     'crossing_solid_line' => Icons.linear_scale_rounded,

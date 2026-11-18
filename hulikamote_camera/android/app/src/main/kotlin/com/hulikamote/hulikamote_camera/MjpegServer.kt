@@ -125,9 +125,9 @@ class MjpegServer(private val port: Int, private val allowNetwork: Boolean) {
     private fun snapshot(out: OutputStream) {
         val jpeg = lock.withLock { latest }
         if (jpeg == null) {
-            out.write("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+            out.write("HTTP/1.1 503 Service Unavailable\r\nServer: HulikamotePhoneCamera\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
         } else {
-            out.write("HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".toByteArray())
+            out.write("HTTP/1.1 200 OK\r\nServer: HulikamotePhoneCamera\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n".toByteArray())
             out.write(jpeg)
         }
         out.flush()

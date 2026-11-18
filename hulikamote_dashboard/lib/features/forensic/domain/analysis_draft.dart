@@ -173,7 +173,7 @@ class AnalysisDraft extends ChangeNotifier {
     'illegal_loading': ['bus', 'tricycle', 'truck'],
     'truck_ban': ['truck'],
     'tricycle_on_highway': ['tricycle'],
-    'sidewalk_driving': ['car', 'motorcycle', 'bus', 'truck', 'tricycle'],
+    'sidewalk_driving': ['car', 'motorcycle', 'bus', 'truck', 'pickup', 'tricycle'],
   };
 
   /// The mutable per-violation config (same keys and defaults the backend has always received).

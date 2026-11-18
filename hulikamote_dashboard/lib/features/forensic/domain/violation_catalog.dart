@@ -255,25 +255,12 @@ class ViolationCatalog {
       icon: Icons.groups,
     ),
     ViolationInfo(
-      key: 'pickup_passengers',
-      label: 'Passengers in a pickup bed',
-      blurb: 'People riding in the open back of a moving pickup or truck (RA 4136).',
+      key: 'passenger_outside',
+      label: 'Passenger outside',
+      blurb: 'People riding where a moving vehicle has no seat: pickup or truck bed, jeepney or bus roof, hanging on, '
+          'or a kuliglig trailer (driver excepted; kuliglig needs a model that knows it) (RA 4136).',
       group: ViolationGroup.vehicle,
       icon: Icons.local_shipping,
-    ),
-    ViolationInfo(
-      key: 'riding_outside_vehicle',
-      label: 'Riding on the roof / hanging on',
-      blurb: 'People on the roof of, or hanging off, a moving bus, jeepney or truck (RA 4136).',
-      group: ViolationGroup.vehicle,
-      icon: Icons.directions_bus_filled,
-    ),
-    ViolationInfo(
-      key: 'kuliglig_passenger',
-      label: 'Passengers on a kuliglig',
-      blurb: 'A moving kuliglig (hand tractor with a trailer) carries people other than its driver. Needs a vehicle model that knows the kuliglig class.',
-      group: ViolationGroup.vehicle,
-      icon: Icons.agriculture,
     ),
     ViolationInfo(
       key: 'no_helmet',
@@ -321,8 +308,15 @@ class ViolationCatalog {
   };
 
   /// Info for any backend key; unknown keys get a readable fallback label.
+  /// Rules merged into another one (2026-11-17): old reports and saved setups show the rule that replaced them.
+  static const legacyKeys = {
+    'pickup_passengers': 'passenger_outside',
+    'riding_outside_vehicle': 'passenger_outside',
+    'kuliglig_passenger': 'passenger_outside',
+  };
+
   static ViolationInfo of(String key) =>
-      _byKey[key] ??
+      _byKey[legacyKeys[key] ?? key] ??
       ViolationInfo(
         key: key,
         label: key.isEmpty
@@ -373,6 +367,7 @@ class ViolationCatalog {
     'motorcycle',
     'car',
     'truck',
+    'pickup',
     'tricycle',
     'bicycle',
   ];

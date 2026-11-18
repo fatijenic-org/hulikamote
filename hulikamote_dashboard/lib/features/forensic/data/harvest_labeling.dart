@@ -35,7 +35,8 @@ abstract class HarvestLabeling {
   ImageProvider image(String model, String id, {int? width});
 
   /// A person decided: these boxes (an empty list = "nothing here").
-  Future<void> save(String itemId, List<HarvestBox> boxes);
+  /// [blur] = the areas to blur in the saved picture (the Labeller's own layer; null = leave what is stored).
+  Future<void> save(String itemId, List<HarvestBox> boxes, {List<HarvestBox>? blur});
 
   /// A person was not sure: the picture stays out of training.
   Future<void> skip(String itemId);
@@ -75,12 +76,19 @@ abstract class FolderLabelling extends HarvestLabeling {
   /// How the pictures of one folder stand, and the last job.
   Future<LabellerStatus> folderStatus(String model, String taskId);
 
-  /// Pre-draws the deployed model's boxes on the next [n] pictures that have none, and, when asked, Blur boxes over the heads of
+  /// Pre-draws the deployed model's boxes on the next [n] pictures that have none, and, when asked, first-guess blur areas over the heads of
   /// people ([heads]) and over number plates ([plates]). Returns how many pictures got boxes.
   Future<int> predraw(String model, String taskId, {int n = 40, bool heads = false, bool plates = false});
 
   /// Writes the finished pictures of the folder as a dataset under [dest]/[model] and, with [move], moves them there.
   Future<LabellerStatus> exportFolder(String model, String taskId, String dest, {bool move = true});
+
+  /// "Send each picture right away": from now on every picture finished in the labelling screen is written to [dest]/[model]
+  /// and (with [move]) moved there at once, instead of waiting for [exportFolder].
+  Future<void> startLive(String model, String taskId, String dest, {bool move = true});
+
+  /// Stops sending. Returns the totals of what was sent (the same numbers an export reports).
+  Future<LabellerStatus> stopLive(String model, String taskId);
 }
 
 class _Helper {
@@ -105,8 +113,8 @@ class LocalHarvestLabeling implements FolderLabelling {
 
   static const _idleMinutes = 30;
 
-  /// What the helper must know: 5 = the Labeller (folders), 4 = "the rest are fine" (3 = the cars one by one, 2 = the "same car?" questions and the clip's own pictures).
-  static const _apiNeeded = 5;
+  /// What the helper must know: 6 = send each picture right away, 5 = the Labeller (folders), 4 = "the rest are fine" (3 = the cars one by one, 2 = the "same car?" questions and the clip's own pictures).
+  static const _apiNeeded = 6;
 
   String _labDir() {
     try {
@@ -285,10 +293,11 @@ class LocalHarvestLabeling implements FolderLabelling {
   }
 
   @override
-  Future<void> save(String itemId, List<HarvestBox> boxes) async {
+  Future<void> save(String itemId, List<HarvestBox> boxes, {List<HarvestBox>? blur}) async {
     await _call('POST', '/api/save', body: {
       'id': itemId,
       'boxes': [for (final b in boxes) [b.cls, b.cx, b.cy, b.w, b.h]],
+      if (blur != null) 'blur': [for (final b in blur) [0, b.cx, b.cy, b.w, b.h]],
     });
   }
 
@@ -332,5 +341,17 @@ class LocalHarvestLabeling implements FolderLabelling {
   Future<LabellerStatus> exportFolder(String model, String taskId, String dest, {bool move = true}) async {
     await _call('POST', '/api/labeller/export', body: {'model': model, 'task': taskId, 'dest': dest, 'move': move});
     return _finishJob(model, taskId);
+  }
+
+  @override
+  Future<void> startLive(String model, String taskId, String dest, {bool move = true}) async {
+    await _call('POST', '/api/labeller/live', body: {'model': model, 'task': taskId, 'dest': dest, 'move': move});
+  }
+
+  @override
+  Future<LabellerStatus> stopLive(String model, String taskId) async {
+    final r = await _call('POST', '/api/labeller/live', body: {'model': model, 'task': taskId, 'dest': ''});
+    final summary = r['summary'];
+    return LabellerStatus(task: taskId, summary: summary is Map ? Map<String, dynamic>.from(summary) : const {});
   }
 }

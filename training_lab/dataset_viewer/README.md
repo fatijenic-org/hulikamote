@@ -2,7 +2,7 @@
 
 A local, offline dataset service for the YOLO training datasets
 (`primary_anchor`, `helmet_specialist`, `plate_specialist`, `cabin_specialist`).
-The dashboard renders its viewer natively in Flutter; a standalone browser UI is also available.
+The dashboard renders its viewer natively in Flutter (API 2 = the quick box review); a standalone browser UI is also available.
 Python stdlib + Pillow only; no CDN. Binds to `127.0.0.1` with a random token.
 
 ## Start
@@ -29,6 +29,21 @@ and later starts take a few seconds. Changes made outside the viewer are noticed
 - **Overview**: charts from the labels at once; picture sizes are read in the background.
 - **Relabel**: review individual box crops or preview a source/split/class rule before changing labels.
   Selection and rule changes are confirmed before writing; edited pictures can be filtered in Gallery.
+- **Relabel > Quick review (the vehicle dataset)**: made to turn pickups out of the `truck` class. One job, few buttons.
+  1. *Add the class "pickup"* (once): it gets the next number (`7`, `nc: 8`); old numbers never change; refused while a vehicle training runs.
+  2. Each page is 6 x 5 small pictures of boxes (class `truck`, or `car`; train, val and test are all in it, so the test score stays honest).
+     Click to pick (**Shift+click** for a range, **A** = the whole page, **C** = clear). **Enter** = "these are pickups": the picked boxes change,
+     the rest of the page is written down as *looked at, not changed*. **N** = no pickups here (the whole page is looked at). **Ctrl+Z**
+     undoes the last page (labels and notes together). **Right arrow** skips a page without deciding.
+  3. A counter shows "Reviewed 1,240 of 7,617 truck boxes"; reviewed boxes never come back, so each page shows only new ones.
+  4. **Suggested pickups**: after at least 100 pickups and 100 not-pickups are marked, "Find likely pickups" cuts out every box nobody looked at,
+     turns each into 512 numbers with the car matcher's network (`embed.py`, already installed, no pip), trains a small logistic regression
+     on the marked boxes, and lists the rest best-first with a percentage and how often it was right on boxes it never saw. It only orders
+     them: nothing is changed until you pick and press Enter (**Pick the likely ones** only selects the 80%+ boxes).
+  5. **The journal** `datasets/_decisions/<model>.jsonl` keeps every decision (picture + place of the box -> class). A re-merge
+     (`scripts/fetch_datasets.py`) or `data.py curate --apply` rewrites label files, and both now call the re-apply at the end;
+     **Re-apply my pickup decisions** does it by hand. A box is found by its picture name and place, not its line number; a box whose
+     class changed in the source is reported, never overwritten.
 - **About**: `DATASET_CARD.md`, sources from `configs/datasets_manifest.yaml`, the CATALOG row, and your notes
   (`datasets/<model>/NOTES.md`, never overwritten by `report.py`). Relabeling marks the card stale; regenerate it
   from the dashboard banner after reviewing the edits.

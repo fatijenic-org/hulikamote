@@ -224,7 +224,7 @@ class ExternalApps {
           .timeout(const Duration(seconds: 3));
       if (r.statusCode != 200) return null;
       final ping = jsonDecode(r.body);
-      if (ping is! Map || ping['ok'] != true || ping['api'] != 1) return null;
+      if (ping is! Map || ping['ok'] != true || ping['api'] != 2) return null;   // 2 = quick box review
       return DatasetViewerEndpoint('http://127.0.0.1:$port', token);
     } catch (_) {
       return null;

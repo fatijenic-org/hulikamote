@@ -65,12 +65,16 @@ class UploadStatusCard extends StatelessWidget {
     super.key,
     required this.status,
     required this.playing,
+    this.compact = false,
     this.onCancel,
     this.onRetry,
     this.onDismiss,
   });
 
   final UploadStatus status;
+
+  /// One slim line (title, a small bar, the numbers, the buttons) for a screen that has more to show than this.
+  final bool compact;
 
   /// The live view is running (the "ready" card then says it shows the video; else it says to press Start).
   final bool playing;
@@ -87,6 +91,7 @@ class UploadStatusCard extends StatelessWidget {
       UploadStage.done => (Icons.check_circle, Fx.success, '${s.name} is ready'),
       UploadStage.failed => (Icons.error_outline, Fx.danger, 'Upload failed'),
     };
+    if (compact) return _slim(context, s, icon, color, title);
     return FxCard(
       key: const ValueKey('upload-card'),
       padding: const EdgeInsets.symmetric(horizontal: Fx.s16, vertical: Fx.s12),
@@ -95,12 +100,7 @@ class UploadStatusCard extends StatelessWidget {
           Icon(icon, size: 20, color: color),
           const SizedBox(width: Fx.s8),
           Expanded(child: Text(title, style: Fx.body(context).copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-          if (s.stage == UploadStage.sending && onCancel != null)
-            TextButton(key: const ValueKey('upload-cancel'), onPressed: onCancel, child: const Text('Cancel upload')),
-          if (s.stage == UploadStage.failed && onRetry != null)
-            TextButton(key: const ValueKey('upload-retry'), onPressed: onRetry, child: const Text('Try again')),
-          if (!s.active && onDismiss != null)
-            IconButton(key: const ValueKey('upload-dismiss'), tooltip: 'Close', visualDensity: VisualDensity.compact, icon: const Icon(Icons.close, size: 18), onPressed: onDismiss),
+          ..._actions(s),
         ]),
         if (s.active) ...[
           const SizedBox(height: Fx.s8),
@@ -116,6 +116,43 @@ class UploadStatusCard extends StatelessWidget {
         ],
         const SizedBox(height: 6),
         Text(_caption(s), key: const ValueKey('upload-caption'), style: Fx.caption(context)),
+      ]),
+    );
+  }
+
+  /// Cancel while the file goes out, Try again after a failure, Close once it is over.
+  List<Widget> _actions(UploadStatus s) => [
+        if (s.stage == UploadStage.sending && onCancel != null)
+          TextButton(key: const ValueKey('upload-cancel'), onPressed: onCancel, child: const Text('Cancel upload')),
+        if (s.stage == UploadStage.failed && onRetry != null)
+          TextButton(key: const ValueKey('upload-retry'), onPressed: onRetry, child: const Text('Try again')),
+        if (!s.active && onDismiss != null)
+          IconButton(key: const ValueKey('upload-dismiss'), tooltip: 'Close', visualDensity: VisualDensity.compact, icon: const Icon(Icons.close, size: 18), onPressed: onDismiss),
+      ];
+
+  /// The same news on one slim line.
+  Widget _slim(BuildContext context, UploadStatus s, IconData icon, Color color, String title) {
+    final text = s.stage == UploadStage.preparing ? 'Checking the file and loading the models  ·  ${formatSeconds(s.waited.inSeconds)}' : _caption(s);
+    return FxCard(
+      key: const ValueKey('upload-card'),
+      padding: const EdgeInsets.symmetric(horizontal: Fx.s12, vertical: Fx.s4),
+      child: Row(children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: Fx.s8),
+        Flexible(flex: 2, child: Text(title, style: Fx.body(context).copyWith(fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+        if (s.active) ...[
+          const SizedBox(width: Fx.s12),
+          SizedBox(
+            width: 110,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(key: const ValueKey('upload-bar'), minHeight: 4, value: s.stage == UploadStage.sending ? s.fraction : null, color: color),
+            ),
+          ),
+        ],
+        const SizedBox(width: Fx.s12),
+        Flexible(flex: 3, child: Text(text, key: const ValueKey('upload-caption'), style: Fx.caption(context), maxLines: 1, overflow: TextOverflow.ellipsis)),
+        ..._actions(s),
       ]),
     );
   }

@@ -279,12 +279,24 @@ def public_workflow(version, args):
                     hits.append(p); break
     if hits:
         raise SystemExit("public: secret pattern found, stopping (files are written but NOT committed):\n  " + "\n  ".join(hits))
-    if not changed and not delete:
+    raw = git(PUB, "status", "--porcelain", "-z", raw=True).decode("utf-8", "replace").split("\0")
+    dirty = []
+    for e in raw:
+        if len(e) < 4:
+            continue
+        path = e[3:]
+        if path.endswith("/"):
+            dirty += [x for x in git(PUB, "ls-files", "--others", "--exclude-standard", "-z", "--", path).split("\0") if x]
+        else:
+            dirty.append(path)
+    if not dirty:
         print("public: already in sync"); return
-    branch = f"nekolaiv/sync-from-private-{version}"
+    branch, tag, k = f"nekolaiv/sync-from-private-{version}", version, 2
+    while git(PUB, "branch", "--list", branch).strip() or git(PUB, "tag", "--list", tag).strip():
+        branch, tag = f"nekolaiv/sync-from-private-{version}-{k}", f"{version}-sync{k}"; k += 1
     git(PUB, "checkout", "-q", "-b", branch)
     by_top = defaultdict(list)
-    for p in changed + delete:
+    for p in dirty:
         by_top[p.split("/")[0] if "/" in p else "(root)"].append(p)
     made = 0
     for top, paths in sorted(by_top.items()):
@@ -295,10 +307,10 @@ def public_workflow(version, args):
             git(PUB, "commit", "-q", "-m", f"chore: sync {top} from the private repo ({len(paths)} files)", "-m", TRAILER); made += 1
     git(PUB, "checkout", "-q", "main")
     git(PUB, "merge", "-q", "--no-ff", branch, "-m", f"Merge branch '{branch}' into main")
-    git(PUB, "tag", "-a", version, "-m", f"{version}: Sync with the private repo at {version}")
-    print(f"  public: {len(changed)} files changed, {len(delete)} removed, {made} commits, tagged {version}")
+    git(PUB, "tag", "-a", tag, "-m", f"{tag}: Sync with the private repo at {version}")
+    print(f"  public: {len(dirty)} files, {made} commits, tagged {tag}")
     if not args.no_push:
-        r = subprocess.run(["git", "-C", str(PUB), "push", "origin", "main", branch, version], capture_output=True)
+        r = subprocess.run(["git", "-C", str(PUB), "push", "origin", "main", branch, tag], capture_output=True)
         print(f"  public pushed (exit {r.returncode})")
         if r.returncode:
             print(r.stderr.decode("utf-8", "replace")[-400:])

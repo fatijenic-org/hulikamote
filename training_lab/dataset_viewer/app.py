@@ -32,10 +32,10 @@ LAB = Path(__file__).resolve().parents[1]                 # training_lab/
 if str(LAB) not in sys.path:
     sys.path.insert(0, str(LAB))
 
-from data_tools import common, curate                      # noqa: E402
+from data_tools import common, curate, decisions           # noqa: E402
 from data_tools.common import IMAGE_EXT, SPLITS, group_key, read_yolo, source_of, write_yolo   # noqa: E402
 
-API_VERSION = 1
+API_VERSION = 2        # 2 = quick box review: add a class, decide boxes, suggestions, the decisions journal
 CACHE = LAB / "dataset_viewer_cache"
 MANIFEST = LAB / "configs" / "datasets_manifest.yaml"
 HARVEST_PREFIX = curate.PROTECTED_PREFIX                   # "harvest__"
@@ -223,6 +223,8 @@ class ViewerApp:
         self._qsplit: dict[str, str] = {}                   # quarantine path (relative) -> split it came from
         self._qname: dict[str, str] = {}                    # quarantine path (relative) -> original file name
         self._reid = None
+        self._journals: dict[str, decisions.Journal] = {}
+        self._suggester = None
         self._load_actions()
 
     @property
@@ -232,6 +234,19 @@ class ViewerApp:
             from .reid import ReidManager
             self._reid = ReidManager(self.datasets, self.cache, thumb=self.thumb)
         return self._reid
+
+    def journal(self, model: str) -> decisions.Journal:
+        """The journal of box decisions of one dataset (datasets/_decisions/<model>.jsonl)."""
+        if model not in self._journals:
+            self._journals[model] = decisions.Journal(self.datasets, model)
+        return self._journals[model]
+
+    @property
+    def suggester(self):
+        if self._suggester is None:
+            from .suggest import Suggester
+            self._suggester = Suggester(self)
+        return self._suggester
 
     # ----------------------------------------------------------------- lookups
 
@@ -691,6 +706,18 @@ class ViewerApp:
                     "sizes": self.start_sizes(model)}
         classes = self.class_names(model)
         marked = self.relabeled(model)
+        journal = self.journal(model).entries()
+        unreviewed = str(q.get("unreviewed") or "") in ("1", "true")
+        order = q.get("order") or "name"
+        if order not in ("name", "suggest"):
+            raise ViewerError("order must be name or suggest")
+        scores: dict[str, float] = {}
+        if order == "suggest":
+            if class_id is None:
+                raise ViewerError("choose the class to look at first")
+            scores = self.suggester.scores(model, classes[class_id], q.get("to") or decisions.DEFAULT_CLASS)
+            if not scores:
+                raise ViewerError("There are no suggestions for this class yet: press 'Find pickups' first.")
         rows = []
         for row in idx.rows:
             if split != "all" and row["s"] != split:
@@ -701,6 +728,12 @@ class ViewerApp:
             for box_index, box in enumerate(row["b"]):
                 if class_id is not None and box[0] != class_id:
                     continue
+                sig = decisions.box_sig(row["n"], box[1:])
+                entry = journal.get(sig)
+                if unreviewed and entry is not None:
+                    continue
+                if order == "suggest" and sig not in scores:
+                    continue
                 width = round(box[3] * size[0]) if size else None
                 height = round(box[4] * size[1]) if size else None
                 if min_box_px and (width is None or height is None or min(width, height) < min_box_px):
@@ -708,10 +741,15 @@ class ViewerApp:
                 rows.append({"split": row["s"], "name": row["n"], "index": box_index,
                              "class_id": box[0], "class_name": classes[box[0]], "box": box[1:],
                              "source": row["src"], "width": width, "height": height,
-                             "harvest": row["mine"], "relabeled": f"{row['s']}/{row['n']}" in marked})
-        rows.sort(key=lambda item: (item["name"], item["split"], item["index"]))
+                             "harvest": row["mine"], "relabeled": f"{row['s']}/{row['n']}" in marked,
+                             "decision": entry["decision"] if entry else None, "score": scores.get(sig)})
+        if order == "suggest":
+            rows.sort(key=lambda item: (-(item["score"] or 0), item["name"], item["split"], item["index"]))
+        else:
+            rows.sort(key=lambda item: (item["name"], item["split"], item["index"]))
         return {"items": rows[offset:offset + limit], "total": len(rows), "offset": offset,
-                "size_pending": False, "sources": sorted({r["src"] for r in idx.rows})}
+                "size_pending": False, "sources": sorted({r["src"] for r in idx.rows}),
+                "review": self.review_counts(model, class_id) if class_id is not None else None}
 
     def item(self, model: str, split: str, name: str) -> dict:
         model = self.model(model)
@@ -967,7 +1005,7 @@ class ViewerApp:
 
     # ----------------------------------------------------------------- the action log and undo
 
-    UNDOABLE = ("quarantine", "restore", "box", "flag", "relabel")
+    UNDOABLE = ("quarantine", "restore", "box", "flag", "relabel", "review")
 
     def _load_actions(self) -> None:
         try:
@@ -1338,6 +1376,100 @@ class ViewerApp:
                 raise
         return {"ok": True, "action": act["id"], "boxes": preview["boxes"], "pictures": len(records)}
 
+    # ----------------------------------------------------------------- quick box review (a class, decisions, suggestions)
+
+    def add_class(self, model: str, name) -> dict:
+        """Add a class (the next number; old numbers never change). Refused while the model trains. Safe to repeat."""
+        model = self.model(model)
+        with self._wlock:
+            self._guard(model)
+            try:
+                class_id, added = decisions.add_class_to_yaml(self.datasets / model / "data.yaml", name)
+            except decisions.DecisionError as e:
+                raise ViewerError(str(e))
+            idx = self.index(model)
+            idx.nc = len(self.class_names(model))
+            if added:
+                self._restamp(model)
+                self._mark_card_stale(model)
+                self._log({"type": "add_class", "model": model, "name": name, "class_id": class_id})
+        return {"ok": True, "added": added, "class_id": class_id, "classes": self.class_names(model)}
+
+    def review_counts(self, model: str, class_id: int) -> dict:
+        """How far the review of one class is: boxes looked at, of all boxes that ever had this class."""
+        names = self.class_names(model)
+        done = self.journal(model).counts(names[class_id])
+        current = sum(1 for row in self.index(model).rows for b in row["b"] if b[0] == class_id)
+        return {"class": names[class_id], "class_id": class_id, "reviewed": done["reviewed"], "moved": done["moved"],
+                "kept": done["kept"], "total": current + done["moved"]}
+
+    def review_state(self, model: str, target: str = decisions.DEFAULT_CLASS) -> dict:
+        model = self.model(model)
+        names = self.class_names(model)
+        counts = {n: self.review_counts(model, i) for i, n in enumerate(names) if n in ("truck", "car")}
+        return {"classes": names, "target": target, "target_id": names.index(target) if target in names else None,
+                "counts": counts, "training": model in self.busy(fresh=True)}
+
+    def decide(self, model: str, to_class, from_class, picked=None, page=None, confirm_harvest: bool = False) -> dict:
+        """One page of the quick review. [picked] boxes (class [from_class]) become [to_class]; the other boxes of the page
+        that still have [from_class] are written down as "looked at, not changed". Everything goes in the journal."""
+        model = self.model(model)
+        idx = self.index(model)
+        for label, value in (("to_class", to_class), ("from_class", from_class)):
+            if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value < idx.nc:
+                raise ViewerError(f"{label} must be 0..{idx.nc - 1}")
+        if to_class == from_class:
+            raise ViewerError("the two classes are the same")
+        picked_refs = self._relabel_refs(model, picked) if picked else []
+        page_refs = self._relabel_refs(model, page) if page else []
+        if not picked_refs and not page_refs:
+            raise ViewerError("there is nothing on this page to decide")
+        names = self.class_names(model)
+
+        def box_of(ref):
+            return list(idx.by_key[(ref[0], ref[1])]["b"][ref[2]])
+
+        picked_set = set(picked_refs)
+        movable = [(ref, box_of(ref)) for ref in picked_refs if box_of(ref)[0] == from_class]
+        kept = [(ref, box_of(ref)) for ref in page_refs if ref not in picked_set and box_of(ref)[0] == from_class]
+        if movable:
+            result = self.relabel(model, to_class, items=[{"split": s, "name": n, "index": i} for (s, n, i), _ in movable],
+                                  confirm_harvest=confirm_harvest)
+            action = result["action"]
+        else:
+            action = self._log({"type": "review", "model": model, "count": len(kept)})["id"]
+        journal = self.journal(model)
+        journal.append([journal.make(action, s, n, b[1:], names[from_class], "move", names[to_class]) for (s, n, _), b in movable] +
+                       [journal.make(action, s, n, b[1:], names[from_class], "keep") for (s, n, _), b in kept])
+        return {"ok": True, "action": action, "moved": len(movable), "kept": len(kept),
+                "review": self.review_counts(model, from_class)}
+
+    def reapply_decisions(self, model: str, target: str = decisions.DEFAULT_CLASS) -> dict:
+        """Put the journal's moves back into the label files (after a re-merge or a cleaning). Adds the class when it is gone."""
+        model = self.model(model)
+        changed: list[tuple[str, str]] = []
+        with self._wlock:
+            self._guard(model)
+            try:
+                result = decisions.reapply(self.datasets, model, target, on_changed=lambda s, n: changed.append((s, n)))
+            except decisions.DecisionError as e:
+                raise ViewerError(str(e))
+            idx = self.index(model)
+            idx.nc = len(self.class_names(model))
+            marked = self.relabeled(model)
+            for key in changed:
+                if key in idx.by_key:
+                    idx.by_key[key].update(self._row_from_disk(model, key[0], key[1]))
+                    derive(idx.by_key[key])
+                marked.add(f"{key[0]}/{key[1]}")
+            if changed:
+                self._save_relabeled(model)
+                self._mark_card_stale(model)
+            self._restamp(model)
+            self._write_cache(idx)
+            self._log({"type": "reapply", "model": model, "applied": result["applied"]})
+        return {"ok": True, **result}
+
     def undo(self, model: str) -> dict:
         model = self.model(model)
         with self._wlock:
@@ -1345,7 +1477,9 @@ class ViewerApp:
             if act is None:
                 raise ViewerError("nothing to undo")
             kind = act["type"]
-            if kind == "flag":
+            if kind == "review":
+                summary = {"type": "review", "count": self.journal(model).drop_action(act["id"])}
+            elif kind == "flag":
                 flags = self.flags(model)
                 for k in act["keys"]:
                     flags.discard(k)
@@ -1390,6 +1524,7 @@ class ViewerApp:
                     self._restamp(model)
                     self._write_cache(idx)
                     self._mark_card_stale(model)
+                    self.journal(model).drop_action(act["id"])        # the decisions made with it are taken back too
                     summary = {"type": "relabel", "count": act["boxes"], "pictures": len(plans)}
                 else:
                     for it in act["items"]:

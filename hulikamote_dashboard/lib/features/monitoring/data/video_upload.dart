@@ -16,6 +16,24 @@ class UploadCancelled implements Exception {
   String toString() => 'Upload cancelled';
 }
 
+/// The backend PC cannot see the file (the dashboard runs on another PC): the file has to be uploaded instead.
+class FileNotOnBackend implements Exception {
+  const FileNotOnBackend();
+
+  @override
+  String toString() => 'The backend cannot see that file';
+}
+
+/// The backend's reason for a refusal (FastAPI sends it as `detail`), or a plain sentence with the status.
+Exception _refusal(http.Response response, String what) {
+  String? detail;
+  try {
+    final body = jsonDecode(response.body);
+    if (body is Map && body['detail'] != null) detail = '${body['detail']}';
+  } catch (_) {}
+  return Exception(detail ?? '$what failed (HTTP ${response.statusCode})');
+}
+
 /// A multipart request that counts its bytes as the network takes them (the client pulls one chunk at a time, so the count
 /// follows what was really sent) and that its abort trigger can stop.
 class _CountingUpload extends http.BaseRequest with http.Abortable {
@@ -71,14 +89,25 @@ Future<Map<String, dynamic>> uploadLiveVideo(
       throw const UploadCancelled();
     }
     final response = await http.Response.fromStream(streamed);
-    if (response.statusCode != 200) {
-      String? detail;
-      try {
-        final body = jsonDecode(response.body);
-        if (body is Map && body['detail'] != null) detail = '${body['detail']}';
-      } catch (_) {}
-      throw Exception(detail ?? 'Upload failed (HTTP ${response.statusCode})');
-    }
+    if (response.statusCode != 200) throw _refusal(response, 'Upload');
+    final body = jsonDecode(response.body);
+    return body is Map<String, dynamic> ? body : <String, dynamic>{};
+  } finally {
+    if (ownClient) sender.close();
+  }
+}
+
+/// Makes the video at [path] the Live Monitor's source WHERE IT IS, with no copy: there is nothing to upload when the backend runs on
+/// this PC. Answer: `{message, path, video: {width, height, fps, frames, duration, size_mb}}`. Throws [FileNotOnBackend] when the
+/// backend PC does not have that path, or an Exception with the backend's reason.
+Future<Map<String, dynamic>> useLocalVideo(String path, {http.Client? client, String baseUrl = ApiConstants.baseUrl}) async {
+  final ownClient = client == null;
+  final http.Client sender = client ?? http.Client();
+  try {
+    final uri = Uri.parse('$baseUrl/settings/video/use-file').replace(queryParameters: {'path': path});
+    final response = await sender.post(uri).timeout(const Duration(seconds: 30));
+    if (response.statusCode == 404) throw const FileNotOnBackend();
+    if (response.statusCode != 200) throw _refusal(response, 'Using the file');
     final body = jsonDecode(response.body);
     return body is Map<String, dynamic> ? body : <String, dynamic>{};
   } finally {

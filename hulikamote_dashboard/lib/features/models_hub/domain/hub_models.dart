@@ -46,11 +46,15 @@ class HubVersion {
     this.checking,
     this.passed,
     this.note,
+    this.classWarning,
   });
 
   /// A run folder (`train-3`), a model file name, or a car-matcher file.
   final String id, name, kind, origin;
   final String? run, file, checking, note, classesSplit;
+
+  /// A vehicle model whose list of class names is missing or incomplete next to its file (the app would misname every box).
+  final String? classWarning;
   final bool live, usable;
   final bool? passed;
   final double? when, sizeMb;
@@ -92,6 +96,7 @@ class HubVersion {
       checking: j['checking'] as String?,
       passed: j['passed'] as bool?,
       note: j['note'] as String?,
+      classWarning: j['class_warning'] as String?,
     );
   }
 }

@@ -8,8 +8,8 @@ Same idea as the backend's engine/privacy.py (R.A. 10173), for pictures with no 
     the vehicle; and any plate the plate model finds in the whole picture (for pictures that are already a vehicle crop).
 Faces are not searched for separately: OpenCV's face finder found nothing real in the project's photos.
 
-The Labeller turns these into "Blur" boxes a person can fix, delete or add to; whatever is inside a Blur box is blurred in the
-saved copy. Nothing here can promise to catch everybody: a person the detector misses stays visible, so the page says so.
+The Labeller keeps them as blur areas (a layer apart from the labels) that a person can fix, delete or add to; whatever is inside
+a blur area is blurred in the saved copy. Nothing here can promise to catch everybody: a person the detector misses stays visible, so the page says so.
 
 Some models must NOT have their own target hidden (PII_ALLOWED): the plate model learns plates, the helmet model learns heads.
 """
@@ -104,7 +104,7 @@ def blur_regions(img: np.ndarray, boxes) -> None:
 
 
 def blur_yolo(img: np.ndarray, boxes) -> None:
-    """Blur boxes given as normalised YOLO rows [cls, cx, cy, w, h] (the class is ignored)."""
+    """Blur areas given as normalised YOLO rows [cls, cx, cy, w, h] (the class is ignored)."""
     height, width = img.shape[:2]
     blur_regions(img, [(int((cx - w / 2) * width), int((cy - h / 2) * height), int(w * width), int(h * height))
                        for _, cx, cy, w, h in boxes])

@@ -12,7 +12,7 @@ import 'package:hulikamote_dashboard/features/models_hub/presentation/screens/mo
 import '../forensic/support/test_support.dart';
 
 Map<String, dynamic> version(String id, String name,
-        {double? score, bool live = false, String kind = 'run', String origin = 'trained', String? file, Map<String, dynamic>? classes, String? checking}) =>
+        {double? score, bool live = false, String kind = 'run', String origin = 'trained', String? file, Map<String, dynamic>? classes, String? checking, String? classWarning}) =>
     {
       'id': id,
       'name': name,
@@ -30,9 +30,10 @@ Map<String, dynamic> version(String id, String name,
       'live': live,
       'usable': true,
       'checking': checking,
+      'class_warning': classWarning,
     };
 
-Map<String, dynamic> vehicles({String live = 'yolo11_primary.onnx', Map<String, dynamic>? v3Classes, String? v3Checking}) => {
+Map<String, dynamic> vehicles({String live = 'yolo11_primary.onnx', Map<String, dynamic>? v3Classes, String? v3Checking, String? v3Warning}) => {
       'job': 'vehicles',
       'key': 'primary_anchor',
       'label': 'Vehicles',
@@ -48,7 +49,7 @@ Map<String, dynamic> vehicles({String live = 'yolo11_primary.onnx', Map<String, 
         {'key': 'coverage', 'label': 'Coverage', 'hint': 'Share of the real ones it finds'},
       ],
       'versions': [
-        version('train-3', 'Version 3', score: 0.712, live: live == 'train-3', file: live == 'train-3' ? 'primary_anchor_train-3_20261101.onnx' : null, classes: v3Classes, checking: v3Checking),
+        version('train-3', 'Version 3', score: 0.712, live: live == 'train-3', file: live == 'train-3' ? 'primary_anchor_train-3_20261101.onnx' : null, classes: v3Classes, checking: v3Checking, classWarning: v3Warning),
         version('train', 'Version 1', score: 0.68),
         version('yolo11_primary.onnx', 'yolo11_primary', kind: 'file', origin: 'stock', file: 'yolo11_primary.onnx', live: live == 'yolo11_primary.onnx'),
       ],
@@ -185,6 +186,24 @@ void main() {
     await tester.tap(find.text('Check per type'));
     await tester.pump();
     expect(backend.posts['/models/hub/check'], {'job': 'vehicles', 'id': 'train'});
+    await dispose(tester);
+  });
+
+  testWidgets('a vehicle model with no list of class names says so on its row, and on the live card when it is live', (tester) async {
+    const warning = 'The list of class names (primary_anchor_train-3_20261101.onnx.classes.txt) is missing next to this model.';
+    await pump(tester, Backend(() => vehicles(v3Warning: warning)));
+    expect(find.byKey(const Key('class-warning')), findsOneWidget);                // on the row of version 3 only
+    expect(find.textContaining('classes.txt'), findsOneWidget);
+    await dispose(tester);
+
+    await pump(tester, Backend(() => vehicles(live: 'train-3', v3Warning: warning)));
+    expect(find.byKey(const Key('class-warning')), findsNWidgets(2));              // the live card shows it too
+    await dispose(tester);
+  });
+
+  testWidgets('no warning when the list of class names is fine', (tester) async {
+    await pump(tester, Backend(vehicles));
+    expect(find.byKey(const Key('class-warning')), findsNothing);
     await dispose(tester);
   });
 

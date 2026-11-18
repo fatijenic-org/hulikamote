@@ -360,9 +360,12 @@ class FakeLabeling implements HarvestLabeling {
   int sessions = 0;
   final List<String?> asked = []; // the analysis each session / queue was asked for
   final Map<String, List<List<num>>> saved = {};
+  final Map<String, List<List<num>>?> savedBlur = {}; // the blur areas sent with each save (null = none sent)
   final List<String> skipped = [];
 
-  static LabelItem item(String id, {List<HarvestBox> boxes = const [], String reason = 'Is there a plate? Box it.'}) => LabelItem(
+  static LabelItem item(String id,
+          {List<HarvestBox> boxes = const [], List<HarvestBox> blur = const [], String reason = 'Is there a plate? Box it.'}) =>
+      LabelItem(
         id: id,
         state: boxes.isEmpty ? HarvestState.label : HarvestState.check,
         reason: reason,
@@ -373,6 +376,7 @@ class FakeLabeling implements HarvestLabeling {
         height: 480,
         task: 't1',
         ticket: 'tk',
+        blur: blur,
       );
 
   /// Plates: the first picture has a guess, the second has none, the third has two. Cabin: two with a guess.
@@ -532,9 +536,10 @@ class FakeLabeling implements HarvestLabeling {
   ImageProvider image(String model, String id, {int? width}) => MemoryImage(kTinyPng);
 
   @override
-  Future<void> save(String itemId, List<HarvestBox> boxes) async {
+  Future<void> save(String itemId, List<HarvestBox> boxes, {List<HarvestBox>? blur}) async {
     if (saveError != null) throw saveError!;
     saved[itemId] = [for (final b in boxes) [b.cls, b.cx, b.cy, b.w, b.h]];
+    savedBlur[itemId] = blur == null ? null : [for (final b in blur) [b.cx, b.cy, b.w, b.h]];
   }
 
   @override

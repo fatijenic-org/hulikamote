@@ -19,7 +19,7 @@ class LaneSign {
 class LaneSigns {
   LaneSigns._();
 
-  static const List<String> vehicleTypes = ['bus', 'jeepney', 'motorcycle', 'car', 'truck', 'tricycle', 'bicycle'];
+  static const List<String> vehicleTypes = ['bus', 'jeepney', 'motorcycle', 'car', 'truck', 'pickup', 'tricycle', 'bicycle'];
 
   static List<String> _allBut(String banned) => [
     for (final t in vehicleTypes)

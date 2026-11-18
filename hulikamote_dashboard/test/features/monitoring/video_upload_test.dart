@@ -126,6 +126,7 @@ void main() {
     ({MockClient client, Completer<http.Response> answer}) backend() {
       final answer = Completer<http.Response>();
       final client = MockClient((req) async {
+        if (req.url.path == '/settings/video/use-file') return http.Response('{"detail":"That file is not on the backend PC."}', 404);   // so a copy is uploaded
         if (req.url.path == '/settings/video/upload') return answer.future;
         return http.Response('{"source_url": "C:/clips/street_cam.mp4"}', 200);
       });
@@ -186,6 +187,7 @@ void main() {
       ];
       var uploads = 0;
       final client = MockClient((req) async {
+        if (req.url.path == '/settings/video/use-file') return http.Response('{"detail":"That file is not on the backend PC."}', 404);   // so a copy is uploaded
         if (req.url.path == '/settings/video/upload') return answers[uploads++];
         return http.Response('{"source_url": "C:/clips/street_cam.mp4"}', 200);
       });
