@@ -33,7 +33,7 @@ def clip(events, enabled=("counterflow", "no_plate"), clean=False, cid="c1"):
 # --------------------------------------------------------------------------- the 25 violations
 
 def test_the_twenty_five_keys_match_the_backend():
-    assert len(KEYS) == 27 and len(set(KEYS)) == 27          # 25 + overtaking_on_right and kuliglig_passenger (2026-11-15)
+    assert len(KEYS) == 25 and len(set(KEYS)) == 25          # 3 passenger rules merged into passenger_outside (2026-11-17)
     backend = ROOT / "hulikamote_backend"
     sys.path.insert(0, str(backend))
     try:
@@ -161,7 +161,7 @@ def test_report_names_what_is_missing_and_compares_two_runs():
     r1 = report.build("baseline", [scoring.score_clip(c, [], 3.0, seconds=60)], DEFAULTS, {})
     r2 = report.build("finetuned", [scoring.score_clip(c, [ticket(1, ["counterflow"], [11])], 3.0, seconds=60)], DEFAULTS, {})
     md = report.markdown(r2)
-    assert "Caught" in md and "Not benchmarked yet" in md and "pickup_passengers" in md
+    assert "Caught" in md and "Not benchmarked yet" in md and "passenger_outside" in md
     assert r1["summary"]["counterflow"]["recall"] == 0 and r2["summary"]["counterflow"]["recall"] == 1
     cmp = report.compare(r1, r2)
     assert "baseline vs finetuned" in cmp and "+100 pts" in cmp
