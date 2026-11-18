@@ -18,7 +18,7 @@ class NoSeatbelt(Violation):
 
     MIN_LOOKS = 4
     SHARE = 0.8
-    JUDGED_CLASSES = ("car", "truck")       # only these: no ticket for a bus, jeepney, tricycle or motorcycle driver
+    JUDGED_CLASSES = ("car", "truck", "pickup")       # only these: no ticket for a bus, jeepney, tricycle or motorcycle driver
 
     def judge(self, pipe, det, look):
         if det.cls not in self.JUDGED_CLASSES or not cabin.judgeable(look):

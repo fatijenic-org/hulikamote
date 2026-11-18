@@ -28,7 +28,7 @@ BASE_SHARE = 0.0070                  # paint width where the road is nearest, as
 SUPERSAMPLE = 2
 WHITE = (238.0, 240.0, 240.0)        # BGR
 YELLOW = (45.0, 185.0, 235.0)
-OCCLUDES = ("car", "motorcycle", "bus", "truck", "tricycle", "bicycle", "person")
+OCCLUDES = ("car", "motorcycle", "bus", "truck", "pickup", "tricycle", "bicycle", "person")
 
 
 def _clamp(value: float, low: float, high: float) -> float:

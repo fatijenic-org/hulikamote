@@ -25,7 +25,8 @@ class ModelRegistry:
         else:
             with open(self.config_path, "r") as f:
                 data = json.load(f)
-                self.active_violations = data.get("active_violations", [])
+                from engine.violations import current_keys      # merged rules: old keys in saved configs still work
+                self.active_violations = current_keys(data.get("active_violations", []))
                 self.plate_model_name = data.get("plate_model", "plate_specialist.onnx")
                 self.plate_method = data.get("plate_method", "smart")
                 self.primary_model = data.get("primary_model", "yolov8n")

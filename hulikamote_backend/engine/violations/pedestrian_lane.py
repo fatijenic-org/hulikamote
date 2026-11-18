@@ -10,7 +10,7 @@ from engine import crosswalk_overlay
 from engine.violations.stopped_in_zone import StoppedInZone
 
 
-OCCLUDES = ("car", "motorcycle", "bus", "truck", "tricycle", "bicycle", "person")
+OCCLUDES = ("car", "motorcycle", "bus", "truck", "pickup", "tricycle", "bicycle", "person")
 
 
 class PedestrianLane(StoppedInZone):

@@ -16,8 +16,8 @@ from tests.helpers import BIG_ZONE, FPS, H, STOP_LINE, W, Det, drive
 U_TURN = REGISTRY["illegal_u_turn"]
 BLOCKING = REGISTRY["blocking_intersection"]
 SOLID = REGISTRY["crossing_solid_line"]
-PICKUP = REGISTRY["pickup_passengers"]
-OUTSIDE = REGISTRY["riding_outside_vehicle"]
+PICKUP = REGISTRY["passenger_outside"]
+OUTSIDE = REGISTRY["passenger_outside"]
 
 
 # ─── Illegal U-turn ──────────────────────────────────────────────────────────
@@ -249,20 +249,20 @@ def passenger(ytop, track_id=50, dy=120):
 def test_pickup_flags_a_passenger_riding_in_the_back():
     pipe = fake_pipe()
     ledger = run_frames(pipe, PICKUP, lambda i, y: [passenger(y)])
-    assert "pickup_passengers" in ledger.violations
+    assert "passenger_outside" in ledger.violations
     assert {label for box, label, _c in marks.current_marks(ledger, [1000, 1200 - 9 * 29, 200, 220]) if box} == {"passenger"}
 
 
 def test_pickup_ignores_the_driver_in_the_cab():
     pipe = fake_pipe()
     driver = lambda i, y: [Det(50, [1080, y + 20, 40, 70], "person")]
-    assert "pickup_passengers" not in run_frames(pipe, PICKUP, driver).violations
+    assert "passenger_outside" not in run_frames(pipe, PICKUP, driver).violations
 
 
 def test_pickup_ignores_a_pedestrian_standing_where_the_bed_would_be():
     pipe = fake_pipe()
     still = lambda i, y: [Det(50, [1080, 1320, 40, 80], "person")]           # not moving with the truck
-    assert "pickup_passengers" not in run_frames(pipe, PICKUP, still).violations
+    assert "passenger_outside" not in run_frames(pipe, PICKUP, still).violations
 
 
 def test_pickup_ignores_people_loading_a_parked_truck():
@@ -271,7 +271,7 @@ def test_pickup_ignores_people_loading_a_parked_truck():
         dets = [Det(1, [1000, 1000, 200, 220], "truck"), Det(50, [1080 + (i % 2), 1120, 40, 80], "person")]
         pipe.ledger_manager.update(dets, i / FPS)
         PICKUP.check_frame(pipe, dets)
-    assert "pickup_passengers" not in pipe.ledger_manager.ledgers[1].violations
+    assert "passenger_outside" not in pipe.ledger_manager.ledgers[1].violations
 
 
 def test_pickup_does_not_count_a_motorcycle_rider_beside_the_truck():
@@ -282,28 +282,28 @@ def test_pickup_does_not_count_a_motorcycle_rider_beside_the_truck():
         person = Det(50, [1085, y + 130, 40, 80], "person")                  # feet on the bike, inside the truck's box
         return [bike, person]
 
-    assert "pickup_passengers" not in run_frames(pipe, PICKUP, rider_on_bike).violations
+    assert "passenger_outside" not in run_frames(pipe, PICKUP, rider_on_bike).violations
 
     # the same person on something that is NOT a motorcycle is a passenger: it is the claim that excludes the rider
     def person_on_a_car(i, y):
         return [Det(60, [1070, y + 140, 70, 80], "car"), Det(50, [1085, y + 130, 40, 80], "person")]
 
-    assert "pickup_passengers" in run_frames(fake_pipe(), PICKUP, person_on_a_car).violations
+    assert "passenger_outside" in run_frames(fake_pipe(), PICKUP, person_on_a_car).violations
 
 
 def test_pickup_tolerates_the_number_of_people_the_config_allows():
     pipe = fake_pipe({"bed_passengers_allowed": 1})
-    assert "pickup_passengers" not in run_frames(pipe, PICKUP, lambda i, y: [passenger(y)]).violations
+    assert "passenger_outside" not in run_frames(pipe, PICKUP, lambda i, y: [passenger(y)]).violations
     pipe = fake_pipe({"bed_passengers_allowed": 1})
     two = lambda i, y: [passenger(y), Det(51, [1130, y + 120, 40, 80], "person")]
-    assert "pickup_passengers" in run_frames(pipe, PICKUP, two).violations
+    assert "passenger_outside" in run_frames(pipe, PICKUP, two).violations
 
 
 def test_pickup_needs_a_few_looks_and_only_judges_trucks():
     pipe = fake_pipe()
-    assert "pickup_passengers" not in run_frames(pipe, PICKUP, lambda i, y: [passenger(y)], frames=15).violations   # only ~3 looks so far
+    assert "passenger_outside" not in run_frames(pipe, PICKUP, lambda i, y: [passenger(y)], frames=15).violations   # only ~3 looks so far
     pipe = fake_pipe()
-    assert "pickup_passengers" not in run_frames(pipe, PICKUP, lambda i, y: [passenger(y)], cls="car").violations    # a car is not a pickup
+    assert "passenger_outside" not in run_frames(pipe, PICKUP, lambda i, y: [passenger(y)], cls="car").violations    # a car is not a pickup
 
 
 # ─── Riding on the roof / hanging on (frame check) ───────────────────────────
@@ -320,39 +320,39 @@ def run_bus(pipe, build, frames=30):
 
 def test_outside_flags_a_roof_rider():
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1090, y - 40, 40, 80], "person")])
-    assert "riding_outside_vehicle" in ledger.violations
+    assert "passenger_outside" in ledger.violations
 
 
 def test_outside_flags_someone_hanging_off_the_side():
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1200, y + 90, 40, 100], "person")])
-    assert "riding_outside_vehicle" in ledger.violations
+    assert "passenger_outside" in ledger.violations
 
 
 def test_outside_ignores_a_pedestrian_standing_beside_the_bus():
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1200, 1250, 40, 100], "person")])      # straddles the edge but stands still
-    assert "riding_outside_vehicle" not in ledger.violations
+    assert "passenger_outside" not in ledger.violations
 
 
 def test_outside_ignores_a_passenger_inside_the_cabin():
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1090, y + 100, 40, 90], "person")])
-    assert "riding_outside_vehicle" not in ledger.violations
+    assert "passenger_outside" not in ledger.violations
 
 
 def test_outside_ignores_a_driver_behind_the_windshield():
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1090, y + 10, 40, 70], "person")])      # upper part, wholly inside
-    assert "riding_outside_vehicle" not in ledger.violations
+    assert "passenger_outside" not in ledger.violations
 
 
 def test_outside_ignores_a_motorcycle_rider_overtaking_alongside():
     # same direction, straddles the bus edge, but slides along it (faster than the bus)
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(50, [1200, y + 160 - 6 * i, 40, 100], "person")])
-    assert "riding_outside_vehicle" not in ledger.violations
+    assert "passenger_outside" not in ledger.violations
 
 
 def test_outside_ignores_a_tricycle_passenger_beside_the_bus():
     ledger = run_bus(fake_pipe(), lambda i, y: [Det(60, [1190, y + 80, 70, 110], "tricycle"),
                                                 Det(50, [1200, y + 90, 40, 100], "person")])
-    assert "riding_outside_vehicle" not in ledger.violations
+    assert "passenger_outside" not in ledger.violations
 
 
 def test_outside_ignores_a_stopped_bus():
@@ -361,4 +361,4 @@ def test_outside_ignores_a_stopped_bus():
         dets = [Det(1, [1000, 1000, 220, 200], "bus"), Det(50, [1090, 960, 40, 80], "person")]
         pipe.ledger_manager.update(dets, i / FPS)
         OUTSIDE.check_frame(pipe, dets)
-    assert "riding_outside_vehicle" not in pipe.ledger_manager.ledgers[1].violations
+    assert "passenger_outside" not in pipe.ledger_manager.ledgers[1].violations

@@ -23,18 +23,18 @@ THESIS_KEYS = {
     # signals and signs
     "red_light", "disregarding_signs", "signal_light",
     # vehicle and riders
-    "overloading", "pickup_passengers", "riding_outside_vehicle", "no_plate", "no_helmet", "no_seatbelt",
+    "overloading", "passenger_outside", "no_plate", "no_helmet", "no_seatbelt",
     "missing_side_mirror", "distracted_driving",
 }
 # added after the consultation: Philippine road rules, each judged from a drawn zone
 PH_RULE_KEYS = {"illegal_loading", "truck_ban", "tricycle_on_highway", "sidewalk_driving", "double_parking",
-                "overtaking_on_right", "kuliglig_passenger"}       # the last two: added 2026-11-15
+                "overtaking_on_right"}       # added 2026-11-15 (kuliglig_passenger merged into passenger_outside 2026-11-17)
 
 
 def test_twenty_five_violations_are_registered():
-    assert len(ALL) == 27
+    assert len(ALL) == 25
     assert {v.key for v in ALL} == THESIS_KEYS | PH_RULE_KEYS
-    assert len(REGISTRY) == 27                                  # no two share a key
+    assert len(REGISTRY) == 25                                  # no two share a key
 
 
 def test_zone_violations_have_their_own_zone_list_and_colour():
@@ -107,7 +107,7 @@ def test_solid_line_zone_carries_its_line():
 def test_overloading_takes_the_rider_limit_as_a_top_level_setting():
     assert REGISTRY["overloading"].settings_from_wizard({"max_riders": 3}) == {"max_riders": 3}
     assert REGISTRY["overloading"].settings_from_wizard({}) == {"max_riders": 2}
-    assert REGISTRY["pickup_passengers"].settings_from_wizard({"max_riders": 3}) == {}
+    assert REGISTRY["passenger_outside"].settings_from_wizard({"max_riders": 3}) == {}
 
 
 # ─── what the wizard writes, the pipeline accepts ────────────────────────────

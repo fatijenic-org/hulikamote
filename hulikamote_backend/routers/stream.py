@@ -98,6 +98,7 @@ def _build_pipeline():
 
 _pipeline = None
 _pipeline_source = None      # the camera the current pipeline was built for (a learned traffic flow only fits the same camera)
+_pipeline_stale = False      # the source changed: a fresh pipeline is built the next time one is needed (see mark_pipeline_stale)
 
 # The Live Monitor learns the painted road lines of its camera from the stream by itself (engine/live_calibrator.py) and
 # remembers them per camera in camera_config.json. One for the whole app: a reconnect or a new pipeline keeps what is learned.
@@ -109,18 +110,25 @@ def road_status() -> dict:
     return road.status()
 
 
+def mark_pipeline_stale() -> None:
+    """The video source changed. The pipeline for the new source (a fresh tracker, nothing remembered from the old video) is built the
+    next time one is needed: when the feed starts, or when "Apply" builds one with new rules, whichever comes first. Not now, so
+    choosing a file or a camera takes no time and the models load once."""
+    global _pipeline_stale
+    _pipeline_stale = True
+
+
 def _get_pipeline():
-    global _pipeline, _pipeline_source
-    if _pipeline is None:
-        _pipeline = _build_pipeline()
-        _pipeline_source = VIDEO_SOURCE
+    if _pipeline is None or _pipeline_stale:
+        return reload_pipeline()
     return _pipeline
 
 def reload_pipeline():
-    global _pipeline, _pipeline_source
+    global _pipeline, _pipeline_source, _pipeline_stale
     old, old_source = _pipeline, _pipeline_source
     _pipeline = _build_pipeline()
     _pipeline_source = VIDEO_SOURCE
+    _pipeline_stale = False
     # New rules for the SAME camera keep what the traffic already taught (the learned flow): learning it again takes minutes.
     # Another camera starts from nothing.
     if old is not None and old_source == VIDEO_SOURCE and getattr(old, "flow", None) is not None:
@@ -276,7 +284,6 @@ REFERENCE_MAX_WIDTH = 1920
 
 def capture_reference() -> dict:
     """Freeze the newest picture of the running camera. {"ok": True, "version", "width", "height", "fps"} or {"ok": False, "reason"}."""
-    global _reference
     picture = _latest_picture
     if picture is None or time.time() - _latest_picture_at > 5.0:
         return {"ok": False, "reason": "No picture from the camera yet. Wait for the live picture, then try again."}
@@ -287,10 +294,22 @@ def capture_reference() -> dict:
     ok, buf = cv2.imencode(".jpg", picture, [cv2.IMWRITE_JPEG_QUALITY, 90])
     if not ok:
         return {"ok": False, "reason": "The picture could not be saved. Try again."}
+    return set_reference(buf.tobytes(), w, h)
+
+
+def set_reference(jpeg: bytes, width: int, height: int, at: float | None = None) -> dict:
+    """Make this picture (a JPEG) the one the violations are set up on. `at` = its time in a video file (None: a camera picture).
+    {"ok": True, "version", "width", "height", "fps"}."""
+    global _reference
     version = _reference["version"] + 1 if _reference else 1
-    _reference = {"jpeg": buf.tobytes(), "width": w, "height": h, "version": version}
+    _reference = {"jpeg": jpeg, "width": width, "height": height, "version": version, "at": at}
     fps = round(_active_source.source_fps, 1) if _active_source is not None else 25.0
-    return {"ok": True, "version": version, "width": w, "height": h, "fps": fps}
+    return {"ok": True, "version": version, "width": width, "height": height, "fps": fps}
+
+
+def reference_at() -> float | None:
+    """The time of the setup picture in its video file (seconds), or None."""
+    return _reference.get("at") if _reference else None
 
 
 def reference_jpeg() -> bytes | None:

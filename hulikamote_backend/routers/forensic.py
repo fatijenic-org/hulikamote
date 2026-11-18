@@ -483,8 +483,13 @@ def prepare_pipeline_config(config: dict) -> dict:
     Flutter's per_violation_configs become the pipeline's regions_of_interest: each violation module maps its own
     wizard settings (engine/violations/*.py: from_wizard / settings_from_wizard).
     """
-    from engine.violations import ALL as ALL_VIOLATIONS, ZONE_VIOLATIONS
-    per_v = config.get("per_violation_configs", {})
+    from engine.violations import ALL as ALL_VIOLATIONS, LEGACY_KEYS, ZONE_VIOLATIONS, current_keys
+    # rules merged into one: an old saved setup still loads under the new key
+    config["active_violations"] = current_keys(config.get("active_violations"))
+    per_v = {}
+    for key, settings in (config.get("per_violation_configs") or {}).items():
+        per_v.setdefault(LEGACY_KEYS.get(key, key), {}).update(settings or {})
+    config["per_violation_configs"] = per_v
     rois = {v.zone_key: v.from_wizard(per_v[v.key]) for v in ZONE_VIOLATIONS if v.key in per_v}
     for violation in ALL_VIOLATIONS:
         if violation.key in per_v:

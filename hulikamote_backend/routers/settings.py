@@ -1,8 +1,11 @@
 import shutil
 import uuid
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from engine.frame_grabber import FrameGrabber
+from engine.setup_scan import SetupScan
 from engine.hls_broadcaster import server_status
 from engine.camera_source import mask_url, parse_source, restore_password, test_connection
+from routers.trimmer import local_only
 from store import delete_all_violations
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -130,7 +133,7 @@ def _remember_source(path: str, profile: str | None = None) -> None:
 def _apply_video_source(path: str):
     stream.VIDEO_SOURCE = path
     stream._stream_generation += 1
-    stream.reload_pipeline()
+    stream.mark_pipeline_stale()          # the fresh pipeline is built when the feed starts (or "Apply" builds one): nothing to wait for now
     # Force broadcaster restart so the new stream gets correct resolution/fps
     broadcaster = stream._get_broadcaster()
     broadcaster.stop()
@@ -264,7 +267,7 @@ def apply_detected_road(counterflow: bool = False):
 # What the setup shows again when it is opened a second time. The camera addresses (with passwords) are NOT part of it.
 LIVE_SETUP_KEYS = (
     "active_violations", "per_violation_configs", "tracker", "plate_model", "plate_method", "plate_format",
-    "ocr_engine", "enhancement", "primary_model", "use_sahi", "flag_sensitivity", "evidence_gap", "blur_privacy",
+    "ocr_engine", "enhancement", "primary_model", "use_sahi", "flag_sensitivity", "evidence_gap", "blur_privacy", "road_markings",
 )
 
 
@@ -282,6 +285,94 @@ async def reference_frame():
     if not data:
         raise HTTPException(status_code=404, detail="No setup picture has been taken yet")
     return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+# The setup's "Find the road automatically": the walkthrough of Detect road on a few seconds collected from the current source, from the setup
+# picture on. The status, the frame and the step pictures have the same shape as Detect road's, so the dashboard shows them the same way.
+scan = SetupScan()
+
+
+@router.post("/video/scan")
+async def start_road_scan():
+    """Start the scan. {"ok": True, "detect": status} or {"ok": False, "reason"}. Poll GET /video/scan."""
+    jpeg = stream.reference_jpeg()
+    if not jpeg:
+        return {"ok": False, "reason": "There is no setup picture yet."}
+    feed_running = stream._active_source is not None            # a camera cannot be opened twice: the feed's own picture is read instead
+    return scan.start(stream.VIDEO_SOURCE, jpeg, stream.reference_at(),
+                      running_picture=(lambda: stream._latest_picture) if feed_running else None)
+
+
+@router.get("/video/scan")
+async def road_scan_status():
+    return scan.road.detect_status()
+
+
+@router.get("/video/scan/frame")
+async def road_scan_frame():
+    data = scan.road.detect_frame()
+    if not data:
+        raise HTTPException(status_code=404, detail="There is no scan in progress")
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@router.get("/video/scan/step/{step}")
+async def road_scan_step(step: str):
+    data = scan.road.detect_overlay(step)
+    if not data:
+        raise HTTPException(status_code=404, detail="That step has no picture (yet)")
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+@router.post("/video/scan/discard")
+async def discard_road_scan():
+    scan.cancel()
+    return {"ok": True}
+
+
+# The setup's "pick a frame" step: a few pictures of the CURRENT source (a file: spread over the video; a camera: one a second for a few
+# seconds). They arrive one by one; the operator picks one and it becomes the setup picture (/video/reference/frame).
+_grab: FrameGrabber | None = None
+
+
+@router.post("/video/frames/start")
+async def start_frame_grab(count: int = 8):
+    """Start collecting pictures of the current source (a new call throws the old pictures away). Poll GET /video/frames."""
+    global _grab
+    if _grab is not None:
+        _grab.cancel()
+    feed_running = stream._active_source is not None            # never open a camera the live feed is reading: use its picture
+    _grab = FrameGrabber(stream.VIDEO_SOURCE, count=max(2, min(count, 12)),
+                         running_picture=(lambda: stream._latest_picture) if feed_running else None)
+    _grab.start()
+    return _grab.status()
+
+
+@router.get("/video/frames")
+async def frame_grab_status():
+    """{job, state: idle|grabbing|done|failed, kind: file|camera, error, expected, fps, frames: [{id, label, width, height}]}"""
+    if _grab is None:
+        return {"job": 0, "state": "idle", "kind": "", "error": "", "expected": 0, "fps": 25.0, "frames": []}
+    return _grab.status()
+
+
+@router.get("/video/frames/{frame_id}")
+async def frame_grab_picture(frame_id: int):
+    """One collected picture (JPEG)."""
+    data = _grab.jpeg(frame_id) if _grab is not None else None
+    if not data:
+        raise HTTPException(status_code=404, detail="That picture is not there (yet)")
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
+@router.post("/video/frames/{frame_id}/use")
+async def use_grabbed_frame(frame_id: int):
+    """Make a collected picture the one the violations are set up on. {"ok": True, "version", "width", "height", "fps"}."""
+    data = _grab.jpeg(frame_id) if _grab is not None else None
+    size = _grab.frame_size(frame_id) if _grab is not None else None
+    if not data or not size:
+        return {"ok": False, "reason": "That picture is not there any more. Get new pictures and pick again."}
+    return {**stream.set_reference(data, size[0], size[1], at=_grab.frame_at(frame_id)), "fps": round(_grab.fps, 1)}
 
 
 @router.post("/live/flow/reverse")
@@ -365,8 +456,67 @@ async def use_camera_profile(name: str):
     return {"message": f"Source updated to {spec.label}", "kind": spec.kind, "label": spec.label}
 
 
-UPLOAD_DIR = Path(__file__).parent.parent / "snapshots" / "live_uploads"
+PHONE_PROFILE = "Phone"
+
+
+@router.post("/phone/connect")
+async def connect_phone():
+    """The Live Monitor's "Connect phone": finds the HULI-KAMOTE Camera app on the phone by itself (USB cable, USB tethering,
+    the phone's hotspot or the same Wi-Fi: engine/phone_link.py), saves it as the camera "Phone" and makes it the live source.
+    Always answers 200: {"ok": False, "message", "steps"} says what to do when no phone was found."""
+    import asyncio
+    from engine import phone_link
+    result = await asyncio.get_running_loop().run_in_executor(None, phone_link.connect)
+    if not result["ok"]:
+        return result
+    url = result["url"]
+    config = _read_config()
+    config["camera_profiles"] = [p for p in _profiles() if p["name"] != PHONE_PROFILE] + [{"name": PHONE_PROFILE, "url": url}]
+    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    _remember_source(url, profile=PHONE_PROFILE)
+    _apply_video_source(url)
+    return {**result, "label": parse_source(url).label}
+
+
+UPLOAD_DIR =Path(__file__).parent.parent / "snapshots" / "live_uploads"
 _ALLOWED_VIDEO_EXT = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+
+
+def _video_info(path: Path) -> dict | None:
+    """What a video file is (width, height, fps, frames, duration in seconds, size_mb), or None when it cannot be opened."""
+    cap = cv2.VideoCapture(str(path))
+    try:
+        if not cap.isOpened():
+            return None
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        return {
+            "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0),
+            "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0),
+            "fps": round(fps, 2),
+            "frames": frames,
+            "duration": round(frames / fps, 1) if fps > 1.0 and frames > 0 else 0.0,
+            "size_mb": round(path.stat().st_size / 1048576, 1),
+        }
+    finally:
+        cap.release()
+
+
+@router.post("/video/use-file", dependencies=[Depends(local_only)])
+async def use_video_file(path: str):
+    """Use a video file WHERE IT IS as the live monitor source: no copy, nothing to wait for (the backend and the dashboard are on
+    the same PC). 404 when this PC cannot see the file (then the dashboard uploads a copy instead)."""
+    file = Path(path)
+    if not file.is_file():
+        raise HTTPException(status_code=404, detail="That file is not on the backend PC.")
+    if file.suffix.lower() not in _ALLOWED_VIDEO_EXT:
+        raise HTTPException(status_code=400, detail=f"Unsupported video type '{file.suffix.lower()}'")
+    video = _video_info(file)
+    if video is None:
+        raise HTTPException(status_code=400, detail="Cannot open that video")
+    _remember_source(str(file))
+    _apply_video_source(str(file))
+    return {"message": "Live source updated", "path": str(file), "video": video}
 
 
 @router.post("/video/upload")
@@ -379,22 +529,8 @@ async def upload_video_source(file: UploadFile = File(...)):
     dest = UPLOAD_DIR / f"{uuid.uuid4().hex}{ext}"
     with open(dest, "wb") as out:
         shutil.copyfileobj(file.file, out)
-    cap = cv2.VideoCapture(str(dest))
-    ok = cap.isOpened()
-    video: dict = {}
-    if ok:                                              # what the video is, for the dashboard's "ready" card
-        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
-        frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-        video = {
-            "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0),
-            "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0),
-            "fps": round(fps, 2),
-            "frames": frames,
-            "duration": round(frames / fps, 1) if fps > 1.0 and frames > 0 else 0.0,
-            "size_mb": round(dest.stat().st_size / 1048576, 1),
-        }
-    cap.release()
-    if not ok:
+    video = _video_info(dest)                           # also what the dashboard's "ready" card shows
+    if video is None:
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=400, detail="Cannot open uploaded video")
     _remember_source(str(dest))

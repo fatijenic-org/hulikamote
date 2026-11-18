@@ -846,6 +846,49 @@ class LiveCalibrator:
                 d["reason"] = f"Could not draw the result ({exc})"
                 d["steps"]["marks"]["state"] = "skipped"
 
+    # ── the setup's road scan (engine/setup_scan.py): the same walkthrough, on a clip that was collected for it ──
+    def scan_begin(self, frame: np.ndarray, need_s: float) -> None:
+        """A scan starts: `frame` (the setup picture) is what the steps are drawn on; the clip is still being collected for `need_s` seconds."""
+        from engine.road_lines import WALKTHROUGH
+        with self._lock:
+            h, w = frame.shape[:2]
+            if w > 1280:
+                frame, (w, h) = cv2.resize(frame, (1280, int(round(h * 1280 / w))), interpolation=cv2.INTER_AREA), (1280, int(round(h * 1280 / w)))
+            ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
+            self._detect_n += 1
+            self._detect = {
+                "id": self._detect_n, "state": "collecting", "frame": jpg.tobytes() if ok else b"", "size": [w, h], "reason": None,
+                "steps": {sid: {"id": sid, "title": title, "about": about, "state": "waiting", "overlay": None, "info": {}}
+                          for sid, title, about in WALKTHROUGH},
+                "found": {"crosswalks": 0, "stop_lines": 0, "solid_lines": 0}, "zones": {}, "rules": [], "hints": [],
+                "editable": [], "edited": False, "flow": None, "background": None, "applied": False, "started": 0.0,
+                "progress": 0.0, "need": float(need_s)}
+
+    def scan_progress(self, seconds: float) -> None:
+        with self._lock:
+            if self._detect is not None and self._detect["state"] == "collecting":
+                self._detect["progress"] = float(seconds)
+
+    def scan_analyse(self, clip: dict) -> None:
+        """The clip is collected: read the road from it, in the caller's thread (it can take a few seconds)."""
+        with self._lock:
+            d = self._detect
+            if d is None or d["state"] != "collecting":
+                return                                              # discarded, or replaced by a newer scan
+            d["state"] = "analysing"
+            did = d["id"]
+        self._detect_run(clip, did)
+
+    def scan_fail(self, reason: str) -> None:
+        with self._lock:
+            d = self._detect
+            if d is None or d["state"] not in ("collecting", "analysing"):
+                return
+            d["state"], d["reason"] = "failed", reason
+            for step in d["steps"].values():
+                if step["state"] in ("waiting", "running"):
+                    step["state"] = "skipped"
+
     def _detect_status(self) -> dict:
         d = self._detect
         if d is None:
@@ -853,7 +896,8 @@ class LiveCalibrator:
         return {"id": d["id"], "state": d["state"], "size": d["size"], "reason": d["reason"], "found": dict(d["found"]),
                 "rules": list(d["rules"]), "hints": list(d["hints"]), "applied": d["applied"],
                 "zones": [dict(z) for z in d["editable"]], "edited": d["edited"], "flow": d.get("flow"),
-                "progress_s": round(min(self.learn_seconds, self._ring_span()), 1), "need_s": self.learn_seconds,
+                "progress_s": round(d["progress"], 1) if "progress" in d else round(min(self.learn_seconds, self._ring_span()), 1),
+                "need_s": d.get("need", self.learn_seconds),
                 "steps": [{"id": st["id"], "title": st["title"], "about": st["about"], "state": st["state"],
                            "has_overlay": st["overlay"] is not None, "info": st["info"]} for st in d["steps"].values()]}
 

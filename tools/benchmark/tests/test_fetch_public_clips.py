@@ -45,7 +45,7 @@ def test_coverage_rows_classify_every_violation():
     assert rows["red_light"]["status"] == "PUBLIC" and "runningredlight_vn" in rows["red_light"]["by_hand"]
     assert rows["no_seatbelt"]["status"] == "OPT-IN"                        # only a Roboflow set that needs your own key
     assert rows["signal_light"]["status"] == "BY HAND"                      # only a gated set exists
-    assert rows["pickup_passengers"]["status"] == "FILM OWN"                # a frame check with no public set
+    assert rows["passenger_outside"]["status"] == "FILM OWN"                # a frame check with no public set
     kinds = {n.key: n.kind for n in NEEDS}
     for key, r in rows.items():
         if r["status"] == "ANY FIXED CLIP":
@@ -137,7 +137,7 @@ def test_list_and_coverage_print_without_network(capsys):
     assert fpc.main(["--list"]) == 0
     assert "idiap_traffic_junction" in capsys.readouterr().out
     assert fpc.main(["--coverage"]) == 0
-    assert "pickup_passengers" in capsys.readouterr().out
+    assert "passenger_outside" in capsys.readouterr().out
 
 
 def test_refuses_to_write_inside_the_backend(tmp_path):
