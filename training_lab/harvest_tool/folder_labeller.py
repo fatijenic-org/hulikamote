@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import threading
 import time
 from pathlib import Path
 
@@ -28,13 +29,10 @@ from PIL import Image
 from .accept import VAL_SHARE, is_training, pick_split
 from .collect import Detectors, suggest
 from .config import MODELS, Paths, class_names
-from . import pii_blur
+from . import ledger, pii_blur
 from .frames import FRAME_CONF, anchor_boxes, anchor_names
 from .store import FOLDER_SOURCE, Item, Store, make_id, yolo_text
 
-BLUR_CLASS = "blur"          # a pseudo class the labelling page offers: whatever is inside a Blur box is blurred in the saved picture
-BLUR_HELP = ("Personal details to hide when the picture is saved: draw a box over a face or a plate. "
-             "It is not a label: it never goes into the dataset's labels.")
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 SKIP_DIRS = {"harvest_inbox", "__pycache__", ".git"}
 _TIME_RE = re.compile(r"(\d{10,})")
@@ -46,11 +44,6 @@ def folder_task(folder) -> str:
     return "folder_" + hashlib.sha1(str(Path(folder).resolve()).lower().encode("utf-8")).hexdigest()[:8]
 
 
-def blur_id(paths: Paths, model: str) -> int:
-    """The class number of the Blur pseudo class: right after the model's own classes."""
-    return len(class_names(paths, model))
-
-
 def picture_group(name: str) -> str:
     """Pictures taken within the same minute (millisecond file names) share a group, so they land on the same side of the
     train / validation split and near-identical frames never end up on both sides."""
@@ -59,14 +52,17 @@ def picture_group(name: str) -> str:
 
 
 def scan(paths: Paths, store: Store, model: str, folder, batch: int = 2000) -> dict:
-    """Queue every picture under [folder] for [model]. Safe to repeat: known pictures are not added twice."""
+    """Queue every picture under [folder] for [model]. Safe to repeat: known pictures are not added twice.
+    A picture the ledger says is already labelled for this model (matched by content, so a rename does not fool it) is left out."""
     if model not in MODELS:
         raise KeyError(model)
     root = Path(folder)
     if not root.is_dir():
         raise ValueError(f"not a folder: {folder}")
     task = folder_task(root)
-    found = new = 0
+    found = new = already = 0
+    done = ledger.load(paths, model)                       # sha1 -> entry: pictures already labelled for THIS model
+    done_sizes = {e.get("size") for e in done.values()}    # only pictures of a matching size are worth reading
     pending: list[Item] = []
     for dirpath, dirnames, files in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
@@ -75,6 +71,13 @@ def scan(paths: Paths, store: Store, model: str, folder, batch: int = 2000) -> d
                 continue
             path = os.path.join(dirpath, name)
             found += 1
+            if done:
+                try:
+                    if os.path.getsize(path) in done_sizes and ledger.digest(path) in done:
+                        already += 1
+                        continue
+                except OSError:
+                    pass
             pending.append(Item(id=make_id("folder", model, path.lower()), model=model, state="label", source=FOLDER_SOURCE,
                                 reason=f"Picture {name}", group_id=picture_group(name), task_id=task, priority=5,
                                 src_path=path))
@@ -83,7 +86,7 @@ def scan(paths: Paths, store: Store, model: str, folder, batch: int = 2000) -> d
                 pending.clear()
     if pending:
         new += store.add_many(pending)
-    return {"task": task, "folder": str(root), "found": found, "new": new}
+    return {"task": task, "folder": str(root), "found": found, "new": new, "already_labelled": already}
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -127,34 +130,39 @@ def prepare(store: Store, items: list) -> list:
 
 def suggest_batch(paths: Paths, store: Store, model: str, task: str, n: int = 40, detectors: Detectors | None = None,
                   heads: bool = False, plates: bool = False) -> int:
-    """Pre-draw the boxes of the deployed model on the next [n] pictures that have none, and (when asked) Blur boxes over
-    the heads of people and the plates of vehicles. Returns how many pictures got boxes."""
+    """Pre-draw the boxes of the deployed model on the next [n] pictures that have none, and (when asked) a first guess of
+    what to blur (heads of people, plates of vehicles) in the separate blur layer. Returns how many pictures got a guess."""
     detectors = detectors or Detectors(paths)
     det = detectors.get(model)
     heads, plates = pii_blur.allowed(model, heads, plates)
     if det is None and not (heads or plates):
         return 0
-    todo = [i for i in store.items(model, ("label",), task=task) if not i.suggested and i.id not in _TRIED][:n]
+    wants_blur = bool(heads or plates)
+    todo = [i for i in store.items(model, ("label", "check"), task=task) if i.id not in _TRIED
+            and ((i.state == "label" and not i.suggested and det is not None) or (wants_blur and not i.blur))][:n]
     got = 0
     for item in prepare(store, todo):
         img = cv2.imread(str(store.image_path(model, item.id)))
         if img is None:
             continue
         h, w = img.shape[:2]
-        if det is None:
+        if det is None or item.state != "label" or item.suggested:
             boxes = []
         elif model == "primary_anchor":
             boxes = anchor_boxes(det.detect(img, conf=FRAME_CONF), det.names, anchor_names(paths), w, h)
         else:
             boxes = suggest(det, img, "find_plate" if model == "plate_specialist" else "riders", w, h) or []
-        if heads or plates:
-            blur = blur_id(paths, model)
-            boxes = list(boxes) + [pii_blur.to_yolo(b, w, h, blur) for b in pii_blur.find_pii(
+        areas = []
+        if wants_blur and not item.blur:
+            areas = [pii_blur.to_yolo(b, w, h, 0) for b in pii_blur.find_pii(
                 img, heads=heads, plates=plates, vehicle_detector=detectors.get("primary_anchor"),
                 plate_detector=detectors.get("plate_specialist"))]
         _TRIED.add(item.id)
         if boxes:
             store.set_suggestion(item.id, boxes)
+        if areas:
+            store.set_blur_guess(item.id, areas)
+        if boxes or areas:
             got += 1
     return got
 
@@ -167,12 +175,7 @@ def _inside(child: Path, parent: Path) -> bool:
         return False
 
 
-def _digest(path: Path) -> str:
-    h = hashlib.sha1()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+_digest = ledger.digest
 
 
 def _safe_move(src: Path, dst: Path) -> None:
@@ -184,55 +187,66 @@ def _safe_move(src: Path, dst: Path) -> None:
     src.unlink()
 
 
-def export(paths: Paths, store: Store, model: str, task: str, dest, move: bool = True,
-           val_share: float = VAL_SHARE) -> dict:
-    """Write the finished pictures of one folder as a clean dataset under <dest>/<model>/ and move them there.
+class Exporter:
+    """Writes finished pictures as a clean dataset under <dest>/<model>/, one picture at a time, and moves them there.
 
-    Clean means: only pictures a person decided (a picture with no box is a real "nothing here" example), readable
-    pictures only, labels checked against the class list, no duplicate picture twice, a group (same minute) never
-    split over train and val, data.yaml + report.json so training can start from the folder as it is."""
-    if model not in MODELS:
-        raise KeyError(model)
-    dest = Path(dest)
-    names = class_names(paths, model)
-    out = dest / model
-    if _inside(out, paths.datasets / model) and is_training(model):
-        raise RuntimeError(f"{MODELS[model]['title']} is training right now, and that folder is its dataset.")
-    ready = store.items(model, ("ready",), task=task)
-    result = {"model": model, "task": task, "ready": len(ready), "exported": 0, "train": 0, "val": 0, "empty_labels": 0,
-              "duplicates": 0, "unreadable": 0, "missing": 0, "failed": 0, "moved": bool(move), "per_class": {},
-              "blurred_pictures": 0, "blurred_regions": 0,
-              "dest": str(out)}
-    if not ready:
-        return result
-    for folder in {Path(i.src_path).parent for i in ready if i.src_path}:
-        if _inside(out, folder):
-            raise ValueError("the destination is inside the folder being labelled: choose another folder")
-    for split in ("train", "val"):
-        (out / "images" / split).mkdir(parents=True, exist_ok=True)
-        (out / "labels" / split).mkdir(parents=True, exist_ok=True)
-    seen: dict[str, str] = {}
-    for existing in (out / "images").rglob("*"):
-        if existing.is_file():
-            seen[_digest(existing)] = existing.name
-    per_class: dict[int, int] = {}
-    blur = blur_id(paths, model)
-    for item in ready:
+    One of these serves the "Build the dataset" button (many pictures at once) and the "send each picture right away" mode
+    (one picture each time a person finishes it). Clean means: a picture with no box is a real "nothing here" example,
+    only readable pictures, no duplicate picture twice, a group (same minute) never split over train and val."""
+
+    def __init__(self, paths: Paths, store: Store, model: str, task: str, dest, move: bool = True,
+                 val_share: float = VAL_SHARE, keep_view: bool = False):
+        if model not in MODELS:
+            raise KeyError(model)
+        self.paths, self.store, self.model, self.task = paths, store, model, task
+        self.move, self.val_share = bool(move), val_share
+        self.keep_view = keep_view          # leave the inbox link, so the labelling screen can still show a picture it just sent
+        self.names = class_names(paths, model)
+        self.out = Path(dest) / model
+        if _inside(self.out, paths.datasets / model) and is_training(model):
+            raise RuntimeError(f"{MODELS[model]['title']} is training right now, and that folder is its dataset.")
+        for folder in {Path(i.src_path).parent for i in store.items(model, ("label", "check", "ready", "skipped"), task=task) if i.src_path}:
+            if _inside(self.out, folder):
+                raise ValueError("the destination is inside the folder being labelled: choose another folder")
+        for split in ("train", "val"):
+            (self.out / "images" / split).mkdir(parents=True, exist_ok=True)
+            (self.out / "labels" / split).mkdir(parents=True, exist_ok=True)
+        self.seen: dict[str, str] = {}
+        for existing in (self.out / "images").rglob("*"):
+            if existing.is_file():
+                self.seen[_digest(existing)] = existing.name
+        self.per_class: dict[int, int] = {}
+        self.result = {"model": model, "task": task, "ready": 0, "exported": 0, "train": 0, "val": 0, "empty_labels": 0,
+                       "duplicates": 0, "unreadable": 0, "missing": 0, "failed": 0, "moved": self.move, "per_class": {},
+                       "blurred_pictures": 0, "blurred_regions": 0, "dest": str(self.out)}
+        self._lock = threading.Lock()
+        (self.out / "data.yaml").write_text(yaml.safe_dump(
+            {"path": ".", "train": "images/train", "val": "images/val", "nc": len(self.names),
+             "names": {i: n for i, n in enumerate(self.names)}}, sort_keys=False), encoding="utf-8")
+
+    def add(self, item: Item) -> str:
+        """Export one finished picture. Returns what happened: exported, duplicate, unreadable, missing or failed."""
+        with self._lock:
+            return self._add(item)
+
+    def _add(self, item: Item) -> str:
+        r, out, model = self.result, self.out, self.model
         src = Path(item.src_path or "")
         if not src.is_file():
-            result["missing"] += 1
-            continue
+            r["missing"] += 1
+            return "missing"
         picture = cv2.imread(str(src))
         if picture is None:
-            result["unreadable"] += 1
-            continue
-        label_boxes = [b for b in item.boxes if int(b[0]) != blur]        # the Blur class is never a label
-        blur_boxes = [b for b in item.boxes if int(b[0]) == blur]
+            r["unreadable"] += 1
+            return "unreadable"
+        src_size = src.stat().st_size
+        label_boxes = item.boxes                                          # labels and blur areas are kept apart: blur is never a label
+        blur_boxes = item.blur
         digest = _digest(src)
-        if digest in seen:
-            result["duplicates"] += 1
-            continue
-        split = pick_split(item.group_id, item.split_hint, val_share)
+        if digest in self.seen:
+            r["duplicates"] += 1
+            return "duplicate"
+        split = pick_split(item.group_id, item.split_hint, self.val_share)
         name = src.name
         if (out / "images" / split / name).exists():
             name = f"{src.stem}_{item.id[:6]}{src.suffix.lower()}"
@@ -242,34 +256,63 @@ def export(paths: Paths, store: Store, model: str, task: str, dest, move: bool =
                 pii_blur.blur_yolo(picture, blur_boxes)
                 if not cv2.imwrite(str(target), picture, [cv2.IMWRITE_JPEG_QUALITY, 95]):
                     raise OSError(f"could not write {target.name}")
-                if move:
+                if self.move:
                     src.unlink()
-            elif move:
+            elif self.move:
                 _safe_move(src, target)
             else:
                 shutil.copy2(src, target)
         except OSError:
             target.unlink(missing_ok=True)
-            result["failed"] += 1
-            continue
+            r["failed"] += 1
+            return "failed"
         (out / "labels" / split / f"{Path(name).stem}.txt").write_text(yolo_text(label_boxes), encoding="utf-8")
-        seen[digest] = name
-        store.mark_accepted(item.id, name)
-        if move:
-            store.set_source(item.id, str(target))
-            store.image_path(model, item.id).unlink(missing_ok=True)      # the inbox link
-        result["exported"] += 1
-        result[split] += 1
-        result["empty_labels"] += 0 if label_boxes else 1
+        self.seen[digest] = name
+        self.store.mark_accepted(item.id, name)
+        try:                                               # the mark that outlives the inbox: central ledger + a copy beside the dataset
+            mark = dict(name=src.name, folder=str(src.parent), size=src_size, labels=len(label_boxes), blur=len(blur_boxes),
+                        status="exported", moved_to=str(target) if self.move else None, copies=(out / ledger.COPY_NAME,))
+            ledger.record(self.paths, model, sha1=digest, **mark)
+            if blur_boxes:                                 # the blurred copy is a different file: remember it too
+                ledger.record(self.paths, model, sha1=ledger.digest(target), **{**mark, "size": target.stat().st_size})
+        except OSError:
+            pass                                           # the ledger is a memory aid; it must never fail an export
+        if self.move:
+            self.store.set_source(item.id, str(target))
+            if not self.keep_view:
+                self.store.image_path(model, item.id).unlink(missing_ok=True)      # the inbox link
+        r["exported"] += 1
+        r[split] += 1
+        r["empty_labels"] += 0 if label_boxes else 1
         if blur_boxes:
-            result["blurred_pictures"] += 1
-            result["blurred_regions"] += len(blur_boxes)
+            r["blurred_pictures"] += 1
+            r["blurred_regions"] += len(blur_boxes)
         for b in label_boxes:
-            per_class[int(b[0])] = per_class.get(int(b[0]), 0) + 1
-    result["per_class"] = {names[c] if c < len(names) else str(c): n for c, n in sorted(per_class.items())}
-    (out / "data.yaml").write_text(yaml.safe_dump(
-        {"path": ".", "train": "images/train", "val": "images/val", "nc": len(names), "names": {i: n for i, n in enumerate(names)}},
-        sort_keys=False), encoding="utf-8")
-    (out / "report.json").write_text(json.dumps({**result, "when": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2),
-                                     encoding="utf-8")
-    return result
+            self.per_class[int(b[0])] = self.per_class.get(int(b[0]), 0) + 1
+        return "exported"
+
+    def finish(self) -> dict:
+        """Write report.json with the totals so far and return them."""
+        with self._lock:
+            self.result["per_class"] = {self.names[c] if c < len(self.names) else str(c): n for c, n in sorted(self.per_class.items())}
+            (self.out / "report.json").write_text(json.dumps({**self.result, "when": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2),
+                                                  encoding="utf-8")
+            return dict(self.result)
+
+
+def export(paths: Paths, store: Store, model: str, task: str, dest, move: bool = True,
+           val_share: float = VAL_SHARE) -> dict:
+    """Write the finished pictures of one folder as a clean dataset under <dest>/<model>/ and move them there.
+    (A picture with no box is a real "nothing here" example; see [Exporter] for the rules.)"""
+    if model not in MODELS:
+        raise KeyError(model)
+    ready = store.items(model, ("ready",), task=task)
+    if not ready:                                          # nothing to write: leave the destination alone
+        return {"model": model, "task": task, "ready": 0, "exported": 0, "train": 0, "val": 0, "empty_labels": 0,
+                "duplicates": 0, "unreadable": 0, "missing": 0, "failed": 0, "moved": bool(move), "per_class": {},
+                "blurred_pictures": 0, "blurred_regions": 0, "dest": str(Path(dest) / model)}
+    exporter = Exporter(paths, store, model, task, dest, move, val_share)
+    exporter.result["ready"] = len(ready)
+    for item in ready:
+        exporter.add(item)
+    return exporter.finish()

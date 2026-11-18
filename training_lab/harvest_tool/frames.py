@@ -32,11 +32,11 @@ MAX_PER_FRAME_FOR = {"helmet_specialist": 8}
 MARGIN = 0.08                           # around a vehicle, like cut_plates and the app
 FRAME_CONF = 0.3
 MIN_SIDE = {"plate_specialist": 80, "helmet_specialist": 80, "cabin_specialist": 100}
-VEHICLES = ("motorcycle", "car", "bus", "jeepney", "truck", "tricycle")
+VEHICLES = ("motorcycle", "car", "bus", "jeepney", "truck", "tricycle", "pickup")
 CROPS_FOR = {
     "plate_specialist": VEHICLES,
     "helmet_specialist": ("motorcycle", "tricycle"),
-    "cabin_specialist": ("car", "bus", "truck"),
+    "cabin_specialist": ("car", "bus", "truck", "pickup"),
 }
 INTENT = {"plate_specialist": "find_plate", "helmet_specialist": "riders", "cabin_specialist": "cabin"}
 REASON = {

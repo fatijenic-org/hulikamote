@@ -1,6 +1,6 @@
 """
-The Labeller's blur: people's heads and number plates become "Blur" boxes a person can fix, and whatever is inside a Blur
-box is blurred in the saved picture. Temporary folders and fake detectors only.
+The Labeller's blur is its own layer, apart from the labels: a person draws areas to blur (or accepts the program's guess of
+heads and number plates), and whatever is inside an area is blurred in the saved picture. Temporary folders and fake detectors only.
 
     hulikamote_backend/venv/Scripts/python.exe -m pytest training_lab/tests/test_pii_blur.py -q -p no:cacheprovider
 """
@@ -122,16 +122,19 @@ def helper_models(paths):
                          plate_specialist=FakeDet(lambda img: [Det(0, 0.9, 30, 40, 60, 55)] if img.shape[1] == 90 else []))
 
 
-def test_pre_drawing_adds_blur_boxes_for_heads_and_never_for_plates_on_the_plate_model(env):
+def folder_item(store, task, ending):
+    return next(i for i in store.items("plate_specialist", ("label", "check"), task=task) if i.src_path.endswith(ending))
+
+
+def test_pre_drawing_guesses_head_blur_in_its_own_layer_and_never_plates_on_the_plate_model(env):
     paths, store, evidence = env
     write_img(evidence / "1794600000000.jpg", 200, 100, seed=5)
     r = fl.scan(paths, store, "plate_specialist", evidence)
     got = fl.suggest_batch(paths, store, "plate_specialist", r["task"], n=50, detectors=helper_models(paths), heads=True, plates=True)
     assert got >= 1
-    item = next(i for i in store.items("plate_specialist", ("check",), task=r["task"]) if i.src_path.endswith("1794600000000.jpg"))
-    blur = fl.blur_id(paths, "plate_specialist")
-    classes = [int(b[0]) for b in item.boxes]
-    assert blur == 1 and classes.count(blur) == 1                    # one head; the plate model's own target is not blurred
+    item = folder_item(store, r["task"], "1794600000000.jpg")
+    assert len(item.blur) == 1 and item.blur[0][0] == 0              # one head; the plate model's own target is not blurred
+    assert all(int(b[0]) == 0 for b in item.boxes)                   # the labels hold only plates: blur is not a class
 
 
 def test_the_helmet_model_gets_plate_blur_but_never_head_blur(env):
@@ -139,41 +142,56 @@ def test_the_helmet_model_gets_plate_blur_but_never_head_blur(env):
     write_img(evidence / "1794600000001.jpg", 200, 100, seed=6)
     r = fl.scan(paths, store, "helmet_specialist", evidence)
     fl.suggest_batch(paths, store, "helmet_specialist", r["task"], n=50, detectors=helper_models(paths), heads=True, plates=True)
-    item = next(i for i in store.items("helmet_specialist", ("check",), task=r["task"]) if i.src_path.endswith("1794600000001.jpg"))
-    blur = fl.blur_id(paths, "helmet_specialist")
-    boxes = [b for b in item.boxes if int(b[0]) == blur]
-    assert len(boxes) == 1 and boxes[0][2] > 0.5                    # the vehicle's plate zone (lower right), no head box
+    item = next(i for i in store.items("helmet_specialist", ("label", "check"), task=r["task"]) if i.src_path.endswith("1794600000001.jpg"))
+    assert len(item.blur) == 1 and item.blur[0][1] > 0.5            # the vehicle's plate zone (lower right), no head box
 
 
-def test_the_labelling_page_gets_one_more_class_called_blur(env):
+def test_blur_guesses_do_not_decide_the_picture(env):
+    paths, store, evidence = env
+    write_img(evidence / "1794600000002.jpg", 200, 100, seed=7)
+    r = fl.scan(paths, store, "plate_specialist", evidence)
+    fl.suggest_batch(paths, store, "plate_specialist", r["task"], n=50, detectors=FakeDetectors(
+        primary_anchor=vehicle_finder(PERSON, CAR)), heads=True, plates=False)     # no plate model here: only the blur guess
+    item = folder_item(store, r["task"], "1794600000002.jpg")
+    assert item.state == "label" and item.boxes == [] and len(item.blur) == 1       # still waiting for a person
+
+
+def test_the_labelling_page_has_no_blur_class_but_every_picture_carries_its_blur_areas(env):
     paths, store, evidence = env
     r = fl.scan(paths, store, "plate_specialist", evidence)
+    item = store.items("plate_specialist", ("label",), task=r["task"])[0]
+    store.set_blur_guess(item.id, [[0, 0.5, 0.5, 0.2, 0.2]])
     queue = HarvestApp(paths, store).queue("plate_specialist", task=r["task"])
-    assert queue["classes"] == ["license_plate", "blur"] and "blur" in queue["help"]
+    assert queue["classes"] == ["license_plate"]
+    assert next(i for i in queue["items"] if i["id"] == item.id)["blur"] == [[0, 0.5, 0.5, 0.2, 0.2]]
 
 
-def test_a_blur_box_can_be_saved_for_a_folder_picture_but_not_for_a_normal_one(env):
+def test_blur_areas_are_saved_apart_from_labels_for_a_folder_picture_but_ignored_for_a_normal_one(env):
     paths, store, evidence = env
     app = HarvestApp(paths, store)
     r = fl.scan(paths, store, "plate_specialist", evidence)
-    folder_item = store.items("plate_specialist", ("label",), task=r["task"])[0]
-    app.save(folder_item.id, [[0, 0.5, 0.5, 0.3, 0.2], [1, 0.2, 0.2, 0.2, 0.2]])
-    assert len(store.get(folder_item.id).boxes) == 2
+    item = store.items("plate_specialist", ("label",), task=r["task"])[0]
+    app.save(item.id, [[0, 0.5, 0.5, 0.3, 0.2]], [[0, 0.2, 0.2, 0.2, 0.2], [0, 9, 9, 9, 9]])      # the second area is not valid
+    saved = store.get(item.id)
+    assert len(saved.boxes) == 1 and saved.boxes[0][0] == 0
+    assert len(saved.blur) == 1 and saved.blur[0][1] == pytest.approx(0.2)
+    app.save(item.id, [[0, 0.5, 0.5, 0.3, 0.2]])                                                    # no blur sent: what is stored stays
+    assert len(store.get(item.id).blur) == 1
     store.add(Item(id="f" * 16, model="plate_specialist", state="label", source="forensic", group_id="g"))
-    app.save("f" * 16, [[0, 0.5, 0.5, 0.3, 0.2], [1, 0.2, 0.2, 0.2, 0.2]])
-    assert len(store.get("f" * 16).boxes) == 1                       # the Blur class does not exist outside the Labeller
+    app.save("f" * 16, [[0, 0.5, 0.5, 0.3, 0.2]], [[0, 0.2, 0.2, 0.2, 0.2]])
+    assert store.get("f" * 16).blur == []                                                           # blur exists only in the Labeller
 
 
-def test_saving_blurs_the_box_removes_the_original_and_keeps_blur_out_of_the_labels(env, tmp_path):
+def test_saving_blurs_the_area_removes_the_original_and_keeps_blur_out_of_the_labels(env, tmp_path):
     paths, store, evidence = env
     only = write_img(evidence / "1794700000000.jpg", 64, 48, seed=11)
     original = cv2.imread(str(only))
     r = fl.scan(paths, store, "plate_specialist", evidence)
     for item in store.items("plate_specialist", ("label",), task=r["task"]):
         if item.src_path.endswith("1794700000000.jpg"):
-            store.save_boxes(item.id, [[0, 0.7, 0.7, 0.2, 0.2], [1, 0.3, 0.3, 0.4, 0.4]])      # a plate label + a blur box
+            store.save_boxes(item.id, [[0, 0.7, 0.7, 0.2, 0.2]], [[0, 0.3, 0.3, 0.4, 0.4]])      # a plate label + a blur area
         else:
-            store.save_boxes(item.id, [[1, 0.5, 0.5, 0.3, 0.3]])                                # only a blur box: an empty-label example
+            store.save_boxes(item.id, [], [[0, 0.5, 0.5, 0.3, 0.3]])                              # only a blur area: an empty-label example
     out = fl.export(paths, store, "plate_specialist", r["task"], tmp_path / "out")
 
     assert out["blurred_pictures"] == 8 and out["blurred_regions"] == 8 and out["per_class"] == {"license_plate": 1}
@@ -182,7 +200,7 @@ def test_saving_blurs_the_box_removes_the_original_and_keeps_blur_out_of_the_lab
     label = (saved.parent.parent.parent / "labels" / saved.parent.name / (saved.stem + ".txt")).read_text().split("\n")
     assert len(label) == 1 and label[0].startswith("0 ")                                         # the plate only; no blur line
     after = cv2.imread(str(saved))
-    assert after[7:22, 8:30].std() < original[7:22, 8:30].std() / 2                              # the blur box is blurred
+    assert after[7:22, 8:30].std() < original[7:22, 8:30].std() / 2                              # the blur area is blurred
     assert after[38:46, 2:20].std() > original[38:46, 2:20].std() / 2                            # the rest is not
     assert not only.exists()                                                                     # the original, with the faces, is gone
 

@@ -141,6 +141,13 @@ def make_handler(viewer: ViewerApp, token: str, touch):
                 return self._json(200, v.job(p.get("id", "")))
             if path == "/api/progress":
                 return self._json(200, v.progress(v.model(p.get("dataset"))))
+            if path == "/api/review":
+                return self._json(200, v.review_state(p.get("dataset"), p.get("target") or "pickup"))
+            if path == "/api/suggest":
+                model = v.model(p.get("dataset"))
+                names = v.class_names(model)
+                frm = names[int(p["class"])] if (p.get("class") or "").isdigit() and int(p["class"]) < len(names) else None
+                return self._json(200, v.suggester.status(model, frm, p.get("target") or "pickup"))
             self._json(404, {"error": "no such endpoint"})
 
         def _get_reid(self, what: str, p: dict):
@@ -231,6 +238,19 @@ def make_handler(viewer: ViewerApp, token: str, touch):
                 return self._json(200, v.relabel(ds, b.get("class_id"), b.get("items"), b.get("rule"), ch))
             if path == "/api/undo":
                 return self._json(200, v.undo(ds))
+            if path == "/api/class/add":
+                return self._json(200, v.add_class(ds, b.get("name")))
+            if path == "/api/decide":
+                return self._json(200, v.decide(ds, b.get("to_class"), b.get("from_class"), b.get("picked"), b.get("page"), ch))
+            if path == "/api/decisions/reapply":
+                return self._json(200, v.reapply_decisions(ds, b.get("target") or "pickup"))
+            if path == "/api/suggest/start":
+                model = v.model(ds)
+                names = v.class_names(model)
+                fc = b.get("from_class")
+                if not isinstance(fc, int) or isinstance(fc, bool) or not 0 <= fc < len(names):
+                    raise ViewerError("choose the class to look through")
+                return self._json(200, v.suggester.start(model, names[fc], b.get("target") or "pickup"))
             if path == "/api/report":
                 return self._json(200, v.start_report(ds))
             if path == "/api/notes":

@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS items (
     decided REAL,
     accepted REAL,
     dataset_name TEXT,
-    src_path TEXT
+    src_path TEXT,
+    blur TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_items_model_state ON items(model, state);
 
@@ -124,6 +125,7 @@ class Item:
     accepted: float | None = None
     dataset_name: str | None = None
     src_path: str | None = None       # a picture that stays where it is (the Labeller's folder items); None = copied into the inbox
+    blur: list = field(default_factory=list)   # areas to blur when the picture is saved: [[0, cx, cy, w, h], ...]. Not labels; kept apart.
 
     def to_dict(self) -> dict:
         return {k: getattr(self, k) for k in self.__dataclass_fields__}
@@ -191,8 +193,11 @@ class Store:
             readme.write_text(README, encoding="utf-8")
         with self._connect() as con:
             con.executescript(SCHEMA)
-            if "src_path" not in {r["name"] for r in con.execute("PRAGMA table_info(items)")}:
+            have = {r["name"] for r in con.execute("PRAGMA table_info(items)")}
+            if "src_path" not in have:
                 con.execute("ALTER TABLE items ADD COLUMN src_path TEXT")        # databases made before the Labeller
+            if "blur" not in have:
+                con.execute("ALTER TABLE items ADD COLUMN blur TEXT NOT NULL DEFAULT '[]'")   # before the separate blur layer
 
     def _connect(self) -> sqlite3.Connection:
         con = sqlite3.connect(self.db_path, timeout=10)
@@ -244,8 +249,9 @@ class Store:
         with closing(self._connect()) as con, con:
             con.execute("UPDATE items SET src_path=? WHERE id=?", (src_path, item_id))
 
-    def save_boxes(self, item_id: str, boxes: list) -> Item:
-        """A human decided: these boxes (empty list = 'nothing here'). The item becomes ready."""
+    def save_boxes(self, item_id: str, boxes: list, blur: list | None = None) -> Item:
+        """A human decided: these boxes (empty list = 'nothing here'). The item becomes ready.
+        [blur] = the areas to blur in the saved picture (None = leave what is stored); they are never labels."""
         item = self.get(item_id)
         if item is None:
             raise KeyError(item_id)
@@ -257,7 +263,14 @@ class Store:
         with closing(self._connect()) as con, con:
             con.execute("UPDATE items SET state='ready', boxes=?, decided=? WHERE id=?",
                         (json.dumps(boxes), time.time(), item_id))
+            if blur is not None:
+                con.execute("UPDATE items SET blur=? WHERE id=?", (json.dumps(blur), item_id))
         return self.get(item_id)
+
+    def set_blur_guess(self, item_id: str, blur: list) -> None:
+        """The program's first guess of what to blur; the person fixes it. The item keeps its state."""
+        with closing(self._connect()) as con, con:
+            con.execute("UPDATE items SET blur=? WHERE id=? AND state!='accepted'", (json.dumps(blur), item_id))
 
     def skip(self, item_id: str) -> None:
         with closing(self._connect()) as con, con:
@@ -293,6 +306,7 @@ class Store:
     def _row(row: sqlite3.Row) -> Item:
         d = dict(row)
         d["boxes"] = json.loads(d["boxes"] or "[]")
+        d["blur"] = json.loads(d.get("blur") or "[]")
         d["suggested"] = bool(d["suggested"])
         return Item(**d)
 

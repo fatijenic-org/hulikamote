@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import config
+from . import config, ledger
 from . import folder_labeller as folders
 from .accept import TrainingBusy, accept, training_models
 from .cars import car_counts, car_detail, car_list, check_car, fill_cars
@@ -25,7 +25,7 @@ from .pairs import answer_pair
 from .sources import load_protected, review_counts
 from .store import FOLDER_SOURCE, Store, clean_boxes
 
-API_VERSION = 5        # 5 = the Labeller (folder scan, export); the dashboard asks /api/ping and restarts a helper that is older than it needs
+API_VERSION = 6        # 6 = send each picture right away; 5 = the Labeller (folder scan, export); the dashboard asks /api/ping and restarts a helper that is older than it needs
 
 PAGE = Path(__file__).with_name("page.html")
 ID_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -84,6 +84,7 @@ class HarvestApp:
         self.paths = paths or Paths()
         self.store = store or Store(self.paths)
         self._collect = {"running": False, "summary": None, "error": None, "task": None}
+        self._live: dict[str, folders.Exporter] = {}      # "model:folder task" -> the exporter that sends each finished picture right away
         self._labeller = {"running": False, "kind": None, "summary": None, "error": None, "task": None}
         self._lock = threading.Lock()
 
@@ -141,11 +142,9 @@ class HarvestApp:
         if task and task.startswith("folder_"):             # the Labeller's pictures stay in their folder: make this page showable
             items = folders.prepare(self.store, items)
         classes, help_ = safe_classes(self.paths, model), dict(CLASS_HELP.get(model, {}))
-        if task and task.startswith("folder_"):               # the Labeller offers one more "class": Blur
-            classes, help_[folders.BLUR_CLASS] = classes + [folders.BLUR_CLASS], folders.BLUR_HELP
         return {"model": model, "classes": classes, "help": help_,
                 "total": self.store.counts(model, task)["needs_eyes"],
-                "items": [{"id": i.id, "state": i.state, "reason": i.reason, "boxes": i.boxes,
+                "items": [{"id": i.id, "state": i.state, "reason": i.reason, "boxes": i.boxes, "blur": i.blur,
                            "suggested": i.suggested, "violation": i.violation, "decision": i.decision,
                            "source": i.source, "width": i.width, "height": i.height, "priority": i.priority,
                            "task": i.task_id, "ticket": i.ticket_uid}
@@ -208,16 +207,26 @@ class HarvestApp:
         self._publish()
         return {"counts": self.store.pair_counts(pair.task_id)}
 
-    def save(self, item_id: str, boxes: list) -> dict:
+    def save(self, item_id: str, boxes: list, blur: list | None = None) -> dict:
         item = self.store.get(item_id)
         if item is None:
             raise KeyError(item_id)
         n_classes = len(safe_classes(self.paths, item.model))
         if not n_classes:
             raise ValueError(f"no dataset definition for {item.model}")
-        if item.source == FOLDER_SOURCE:
-            n_classes += 1                                    # the Labeller's Blur pseudo class
-        self.store.save_boxes(item_id, clean_boxes(boxes, n_classes))
+        # the Labeller's own layer: areas to blur in the saved picture. They are not labels and have no class.
+        areas = clean_boxes(blur, 1) if (blur is not None and item.source == FOLDER_SOURCE) else None
+        saved = self.store.save_boxes(item_id, clean_boxes(boxes, n_classes), areas)
+        live = self._live.get(f"{item.model}:{item.task_id}") if item.source == FOLDER_SOURCE else None
+        if item.source == FOLDER_SOURCE and item.src_path and Path(item.src_path).is_file():
+            try:                                           # remember this picture as labelled for this model, outside the inbox
+                ledger.record(self.paths, item.model, sha1=ledger.digest(item.src_path), name=Path(item.src_path).name,
+                              folder=str(Path(item.src_path).parent), size=Path(item.src_path).stat().st_size,
+                              labels=len(saved.boxes), blur=len(saved.blur), status="labelled")
+            except OSError:
+                pass
+        if live is not None:
+            live.add(saved)                                 # a failure is counted in the totals; the label itself is safe
         self._publish()
         return {"counts": self.store.counts(item.model)}
 
@@ -270,12 +279,27 @@ class HarvestApp:
                                lambda: folders.scan(self.paths, self.store, model, folder))
 
     def labeller_suggest(self, model: str, task: str, n: int = 40, heads: bool = False, plates: bool = False) -> dict:
-        """Pre-draw the deployed model's boxes (and, when asked, Blur boxes over heads and plates) on the next pictures."""
+        """Pre-draw the deployed model's boxes (and, when asked, first-guess blur areas over heads and plates) on the next pictures."""
         task = self._task(task)
         if model not in MODELS or task is None:
             raise ValueError("a model and a folder are needed")
         return {"suggested": folders.suggest_batch(self.paths, self.store, model, task, max(1, min(int(n), 200)),
                                                     heads=bool(heads), plates=bool(plates))}
+
+    def labeller_live(self, model: str, task: str, dest: str = "", move: bool = True) -> dict:
+        """Turn "send each picture right away" on (a destination) or off (no destination) for one folder.
+        Off returns the totals so far (and writes report.json)."""
+        task = self._task(task)
+        if model not in MODELS or task is None:
+            raise ValueError("a model and a folder are needed")
+        if not dest:
+            exporter = self._live.pop(f"{model}:{task}", None)
+            return {"live": False, "summary": exporter.finish() if exporter else None}
+        if not Path(dest).is_absolute():
+            raise ValueError("choose the folder to move the finished pictures to (a full path)")
+        exporter = folders.Exporter(self.paths, self.store, model, task, dest, bool(move), keep_view=True)
+        self._live[f"{model}:{task}"] = exporter
+        return {"live": True, "dest": str(exporter.out)}
 
     def labeller_export(self, model: str, task: str, dest: str, move: bool = True) -> dict:
         """Write the clean dataset to [dest] and move the finished pictures there, in the background."""
@@ -370,7 +394,7 @@ def make_server(app: HarvestApp, port: int = 8765, token: str | None = None) -> 
                         return self._json(404, {"error": "not found"})
                     return self._send(200, f.read_bytes(), "image/jpeg")
                 if method == "POST" and path == "/api/save":
-                    return self._json(200, app.save(body["id"], body.get("boxes", [])))
+                    return self._json(200, app.save(body["id"], body.get("boxes", []), body.get("blur")))
                 if method == "POST" and path == "/api/skip":
                     return self._json(200, app.skip(body["id"]))
                 if method == "POST" and path == "/api/cars/fill":
@@ -392,6 +416,9 @@ def make_server(app: HarvestApp, port: int = 8765, token: str | None = None) -> 
                 if method == "POST" and path == "/api/labeller/suggest":
                     return self._json(200, app.labeller_suggest(str(body.get("model", "")), body.get("task"), body.get("n", 40),
                                                                body.get("heads", False), body.get("plates", False)))
+                if method == "POST" and path == "/api/labeller/live":
+                    return self._json(200, app.labeller_live(str(body.get("model", "")), body.get("task"),
+                                                             str(body.get("dest", "") or ""), body.get("move", True)))
                 if method == "POST" and path == "/api/labeller/export":
                     return self._json(200, app.labeller_export(str(body.get("model", "")), body.get("task"),
                                                                str(body.get("dest", "")), body.get("move", True)))

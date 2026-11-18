@@ -98,7 +98,8 @@ CLASS_HELP = {
         "motorcycle": "A motorcycle. Box the whole bike.",
         "car": "A car, van or SUV.",
         "bus": "A full-size bus (a jeepney is its own class).",
-        "truck": "A truck or a pickup.",
+        "truck": "A truck or a lorry. Once the dataset has a pickup class, a pickup is NOT a truck.",
+        "pickup": "A pickup: a car-sized cab with an open back (the bed). Not a big truck or lorry, and not a van.",
         "person": "A rider or passenger sitting on a motorcycle or tricycle (not people walking).",
         "tricycle": "A tricycle: a motorcycle with a sidecar.",
         "jeepney": "A jeepney: the long open-sided passenger vehicle with benches along the sides.",
@@ -106,7 +107,7 @@ CLASS_HELP = {
 }
 
 # Colours used for the boxes in the labelling page (one per class index).
-CLASS_COLORS = ["#2f9e44", "#e03131", "#1971c2", "#f08c00", "#9c36b5", "#0c8599", "#e64980"]
+CLASS_COLORS = ["#2f9e44", "#e03131", "#1971c2", "#f08c00", "#9c36b5", "#0c8599", "#e64980", "#74b816"]
 
 # Data the app already collects by itself; shown on the board so everything is in one place.
 AUTOMATIC = [
