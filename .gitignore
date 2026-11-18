@@ -52,6 +52,7 @@ training_lab/datasets/sr_plates/
 
 # Harvest inbox: CCTV pictures + your decisions (local only, never committed)
 training_lab/harvest_inbox/
+training_lab/labelled_ledger/
 training_lab/**/__pycache__/
 *.cache
 
