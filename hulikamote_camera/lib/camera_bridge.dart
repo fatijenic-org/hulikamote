@@ -82,6 +82,11 @@ class CameraBridge {
 
   Future<void> stop() => _control.invokeMethod<void>('stop');
 
+  /// What was chosen last time (empty the first time). The app uses it to start broadcasting by itself.
+  Future<Map<String, dynamic>> loadPrefs() async => await _control.invokeMapMethod<String, dynamic>('loadPrefs') ?? <String, dynamic>{};
+
+  Future<void> savePrefs(Map<String, dynamic> prefs) => _control.invokeMethod<void>('savePrefs', prefs);
+
   Future<PickedVideo?> pickVideo() async {
     final r = await _control.invokeMapMethod<String, dynamic>('pickVideo');
     if (r == null) return null;

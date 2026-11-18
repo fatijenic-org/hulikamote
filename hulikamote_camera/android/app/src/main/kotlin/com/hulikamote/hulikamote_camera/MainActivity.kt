@@ -36,6 +36,11 @@ class MainActivity : FlutterActivity() {
                 }
                 "status" -> result.success(streamer.status())
                 "pickVideo" -> pickVideo(result)
+                "loadPrefs" -> result.success(loadPrefs())
+                "savePrefs" -> {
+                    savePrefs(call.arguments as? Map<*, *> ?: emptyMap<Any, Any>())
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -48,6 +53,29 @@ class MainActivity : FlutterActivity() {
                 previewSink = null
             }
         })
+    }
+
+    // ── the last choice: the app opens and broadcasts by itself with it ──
+    private val prefs by lazy { getSharedPreferences("hulikamote_camera", MODE_PRIVATE) }
+
+    private fun loadPrefs(): Map<String, Any?> = mapOf(
+        "mode" to prefs.getString("mode", null),
+        "front" to prefs.getBoolean("front", false),
+        "quality" to prefs.getString("quality", null),
+        "wifi" to prefs.getBoolean("wifi", true),
+        "videoUri" to prefs.getString("videoUri", null),
+        "videoName" to prefs.getString("videoName", null),
+    )
+
+    private fun savePrefs(args: Map<*, *>) {
+        prefs.edit().apply {
+            (args["mode"] as? String)?.let { putString("mode", it) }
+            (args["front"] as? Boolean)?.let { putBoolean("front", it) }
+            (args["quality"] as? String)?.let { putString("quality", it) }
+            (args["wifi"] as? Boolean)?.let { putBoolean("wifi", it) }
+            (args["videoUri"] as? String)?.let { putString("videoUri", it) }
+            (args["videoName"] as? String)?.let { putString("videoName", it) }
+        }.apply()
     }
 
     // ── start / stop ──
@@ -116,6 +144,11 @@ class MainActivity : FlutterActivity() {
         if (resultCode != RESULT_OK || uri == null) {
             result.success(null)
             return
+        }
+        try {
+            // so the app can broadcast this video again the next time it opens by itself
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {
         }
         result.success(mapOf("uri" to uri.toString(), "name" to displayName(uri)))
     }
