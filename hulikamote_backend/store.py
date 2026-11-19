@@ -496,6 +496,9 @@ async def _link_owner(v: dict) -> dict:
 
 
 async def _notify_owner(v: dict) -> None:
+    if not evidence_files.privacy_ok(v):
+        print(f"[NOTICE] Ticket {v.get('id')} was made with the privacy blur off: its photos stay on this laptop, nothing is sent.")
+        return
     published = None
     if emailer.mode() == "online" and cloud.configured():
         published = await asyncio.to_thread(cloud.publish, v, evidence_files.frames_of(v))

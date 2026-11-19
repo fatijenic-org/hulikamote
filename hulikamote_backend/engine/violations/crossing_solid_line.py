@@ -7,11 +7,18 @@ can have as many lines as it has. The road section (a polygon around the line) i
 drawn: the line alone is enough. Nothing has to be drawn at all: when the Forensic run has no drawn line it
 finds the painted solid lane lines itself (engine/auto_lines.py, the road finder) and uses them the same way.
 
-Heuristic: a vehicle is flagged on the frame its ground point crosses the line, in either direction, coming
-from the side it was first seen on (geometry.crossed_line: it must end up clearly past the line, 30% of its
-box width and at least 10 px, so a car wobbling on the line is not a crossing; points beyond the line's ends
-are ignored). Legal basis: the no-overtaking / no-crossing rules of RA 4136 and local ordinances (to be
-confirmed before it is quoted on a ticket).
+Heuristic: a vehicle is flagged once its ground point has driven across the line, in either direction, coming from the side it
+was first seen on: it must end up clearly past the line (30% of its box width, at least 10 px) and stay there, so a car wobbling on the
+line is not a crossing; points beyond the line's ends are ignored. Legal basis: the no-overtaking / no-crossing rules of RA 4136 and
+local ordinances (to be confirmed before it is quoted on a ticket).
+
+The trackers hand a vehicle's number to another vehicle now and then, so "this number is now on the other side" is not believed on its
+own: the vehicle must have been followed picture after picture, from clearly before the line to clearly after it, and its trip must
+really cut the line (engine/violations/line_watch.py, engine/track_continuity.py). On a real 4K clip the old check flagged 96 vehicles in
+7 minutes, nearly all of them a tracker number that had moved to another vehicle; this one flags the 2 that really drove over the line.
+
+It judges a vehicle that drives ALONG the line and drifts over it (a lane change, an overtaking swerve). A vehicle that goes straight
+ACROSS it (turning across the road, into or out of a side street) is cross traffic: the turning rules judge that, not this one.
 
 Painted overlay (engine/line_paint.py, for testing): a saved line that carries a `look` is also drawn like paint on the road (solid white or
 yellow, double yellow, dashed white; width, wear, perspective taper; vehicles drive over it). The paint is only a picture of the line the rule
@@ -22,8 +29,10 @@ import cv2
 import numpy as np
 
 from engine import line_paint
+from engine.track_stitcher import compute_signature
 from engine.violations.base import Violation
-from engine.violations.geometry import crossed_line, point_in_polygon
+from engine.violations.geometry import point_in_polygon
+from engine.violations.line_watch import LineWatch
 
 
 class CrossingSolidLine(Violation):
@@ -57,21 +66,46 @@ class CrossingSolidLine(Violation):
                 zones.append(zone)
         return zones
 
+    def prepare(self, pipe, frame, detections, zones, t):
+        """Once per picture: keep it, so the colours of a vehicle can be looked at when its crossing is about to be believed."""
+        pipe.ledger_manager.solid_frame = frame
+
+    @staticmethod
+    def _signature(mgr, ledger):
+        """The colour histogram of the vehicle's box in the picture being judged (None when there is no picture, as in a test)."""
+        frame = getattr(mgr, "solid_frame", None)
+        if frame is None or not ledger.history:
+            return None
+        return compute_signature(frame, ledger.history[-1][3])
+
     def evaluate(self, mgr, track_id, zones):
-        """Each zone: {"polygon": [...] (may be empty), "stop_line": [[x1, y1], [x2, y2], ...]}."""
+        """Each zone: {"polygon": [...] (may be empty), "stop_line": [[x1, y1], [x2, y2], ...]}.
+        Asked for every vehicle on every picture, also for one that was not seen in it: only a NEW picture of the vehicle counts
+        (engine/violations/line_watch.py decides whether it drove across the line)."""
         if track_id not in mgr.ledgers or not zones:
             return False
         ledger = mgr.ledgers[track_id]
-        if len(ledger.path) < self.MIN_PATH_POINTS:
+        if len(ledger.path) < self.MIN_PATH_POINTS or not ledger.history:
             return False
-        _t, cx, cy, _w = ledger.path[-1]
+        if ledger.latest_class == "unknown":           # the tracker has not said what it is yet
+            return False
+        t, cx, cy, w = ledger.path[-1]
+        sample = (t, cx, cy, w, ledger.history[-1][3][3])
+        flagged = False
         for i, zone in enumerate(zones):
-            if zone["polygon"] and not point_in_polygon(cx, cy, zone["polygon"]):
+            line = zone.get("stop_line")
+            if not line or len(line) < 2:
                 continue
-            if crossed_line(ledger, (self.key, i), zone.get("stop_line")):
+            watch = ledger.line_watch.setdefault((self.key, i), LineWatch())
+            if zone["polygon"] and not point_in_polygon(cx, cy, zone["polygon"]):
+                watch.leave(t)
+                continue
+            crossing = watch.update(sample, line, lambda: self._signature(mgr, ledger), ledger.latest_class)
+            if crossing is not None:
+                ledger.cross_points.append((crossing.t, crossing.point[0], crossing.point[1]))
                 ledger.violations.add(self.key)
-                return True
-        return False
+                flagged = True
+        return flagged
 
     def draw_zone(self, pipe, frame, index, zone):
         """The line itself, bent as drawn (and the road section, when one was drawn)."""

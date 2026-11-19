@@ -158,6 +158,7 @@ def _ticket_from_ledger(lt: dict, config: dict) -> dict:
     ticket = {
         "track_id": lt["track_id"],
         "violations": lt["violations"],
+        "privacy_blurred": bool(config.get("blur_privacy", True)),   # False: the photos show faces and other plates, never sent
         "plate_text": lt["plate_text"],
         "plate_crops": lt.get("plate_crops", []),
         "evidence_paths": [Path(p).name for p in lt.get("evidence_paths", [])],
@@ -180,22 +181,24 @@ def _ticket_from_ledger(lt: dict, config: dict) -> dict:
 
 
 def _read_ticket_plate(task_id: str, t: dict, config: dict, written: list, on_crop=None) -> None:
-    """Deep OCR of one ticket (Pass 2): read every plate crop and vote for the best plate. `on_crop()` is called before
-    each crop is read. Raises _ForensicCancelled when the operator cancels."""
-    from engine.pipeline import EVIDENCE_DIR, _extract_plate_text
+    """Deep OCR of one ticket (Pass 2): every plate crop is read twice, as seen and enhanced (the GAN), and the reads vote for
+    the best plate (engine/plate_vote.py). The video pass keeps plate crops only while the no_plate violation is on; without crops
+    the plate is looked for, and read, in the evidence photos of the ticket. `on_crop()` is called before each crop is read.
+    Raises _ForensicCancelled when the operator cancels."""
+    from engine import plate_vote
+    from engine.pipeline import EVIDENCE_DIR, _extract_plate_reads
+    from engine.ticket_merge import revote
     from yolo_inference import YoloInference
 
     plate_format = config.get("plate_format", "ph_standard")
     crops = t.pop("plate_crops", [])
     t["plate_crop_paths"] = []
-    if not crops:
-        return
     if _plate_stop(task_id) == "finish":
         return          # Stop here: this ticket's plates are not read, the plate stays as the video pass left it
+    if not crops:
+        _read_from_photos(t, config, plate_format, written)
+        return
 
-    votes = {}
-    raw_map = {}
-    conf_map = {}
     crop_results = []
     for item in crops:
         mode = _plate_stop(task_id)
@@ -230,13 +233,12 @@ def _read_ticket_plate(task_id: str, t: dict, config: dict, written: list, on_cr
             except Exception:
                 pass
 
-        ocr_engine = config.get("ocr_engine", "easyocr")
-        enhancement = config.get("enhancement", "lanczos")
-        raw, cleaned, raw_crop_img, sr_crop_img, confidence = _extract_plate_text(crop, plate_format, ocr_engine, enhancement)
+        got = _extract_plate_reads(crop, plate_format, config.get("ocr_engine", "easyocr"), config.get("enhancement", "lanczos"))
+        top = plate_vote.best_read(got["reads"], plate_format)
 
         sr_filename = None
         try:
-            sr_path = YoloInference.save_snapshot(sr_crop_img, EVIDENCE_DIR)
+            sr_path = YoloInference.save_snapshot(got["enhanced_crop"], EVIDENCE_DIR)
             sr_filename = Path(sr_path).name
             written.append(EVIDENCE_DIR / sr_filename)
         except Exception:
@@ -248,56 +250,37 @@ def _read_ticket_plate(task_id: str, t: dict, config: dict, written: list, on_cr
                 "image_sr": sr_filename,
                 "image_context": context_filename,
                 "t": crop_t,
-                "raw": raw,
-                "cleaned": cleaned,
-                "confidence": confidence,
+                "raw": top["raw"],
+                "cleaned": top["cleaned"],
+                "confidence": top["confidence"],
+                "reads": got["reads"],
             })
-
-        if cleaned not in ("unidentified", "OCR_NOT_INSTALLED", ""):
-            votes[cleaned] = votes.get(cleaned, 0) + 1
-            raw_map[cleaned] = raw
-            conf_map[cleaned] = max(conf_map.get(cleaned, 0.0), confidence)
 
     t["crop_results"] = crop_results
     _link_crops_to_frames(t)
-    if not votes:
-        t["plate_text"] = "unidentified"
-        t["plate_raw"] = "unidentified"
+    revote(t, plate_format)            # plate_text, vote_tally, plate_candidates, winning crop (winner first), length warning
+    if t.get("plate_text", "unidentified") in _UNREAD:
         # no text: the status from the plate looks stays (no_plate / not_read / unclear / not_checked)
         t.setdefault("plate_status", "not_read" if crop_results else "not_checked")
+    else:
+        t["plate_status"] = "read"
+
+
+def _read_from_photos(t: dict, config: dict, plate_format: str, written: list) -> None:
+    """No plate crops came from the video: find the plate in the clean vehicle picture of every evidence photo of the ticket and
+    read it (as seen and enhanced). The ticket is changed in place."""
+    if not any(m.get("clean") or m.get("car_crop") for m in t.get("evidence_meta", [])):
+        return                  # no clean vehicle picture to look in
+    try:
+        new, _summary = _reread_with_models(t, [], config, plate_format, written)
+    except ValueError:
         return
-
-    vote_tally = {}
-
-    def get_vote_score(item):
-        text, vote_count = item
-        # Base score is number of votes + highest AI confidence on that string
-        score = vote_count + conf_map.get(text, 0.0)
-        if plate_format == "uk_standard" and len(text) == 7:
-            score += 20  # Massively enforce 7 digits for UK (e.g. NA54KGJ)
-        elif plate_format == "ph_standard" and len(text) in (6, 7):
-            score += 20  # Enforce 6 or 7 digits for PH
-        vote_tally[text] = round(score, 3)
-        return score
-
-    best_plate = max(votes.items(), key=get_vote_score)[0]
-    t["plate_text"] = best_plate
-    t["plate_status"] = "read"
-    t["vote_tally"] = vote_tally
-    t["plate_raw"] = raw_map[best_plate]
-
-    expected_length = 7 if plate_format in ("ph_standard", "uk_standard") else None
-    t["plate_length_warning"] = (expected_length is not None and len(best_plate) != expected_length)
-
-    # TRACK THE WINNING CROP (the one the AI was most confident in reading: the sharpest image to show)
-    matching_crops = [cr for cr in t.get("crop_results", []) if cr["cleaned"] == best_plate]
-    if matching_crops:
-        winning_crop_name = max(matching_crops, key=lambda x: x.get("confidence", 0.0))["image_raw"]
-        t["winning_crop"] = winning_crop_name
-        # Sort both lists so the winning crop is ALWAYS at index 0 (the Inbox thumbnail and its RAW/GAN comparison).
-        t["crop_results"].sort(key=lambda x: 0 if x["image_raw"] == winning_crop_name else 1)
-        if t.get("plate_crop_paths"):
-            t["plate_crop_paths"].sort(key=lambda x: 0 if x == winning_crop_name else 1)
+    t.clear()
+    t.update(new)
+    if t.get("plate_text", "unidentified") in _UNREAD:
+        t.setdefault("plate_status", "not_read" if t.get("crop_results") else "not_checked")
+    else:
+        t["plate_status"] = "read"
 
 
 def _first_track_id(t: dict) -> int:
@@ -312,7 +295,7 @@ def _owner_id(plate_text: str, owner) -> str:
 
 
 async def _save_rows(task_id: str, t: dict, classes: list, user_id: str, plate_text: str, save_violation,
-                     track_id: int | None = None) -> list:
+                     track_id: int | None = None, source: str = "forensic") -> list:
     """One 'pending' Inbox row per violation class of the ticket (pending triggers the Pop Quiz Inbox).
     `track_id`: the tracker number the rows carry (default: the ticket's own)."""
     ids = []
@@ -326,7 +309,7 @@ async def _save_rows(task_id: str, t: dict, classes: list, user_id: str, plate_t
         v_res = await save_violation(
             cls=v, confidence=1.0, user_id=user_id, image_path=img_path, notify=False, status="pending",
             evidence_paths=photo_names(t), track_id=_first_track_id(t) if track_id is None else track_id,
-            source="forensic",
+            source=source,
             session_id=task_id, plate_text=plate_text, dedupe=False,
         )
         if v_res and "id" in v_res:
@@ -345,7 +328,8 @@ async def _nobody_decided(ticket: dict) -> bool:
     return True
 
 
-async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path, save_violation, ids_sink: list) -> None:
+async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path, save_violation, ids_sink: list,
+                          source: str = "forensic", unread_user: str = "no_plate_found") -> None:
     """Add one finished ticket to the report and the Inbox database. When an earlier ticket has the same plate (one letter
     of OCR jitter allowed) and nobody has decided it yet, the two are the same car and are merged instead."""
     from engine.ticket_flags import annotate_tickets
@@ -354,7 +338,7 @@ async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path,
 
     plate_text = t.get("plate_text", "unidentified")
     owner = await get_user_by_plate(plate_text) if plate_text != "unidentified" else None
-    user_id = _owner_id(plate_text, owner)
+    user_id = _owner_id(plate_text, owner) if plate_text not in _UNREAD else unread_user
 
     async with _report_lock:
         report_path = output_dir / "report.json"
@@ -372,7 +356,7 @@ async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path,
                 if row:
                     have.add(row["cls"])
             new_ids = await _save_rows(task_id, merged, [v for v in t["violations"] if v not in have],
-                                       user_id, merged.get("plate_text", plate_text), save_violation)
+                                       user_id, merged.get("plate_text", plate_text), save_violation, source=source)
             ids_sink.extend(new_ids)
             merged["db_ids"] = list(twin.get("db_ids", [])) + new_ids
             if merged["db_ids"]:
@@ -381,7 +365,7 @@ async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path,
                     _first_track_id(merged))
             tickets[tickets.index(twin)] = merged
         else:
-            t["db_ids"] = await _save_rows(task_id, t, t.get("violations", []), user_id, plate_text, save_violation)
+            t["db_ids"] = await _save_rows(task_id, t, t.get("violations", []), user_id, plate_text, save_violation, source=source)
             ids_sink.extend(t["db_ids"])
             tickets.append(t)
 
@@ -391,6 +375,52 @@ async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path,
         if task is not None:
             task["tickets"] = tickets
             task["ticket_count"] = len(tickets)
+
+
+# ─── The live feed's tickets ───────────────────────────────────────────────────────────────────────────────────
+# A vehicle that the Live Monitor finished becomes a ticket of one standing run, "live" (report.json and forensic_config.json in
+# snapshots/evidence/forensic/live/output, Inbox rows with source "live"). So the review of the forensic analyzer works on it as it is:
+# choose photos, set them aside, merge with another ticket, read the plate again, type or pick another plate. The live pipeline reads
+# NO plate: it is read from the evidence photos when the reviewer asks (or the no_plate violation decides, when that one is on).
+
+LIVE_TASK = "live"
+LIVE_PENDING_USER = "plate_pending"        # the Inbox row's owner while nobody has read the plate yet
+
+
+def live_output_dir() -> Path:
+    from engine.pipeline import EVIDENCE_DIR
+    return EVIDENCE_DIR / "forensic" / LIVE_TASK / "output"
+
+
+def _live_run_config(config: dict) -> dict:
+    """What the plate tools of the live review read from forensic_config.json: the plate settings of the live setup."""
+    keys = ("plate_format", "ocr_engine", "enhancement", "plate_model", "plate_method", "primary_model", "tracker", "use_sahi",
+            "flag_sensitivity", "per_violation_configs", "blur_privacy")
+    cfg = {k: config[k] for k in keys if k in config}
+    cfg.setdefault("plate_format", "ph_standard")
+    cfg.setdefault("ocr_engine", "easyocr")
+    # the GAN (Real-ESRGAN) when its model is installed, else a plain upscale: the plate is read as seen AND enhanced
+    models = Path(__file__).resolve().parent.parent / "models"
+    cfg.setdefault("enhancement", "realesrgan" if next(models.rglob("realesrgan.onnx"), None) else "lanczos")
+    return cfg
+
+
+async def publish_live_ticket(lt: dict, config: dict, save_violation) -> list:
+    """A vehicle the live feed finished (a ledger ticket) becomes a ticket of the "live" run, plate not read yet. `config` = the live
+    pipeline's settings. Returns the ids of the Inbox rows made."""
+    out = live_output_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    cfg = _live_run_config(config)
+    cfg_path = out / "forensic_config.json"
+    text = json.dumps(cfg, indent=2, default=str)
+    if not cfg_path.exists() or cfg_path.read_text() != text:
+        cfg_path.write_text(text)
+    ticket = _ticket_from_ledger({**lt, "plate_crops": [], "plate_text": "unidentified"}, cfg)
+    ticket["plate_status"] = lt.get("plate_status") if "no_plate" in ticket["violations"] and lt.get("plate_status") else "pending"
+    ticket["source"] = "live"
+    ids: list = []
+    await _publish_ticket(LIVE_TASK, ticket, cfg, out, save_violation, ids, source="live", unread_user=LIVE_PENDING_USER)
+    return ids
 
 
 async def _close_report(task_id: str, output_dir: Path, config: dict, save_violation) -> list:
@@ -1457,6 +1487,61 @@ class TicketPlateRequest(BaseModel):
     revert: bool = False     # go back to what the OCR read
 
 
+class TicketNoPlateRequest(BaseModel):
+    task_id: str
+    ticket_uid: str
+    on: bool = True          # False takes the verdict back
+
+
+async def _drop_no_plate_verdict(ticket: dict) -> None:
+    """The enforcer's "no plate" verdict does not stand once the ticket has a plate number: its violation and Inbox row go.
+    The ticket is changed in place."""
+    from store import delete_violations, get_violation
+
+    ticket["violations"] = [v for v in ticket.get("violations", []) if v != "no_plate"]
+    gone, keep = [], []
+    for rid in ticket.get("db_ids", []):
+        row = await get_violation(rid)
+        (gone if row and row.get("cls") == "no_plate" else keep).append(rid)
+    if gone:
+        await delete_violations(gone)
+    ticket["db_ids"] = keep
+    ticket.pop("no_plate_by_verdict", None)
+
+
+@router.post("/tickets/no-plate")
+@_serialized
+async def set_ticket_no_plate(req: TicketNoPlateRequest):
+    """The enforcer's verdict "the vehicle has no plate number": adds the no_plate violation (and its Inbox row) to a ticket whose plate
+    is NOT read. Only a ticket without a plate number can carry it: a plate that was read or typed rules the verdict out. `on` = False
+    takes the verdict back (the violation the detector found by itself, when no_plate is switched on, is not touched)."""
+    from engine.ticket_flags import annotate_tickets
+
+    opened = _open_report(req.task_id, req.ticket_uid)
+    if isinstance(opened, JSONResponse):
+        return opened
+    out_dir, report_path, tickets, idx = opened
+    t = tickets[idx]
+    if req.on:
+        if t.get("plate_text", "unidentified") not in _UNREAD:
+            return JSONResponse(status_code=400, content={"error": "This ticket has a plate number, so it cannot be marked as having none"})
+        if "no_plate" not in t.get("violations", []):
+            t["violations"] = list(t.get("violations", [])) + ["no_plate"]
+            new_ids = await _save_rows(req.task_id, t, ["no_plate"], "no_plate_found", "unidentified", add_violation,
+                                       source=t.get("source", "forensic"))
+            t["db_ids"] = list(t.get("db_ids", [])) + new_ids
+            t["no_plate_by_verdict"] = True
+        t["plate_status"] = "no_plate"
+    else:
+        if not t.get("no_plate_by_verdict"):
+            return JSONResponse(status_code=400, content={"error": "The no-plate violation of this ticket was found by the detector, not set by a reviewer"})
+        await _drop_no_plate_verdict(t)
+        t["plate_status"] = "pending" if t.get("source") == "live" else "not_read"
+    annotate_tickets(tickets, _levenshtein, _run_config(out_dir).get("flag_sensitivity", 4))
+    _save_edited(req.task_id, out_dir, report_path, tickets)
+    return {"tickets": tickets}
+
+
 @router.post("/tickets/set-plate")
 @_serialized
 async def set_ticket_plate(req: TicketPlateRequest):
@@ -1492,6 +1577,8 @@ async def set_ticket_plate(req: TicketPlateRequest):
         user = await get_user_by_plate(plate)
         user_id = user["id"] if user else "unregistered"
     await update_violation_plate(edited.get("db_ids", []), plate, user_id)
+    if plate not in ("unidentified", "no_plate_found", "") and edited.get("no_plate_by_verdict"):
+        await _drop_no_plate_verdict(edited)                  # it has a plate number now: the "no plate" verdict is void
 
     sensitivity = 4
     try:
@@ -1568,6 +1655,8 @@ async def _sync_plate(old: dict, new: dict) -> None:
         user = await get_user_by_plate(plate)
         user_id = user["id"] if user else "unregistered"
     await update_violation_plate(new.get("db_ids", []), plate, user_id)
+    if plate not in ("unidentified", "no_plate_found", "") and new.get("no_plate_by_verdict"):
+        await _drop_no_plate_verdict(new)                     # it has a plate number now: the "no plate" verdict is void
 
 
 def _plate_finder(config: dict):
@@ -1597,20 +1686,33 @@ def _plate_finder(config: dict):
     return find
 
 
-def _reread_with_models(ticket: dict, frames: list[str], config: dict, plate_format: str):
-    """Runs plate_reread.reread with the real plate model, OCR and image files (slow: call it in a thread)."""
-    from engine import plate_reread
-    from engine.pipeline import EVIDENCE_DIR, _extract_plate_text
+def _reread_with_models(ticket: dict, frames: list[str], config: dict, plate_format: str, written: list | None = None):
+    """Runs plate_reread.reread with the real plate model, OCR and image files (slow: call it in a thread). Every crop is read as
+    seen and enhanced. `written` (optional) collects the files made, for a clean-up."""
+    from engine import plate_reread, plate_vote
+    from engine.pipeline import EVIDENCE_DIR, _extract_plate_reads
     from yolo_inference import YoloInference
 
     ocr_engine = config.get("ocr_engine", "easyocr")
     enhancement = config.get("enhancement", "lanczos")
+
+    def read_both(crop):
+        got = _extract_plate_reads(crop, plate_format, ocr_engine, enhancement)
+        top = plate_vote.best_read(got["reads"], plate_format)
+        return top["raw"], top["cleaned"], got["raw_crop"], got["enhanced_crop"], top["confidence"], got["reads"]
+
+    def save(image):
+        name = Path(YoloInference.save_snapshot(image, EVIDENCE_DIR)).name
+        if written is not None:
+            written.append(EVIDENCE_DIR / name)
+        return name
+
     return plate_reread.reread(
         ticket, frames,
         find_plates=_plate_finder(config),
-        read_plate=lambda crop: _extract_plate_text(crop, plate_format, ocr_engine, enhancement),
+        read_plate=read_both,
         load_image=lambda name: cv2.imread(str(EVIDENCE_DIR / Path(name).name)),
-        save_image=lambda image: Path(YoloInference.save_snapshot(image, EVIDENCE_DIR)).name,
+        save_image=save,
         plate_format=plate_format,
     )
 

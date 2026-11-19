@@ -6,8 +6,8 @@ a Look (boxes in frame pixels). One look is shared by every violation judged fro
 (the cabin look serves seatbelt, phone and mirror), so each model runs once per vehicle per round.
 What a look MEANS is decided by the violation modules (engine/violations/*.py: judge()).
 
-The plate job also does plate identification (tight crops for OCR, plate position cache), which
-runs for every vehicle whether or not "no_plate" is an active violation.
+The plate job (the plate looks, the tight crops for the OCR, the plate position cache) runs only while "no_plate" is an
+active violation; otherwise a ticket's plate is read from its evidence photos afterwards.
 """
 import logging
 from dataclasses import dataclass, field
@@ -102,7 +102,10 @@ class PlateJob:
     model = "plate_specialist"
 
     def wanted(self, active, det) -> bool:
-        return det.cls in VEHICLE_CLASSES      # plates are read for every ticket, not only no_plate ones
+        # Plate looks (and the crops kept for the OCR) are the "no_plate" violation's own evidence: they run only while it is switched
+        # on. A ticket's plate is found and read afterwards, in the evidence photos (routers/forensic.py _read_from_photos, and the
+        # "Read the plate" button of the review) - not tracked frame by frame on every vehicle.
+        return "no_plate" in active and det.cls in VEHICLE_CLASSES
 
     def look(self, pipe, frame, det, detections):
         direct = getattr(pipe.registry, "plate_method", "smart") == "direct_ocr"

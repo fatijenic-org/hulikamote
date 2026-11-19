@@ -205,6 +205,16 @@ class CameraSource:
                     return None
             return Frame(image, self._now())
 
+    def seek(self, seconds: float) -> None:
+        """A video file: go to this moment (a position past the end wraps round, as the file does when it plays on). Other sources: nothing."""
+        with self._file_lock:
+            if self._cap is None:
+                return
+            total = self._cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+            if total > 0 and self.source_fps > 0:
+                seconds = seconds % (total / self.source_fps)
+            self._cap.set(cv2.CAP_PROP_POS_MSEC, max(0.0, seconds) * 1000.0)
+
     # ── status / stop ────────────────────────────────────────────────────────
     def status(self) -> dict:
         return {

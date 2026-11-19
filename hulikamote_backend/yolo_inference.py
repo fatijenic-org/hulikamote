@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait as _futures_wait
 
 from engine import marks, specialists
 from engine.stage_timer import TIMER
@@ -531,13 +531,26 @@ class YoloInference:
         """
         people = [d for d in detections if d.cls == "person"]
         vehicles = [d for d in detections if d.cls != "person"]
-        if people and vehicles:
-            helper = _PEOPLE_TRACK_POOL.submit(self._timed_track, "trackP", self.people_tracker, people, frame, PERSON_ID_BASE)
-            self._timed_track("trackV", self.tracker, vehicles, frame, 0)
-            helper.result()                         # an error in the helper surfaces here, as it did when they ran one after the other
-        else:
-            self._timed_track("trackV", self.tracker, vehicles, frame, 0)
-            self._timed_track("trackP", self.people_tracker, people, frame, PERSON_ID_BASE)
+        try:
+            if people and vehicles:
+                helper = _PEOPLE_TRACK_POOL.submit(self._timed_track, "trackP", self.people_tracker, people, frame, PERSON_ID_BASE)
+                try:
+                    self._timed_track("trackV", self.tracker, vehicles, frame, 0)
+                finally:
+                    _futures_wait([helper])         # the helper never runs on into the next picture
+                helper.result()                     # an error in the helper surfaces here, as it did when they ran one after the other
+            else:
+                self._timed_track("trackV", self.tracker, vehicles, frame, 0)
+                self._timed_track("trackP", self.people_tracker, people, frame, PERSON_ID_BASE)
+        except (ValueError, IndexError, RuntimeError) as exc:
+            # A tracker found its own numbers out of step (seen in stream_errors.log: two threads in one tracker, "operands could not be
+            # broadcast together"). One picture without track ids is far better than a live feed that stops; five in a row is a real fault.
+            self._track_failures = getattr(self, "_track_failures", 0) + 1
+            print(f"[Tracker] one picture was left untracked ({self._track_failures}): {exc!r}")
+            if self._track_failures >= 5:
+                raise
+            return
+        self._track_failures = 0
         for d in vehicles:
             if d.track_id != -1:                    # one frame of "car" on a motorcycle does not change its class
                 d.cls = d.violation_type = self._stable_class(d.track_id, d.cls, d.confidence)

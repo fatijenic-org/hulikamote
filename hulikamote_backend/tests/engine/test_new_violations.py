@@ -130,13 +130,13 @@ def solid(mgr, zones=LINE_ZONE):
 
 def test_solid_line_flags_a_vehicle_that_drives_over_it():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1000, 1300 - 9 * i) for i in range(40)], solid(mgr))
+    assert drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr))                  # a lane change: at a slant
     assert "crossing_solid_line" in mgr.ledgers[1].violations
 
 
 def test_solid_line_flags_a_crossing_in_the_other_direction_too():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1000, 700 + 9 * i) for i in range(40)], solid(mgr))
+    assert drive(mgr, [(800 + 8 * i, 700 + 9 * i) for i in range(40)], solid(mgr))
 
 
 def test_solid_line_ignores_a_vehicle_that_stays_on_one_side():

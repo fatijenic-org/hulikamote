@@ -51,7 +51,7 @@ async def list_sessions():
             d = dict(r)
             
             # --- Injects Missing Forensic Metadata (crop_results) ---
-            if src == "forensic":
+            if src in ("forensic", "live"):
                 import os
                 import json
                 sess_id = d.get("session_id", "default")
@@ -62,7 +62,10 @@ async def list_sessions():
                         with open(rep_path, "r") as r_file:
                             rep_data = json.load(r_file)
                             for t_json in rep_data:
-                                if t_json.get("track_id", -1) == d.get("track_id", -1) and d.get("cls") in t_json.get("violations", []):
+                                mine = d.get("id") in (t_json.get("db_ids") or [])          # the ticket that owns this row
+                                if not t_json.get("db_ids"):                                # an older report without row ids
+                                    mine = t_json.get("track_id", -1) == d.get("track_id", -1) and d.get("cls") in t_json.get("violations", [])
+                                if mine:
                                     if "crop_results" in t_json:
                                         import json
                                         d["crop_results_json"] = json.dumps(t_json["crop_results"])
@@ -74,6 +77,8 @@ async def list_sessions():
                 d["user_name"] = d["plate_text"]
             elif d.get("user_id") == "scanning":
                 d["user_name"] = "SCANNING..."
+            elif d.get("user_id") == "plate_pending":
+                d["user_name"] = "PLATE NOT READ YET"
             elif d.get("user_id") == "no_plate_found":
                 d["user_name"] = "NO PLATE FOUND"
             elif str(d.get("user_id", "")).startswith("RAW:"):
@@ -171,7 +176,7 @@ async def run_plate_extraction(violation_id: str) -> dict:
             frame = cv2.imread(abs_path)
             if frame is None: continue
             
-            detections = yolo.infer(frame)
+            detections = yolo.infer(frame, track=False)       # boxes only: old evidence pictures must never reach the live trackers
             
             for det in detections:
                 x, y, w, h = det.bbox
