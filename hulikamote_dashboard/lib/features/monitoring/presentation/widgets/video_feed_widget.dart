@@ -8,6 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../domain/models/detection.dart';
 import '../../../forensic/presentation/widgets/replay_boxes.dart';
+import 'processing_scan.dart';
 import 'road_arrow.dart';
 import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
@@ -28,7 +29,10 @@ class VideoFeedWidget extends StatefulWidget {
   /// The outlines, fills and labels of the set-up and learned zones (the arrows have their own switch).
   final bool showRoadZones;
 
-  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.boxDelayMs = 0, this.showFlow = true, this.showRoadArrows = true, this.showRoadZones = true});
+  /// Told the backend's playback buffer state of each picture ({state, ahead_s, speed, pos_s, live}); a video file's pos_s is where on the video it is.
+  final ValueChanged<Map<String, dynamic>?>? onBuffer;
+
+  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.onBuffer, this.boxDelayMs = 0, this.showFlow = true, this.showRoadArrows = true, this.showRoadZones = true});
 
   @override
   State<VideoFeedWidget> createState() => _VideoFeedWidgetState();
@@ -53,6 +57,10 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
   String? _error;
   
   final Set<Timer> _waiting = {};          // boxes waiting for the picture to catch up
+  Map<String, dynamic>? _buffer;           // the backend's playback buffer: {state: filling | playing | done, percent, ahead_s, speed, need_s, live}
+  Uint8List? _previewBytes;                // while it fills: the newest finished picture, for the "Processing" view only
+  double? _previewW, _previewH;
+  List<Rect> _previewBoxes = const [];
 
   String? _currentHlsUrl;
   Player? _player;
@@ -89,12 +97,36 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
     setState(() {
       _isWaiting = true;
       _error = null;
+      _buffer = null;
     });
 
     _sub = widget.stream!.listen(
       (message) {
         try {
           final data = jsonDecode(message);
+          if (data is Map && data['type'] == 'buffer') {   // the picture is not ready yet: "Processing... 60%"
+            final pv = data['preview'];
+            Uint8List? bytes;
+            var boxes = <Rect>[];
+            if (pv is Map && pv['picture'] is String) {
+              bytes = base64Decode(pv['picture'] as String);
+              for (final b in (pv['boxes'] as List? ?? const [])) {
+                if (b is List && b.length >= 4) boxes.add(Rect.fromLTWH((b[0] as num).toDouble(), (b[1] as num).toDouble(), (b[2] as num).toDouble(), (b[3] as num).toDouble()));
+              }
+            }
+            if (mounted) {
+              setState(() {
+                _buffer = Map<String, dynamic>.from(data);
+                if (bytes != null) {
+                  _previewBytes = bytes;
+                  _previewW = (pv as Map)['w'] is num ? ((pv['w']) as num).toDouble() : null;
+                  _previewH = pv['h'] is num ? ((pv['h']) as num).toDouble() : null;
+                  _previewBoxes = boxes;
+                }
+              });
+            }
+            return;
+          }
           if (data is Map && data['type'] == 'status') return; // camera silent / offline: no picture to draw
           final frame = VideoFrame.fromJson(data);
           
@@ -121,6 +153,11 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
             setState(() {
               _currentFps = _frameTimestamps.length.toDouble();
               if (nextFrame != null) _frameBytes = nextFrame;
+              final buf = data is Map ? data['buffer'] : null;
+              _buffer = buf is Map ? Map<String, dynamic>.from(buf) : null;
+              widget.onBuffer?.call(_buffer);
+              _previewBytes = null;
+              _previewBoxes = const [];
               if (widget.boxDelayMs <= 0 || frame.transport != 'hls') {   // a picture sent with the boxes needs no delay
                 _detections = frame.detections;
                 _roadZones = frame.roadZones;
@@ -277,7 +314,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
       child: widget.stream == null
           ? const _DisconnectedView()
           : _isWaiting
-          ? const Center(child: CircularProgressIndicator())
+          ? _waitingView()
           : _error != null
           ? _errorBox(_error!)
           : Center(
@@ -344,6 +381,10 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
 
                   Positioned(bottom: 8, right: 8, child: _zoomBar()),
 
+                  // The playback buffer: "Processing..." while it fills (also when it ran dry), and how late / how slow the picture is.
+                  if (_buffer?['state'] == 'filling') const Positioned.fill(child: ProcessingScan(overPicture: true)),
+                  if (_buffer?['state'] == 'playing') Positioned(top: 8, left: 8, child: _bufferChip(_buffer!)),
+
                   // FPS Meter
                   Positioned(
                     top: 40,
@@ -369,6 +410,32 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
             ),
             ),
           ),
+    );
+  }
+
+  /// Before the first picture: a spinner, or, while the backend fills its buffer, the "Processing" view.
+  Widget _waitingView() {
+    final b = _buffer;
+    return b != null && b['state'] == 'filling'
+        ? ProcessingScan(picture: _previewBytes, pictureWidth: _previewW, pictureHeight: _previewH, boxes: _previewBoxes)
+        : const Center(child: CircularProgressIndicator());
+  }
+
+  /// A live camera: how late the picture is. A video file: how much is ready, and "slow motion" when the backend is slower than the video.
+  Widget _bufferChip(Map<String, dynamic> b) {
+    final speed = (b['speed'] as num?)?.toDouble() ?? 1.0;
+    final ahead = (b['ahead_s'] as num?)?.toDouble() ?? 0.0;
+    final live = b['live'] == true;
+    final slow = !live && speed < 0.97;
+    final text = live
+        ? 'Delayed ${ahead.toStringAsFixed(1)} s'
+        : slow
+        ? 'Slow motion ${speed.toStringAsFixed(2)}×  ·  ${ahead.toStringAsFixed(1)} s ready'
+        : '${ahead.toStringAsFixed(1)} s ready';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: Colors.black.withOpacity(0.7), borderRadius: BorderRadius.circular(4)),
+      child: Text(text, style: TextStyle(color: slow ? Colors.amberAccent : Colors.white70, fontWeight: FontWeight.w600, fontSize: 12)),
     );
   }
 

@@ -81,8 +81,10 @@ def test_style_flow_and_arrow_are_kept_only_when_they_make_sense():
     assert kept["flow"] == "in" and kept["arrow"] == [[3.0, 1.0], [3.0, 8.0]]
     sideways, = lc.clean_zones([{**road, "flow": "sideways"}], size)
     assert "flow" not in sideways and "arrow" not in sideways
-    three, = lc.clean_zones([{**road, "arrow": [[0, 0], [1, 1], [2, 2]]}], size)
-    assert three["flow"] == "in" and "arrow" not in three
+    three, = lc.clean_zones([{**road, "arrow": [[0, 0], [1, 1], [2, 2]]}], size)                  # a bent arrow follows a bent road: every point is kept
+    assert three["flow"] == "in" and three["arrow"] == [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]
+    one, = lc.clean_zones([{**road, "arrow": [[0, 0]]}], size)                                      # one point is no arrow
+    assert one["flow"] == "in" and "arrow" not in one
     on_sidewalk, = lc.clean_zones([{"kind": "sidewalk", "polygon": [[0, 0], [9, 0], [9, 9]], "flow": "in"}], size)
     assert "flow" not in on_sidewalk
 

@@ -454,14 +454,15 @@ class ReviewController extends ChangeNotifier {
   }
 
   /// Looks for the plate again and votes again. Returns what it found (null if it failed: the workspace shows why).
-  /// Decisions, selection and the open photo stay where they are.
-  Future<RereadResult?> rereadPlate(ForensicTicket ticket) async {
+  /// Decisions, selection and the open photo stay where they are. With [all] every photo of the ticket is read (the first reading of a
+  /// live ticket), not only the even spread of [rereadSample].
+  Future<RereadResult?> rereadPlate(ForensicTicket ticket, {bool all = false}) async {
     if (_busy) return null;
     _busy = true;
     _error = null;
     notifyListeners();
     try {
-      final result = await gateway.rereadPlate(taskId, ticket.uid, rereadSample(ticket));
+      final result = await gateway.rereadPlate(taskId, ticket.uid, all ? [for (final f in ticket.frames) f.file] : rereadSample(ticket));
       final photo = _frame;
       final wasOpen = _selectedUid == ticket.uid;
       replaceTickets(result.tickets, preferUid: ticket.uid);

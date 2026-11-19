@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -7,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/utils/visible_poller.dart';
+import '../../../forensic/data/forensic_api.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
 import '../../data/video_upload.dart';
@@ -14,6 +16,8 @@ import '../widgets/camera_input_dialog.dart';
 import '../widgets/camera_status_chip.dart';
 import '../widgets/flow_controls.dart';
 import '../widgets/performance_dialog.dart';
+import '../widgets/processing_scan.dart';
+import 'live_tickets_screen.dart';
 import '../widgets/phone_connect_dialog.dart';
 import '../widgets/road_detect_view.dart';
 import '../widgets/upload_status_card.dart';
@@ -74,6 +78,18 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   bool _flowBusy = false;        // a flow action (reverse / learn again) is on its way
 
   int _reconnectTries = 0;
+  bool _applyingSetup = false;     // Apply was pressed in the setup: the rules are on their way, the "Processing" view shows meanwhile
+  bool _applyReady = false;        // ... and the rules are in: the next message of a NEW connection ends the view
+  WebSocketChannel? _applyChannel; // the connection that was open when the rules went in (its messages do not count)
+  Uint8List? _applyPicture;        // the picture the setup was made on, dimmed under the scan
+  Size? _applyPictureSize;
+  Timer? _applyGuard;              // the view never stays longer than this
+  double? _resumeAtS;              // a video file: where on the video the picture was (Refresh and Resume go on from here)
+  bool _resumable = false;         // the feed ran and was stopped (or lost): Resume goes on with the same setup, no new setup
+  String? _resumeSource;           // the source it ran on: another source has nothing to resume
+  String? _positionSource;         // the source that _resumeAtS belongs to
+  DateTime _lastMessage = DateTime.now();
+  Timer? _watchdog;                // refreshes a feed that has gone silent
 
   late final http.Client _client = widget.client ?? http.Client();
   String? _problem;          // what is wrong, in words, shown above the picture until it is fixed
@@ -213,7 +229,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     try {
       await _setupEmptied;                                 // the clearing of the last visit is done before a setup is read
       if (!mounted) return;
-      final int? count;
+      final Object? result;
       if (_playing) {
         Map<String, dynamic> shot = {'ok': false};
         for (var i = 0; i < 20 && mounted; i++) {   // the first picture of a camera can take a few seconds
@@ -226,8 +242,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           messenger.showSnackBar(SnackBar(content: Text('${shot['reason'] ?? 'No picture from the camera yet.'}')));
           return;
         }
-        count = await Navigator.of(context).push<int>(
-          MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, shot: shot)),
+        result = await Navigator.of(context).push<Object>(
+          MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, shot: shot, deferApply: true)),
         );
       } else {
         if (!await _loadSource() || !mounted) return;     // the backend, or the video relay, is not ready: the reason is shown
@@ -235,13 +251,15 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           messenger.showSnackBar(const SnackBar(content: Text('The old setup could not be cleared. Restart the backend, then try again.')));
           return;
         }
-        count = await Navigator.of(context).push<int>(
-          MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, chooseFrame: true)),
+        result = await Navigator.of(context).push<Object>(
+          MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, chooseFrame: true, deferApply: true)),
         );
       }
       if (!mounted) return;
-      if (count != null) {
-        messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches $count violation${count == 1 ? '' : 's'}.')));
+      if (result is LiveSetupPending) {
+        unawaited(_applyPending(result));                 // the wizard is gone at once; the rules are sent behind the "Processing" view
+      } else if (result is int) {
+        messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches $result violation${result == 1 ? '' : 's'}.')));
         _loadSetup();
         if (!_playing) await _connect();                  // applied before the feed ran: now it starts
       }
@@ -249,6 +267,57 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       messenger.showSnackBar(SnackBar(content: Text('Could not set up violations: ${e.toString().replaceFirst('Exception: ', '')}')));
     } finally {
       if (mounted) setState(() => _preparingSetup = false);
+    }
+  }
+
+  /// Apply (last step of the setup): the wizard has closed already. The rules go to the backend (it builds the pipeline and loads the
+  /// models: seconds) while the "Processing" view shows over the picture the setup was made on. Then the feed starts (a running feed restarts
+  /// by itself) and the view goes when the first message of the new connection arrives.
+  Future<void> _applyPending(LiveSetupPending p) async {
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _applyingSetup = true;
+      _applyReady = false;
+      _applyChannel = null;
+      _applyPicture = null;
+      _applyPictureSize = null;
+    });
+    _applyGuard?.cancel();
+    _applyGuard = Timer(const Duration(seconds: 120), () {
+      if (mounted && _applyingSetup) setState(() => _applyingSetup = false);
+    });
+    unawaited(_loadApplyPicture());
+    try {
+      await ForensicApi().useForLive(p.config);
+      if (!mounted) return;
+      _applyChannel = _channel;
+      _applyReady = true;
+      messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches ${p.count} violation${p.count == 1 ? '' : 's'}.')));
+      _loadSetup();
+      if (!_playing) await _connect();                    // applied before the feed ran: now it starts
+    } catch (e) {
+      if (mounted) {
+        setState(() => _applyingSetup = false);
+        messenger.showSnackBar(SnackBar(content: Text('Could not apply the setup: ${e.toString().replaceFirst('Exception: ', '')}')));
+      }
+    }
+  }
+
+  Future<void> _loadApplyPicture() async {
+    try {
+      final bytes = await _cameraApi.referenceFrameBytes();
+      if (bytes == null || !mounted || !_applyingSetup) return;
+      final image = await decodeImageFromList(bytes);
+      final size = Size(image.width.toDouble(), image.height.toDouble());
+      image.dispose();
+      if (mounted && _applyingSetup) {
+        setState(() {
+          _applyPicture = bytes;
+          _applyPictureSize = size;
+        });
+      }
+    } catch (_) {
+      // the view then shows the scan without a picture
     }
   }
 
@@ -268,6 +337,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   static const _backendDown = 'The backend is not answering. Restart it, then press Try again.';
   static const _noPictureYet = 'Connected, but no picture yet. Check the source with Change source.';
+  static const _stalledText = 'The feed stopped answering. Refreshing it…';
 
   /// Asks the backend which source it uses, and tells the operator in words when something is missing: the backend
   /// not answering, or the video relay (MediaMTX) not running (it starts the relay itself when it can). Without the
@@ -287,7 +357,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       setState(() {
         if (problem != null) {
           _problem = problem;
-        } else if (_problem != _noPictureYet) {
+        } else if (_problem != _noPictureYet && _problem != _stalledText) {
           _problem = null;                      // fixed; a "no picture" warning is only cleared by a picture arriving
         }
       });
@@ -309,8 +379,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   void _retry() {
     if (_isPlaying) {
-      _stopMonitoring();
-      _connect();
+      _refreshFeed();
     } else {
       _loadSource();
     }
@@ -361,13 +430,15 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   void _skipSetup() => _connect();
 
   /// Opens the feed. Also what reconnecting after a source change does.
-  Future<void> _connect() async {
+  Future<void> _connect({double? startAt}) async {
     if (!await _loadSource()) {
       if (_isPlaying) _stopMonitoring();       // a reconnect found the backend gone
       return;
     }
     if (!mounted) return;
-    final channel = WebSocketChannel.connect(Uri.parse(ApiConstants.wsVideoFeed));
+    if (_positionSource != _sourceName) startAt = null;     // the position belongs to another video: start that one from the beginning
+    final feed = Uri.parse(ApiConstants.wsVideoFeed);
+    final channel = WebSocketChannel.connect(startAt != null && startAt > 0 ? feed.replace(queryParameters: {'start': startAt.toStringAsFixed(2)}) : feed);
     final stream = channel.stream.asBroadcastStream();
     setState(() {
       _gate = false;
@@ -380,6 +451,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     _poller.active = true;
     stream.listen((_) {
       _reconnectTries = 0;
+      _lastMessage = DateTime.now();
+      if (_problem == _stalledText && mounted) setState(() => _problem = null);
+      if (_applyingSetup && _applyReady && identical(_channel, channel) && !identical(channel, _applyChannel) && mounted) {
+        setState(() => _applyingSetup = false);          // the new feed speaks: its own "Processing" view takes over
+      }
       if (!_gotFrame) {
         _gotFrame = true;
         _noPicture?.cancel();
@@ -390,6 +466,41 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     _noPicture = Timer(const Duration(seconds: 12), () {
       if (mounted && _isPlaying && !_gotFrame) setState(() => _problem = _noPictureYet);
     });
+    // A feed that has gone silent (nothing for 25 s) is refreshed once for each silence, with the same setup.
+    _lastMessage = DateTime.now();
+    _watchdog?.cancel();
+    _watchdog = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (!mounted || !_isPlaying || !_gotFrame) return;
+      if (DateTime.now().difference(_lastMessage) < const Duration(seconds: 25)) return;
+      _lastMessage = DateTime.now();
+      setState(() => _problem = _stalledText);
+      _refreshFeed();
+    });
+  }
+
+  /// Refresh: open the feed again with the same setup (no new setup). A video file goes on from where the picture was.
+  Future<void> _refreshFeed() async {
+    if (!_isPlaying) return;
+    _reconnectTries = 0;
+    _channel?.sink.close();
+    await _connect(startAt: _resumeAtS);
+  }
+
+  /// Resume after a stop (or a lost feed): the same setup, no new setup. A video file goes on from where the picture was.
+  Future<void> _resume() => _connect(startAt: _resumeAtS);
+
+  bool get _canResume => _resumable && _resumeSource == _sourceName;
+  String get _resumeLabel => _resumeAtS != null && _resumeAtS! >= 1 ? 'Resume from ${_clock(_resumeAtS!)}' : 'Resume';
+  static String _clock(double seconds) {
+    final t = seconds.round();
+    return '${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}';
+  }
+
+  void _onBuffer(Map<String, dynamic>? b) {
+    if (b != null && b['pos_s'] is num) {
+      _resumeAtS = (b['pos_s'] as num).toDouble();   // where the picture is on the video
+      _positionSource = _sourceName;
+    }
   }
 
   /// The backend closes the feed when the source changes (e.g. "Send to Live Monitor"
@@ -401,13 +512,18 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       return;
     }
     Future.delayed(const Duration(seconds: 1), () {
-      if (mounted && _isPlaying && identical(_channel, channel)) _connect();
+      if (mounted && _isPlaying && identical(_channel, channel)) _connect(startAt: _resumeAtS);
     });
   }
 
   void _stopMonitoring() {
     _poller.active = false;
     _noPicture?.cancel();
+    _watchdog?.cancel();
+    if (_isPlaying) {                          // what it ran on is kept, so Resume can go on with the same setup
+      _resumable = true;
+      _resumeSource = _sourceName;
+    }
     setState(() {
       _gate = false;
       _isPlaying = false;
@@ -462,6 +578,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   /// The video is the source now. Another video needs its own setup, so a running feed stops and Start asks for it again.
   void _fileReady(String name, Map<String, dynamic> answer) {
     if (_isPlaying) _stopMonitoring();
+    _resumable = false;                         // a new video: nothing to resume
+    _resumeAtS = null;
     setState(() {
       _sourceName = name;
       _gate = false;
@@ -572,7 +690,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   @override
   void dispose() {
+    _applyGuard?.cancel();
     _noPicture?.cancel();
+    _watchdog?.cancel();
     _uploadTicker?.cancel();
     _uploadFade?.cancel();
     _poller.dispose();
@@ -606,7 +726,22 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         FxBanner(message: _problem!, action: TextButton(onPressed: _retry, child: const Text('Try again'))),
         const SizedBox(height: Fx.s12),
       ],
-      Expanded(child: _playing ? _videoArea() : (_gate ? _gateStage() : _pausedStage())),
+      Expanded(
+        child: Stack(fit: StackFit.expand, children: [
+          _playing ? _videoArea() : (_applyingSetup ? const SizedBox.shrink() : (_gate ? _gateStage() : _pausedStage())),
+          // Apply was pressed: the rules are on their way. Only "Processing" is shown, over the picture the setup was made on.
+          if (_applyingSetup)
+            Positioned.fill(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(Fx.radius),
+                child: ColoredBox(
+                  color: Colors.black,
+                  child: ProcessingScan(picture: _applyPicture, pictureWidth: _applyPictureSize?.width, pictureHeight: _applyPictureSize?.height),
+                ),
+              ),
+            ),
+        ]),
+      ),
     ]);
     final detections = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text('Live detections', style: Fx.heading(context).copyWith(fontSize: 18)),
@@ -646,6 +781,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   }
 
   Widget _sourceBar() {
+    // One line: in a narrower window the buttons turn into icons (the words are in their tooltips) so they stay side by side.
+    return LayoutBuilder(builder: (context, box) => _sourceRow(compact: box.maxWidth < 1180));
+  }
+
+  Widget _sourceRow({required bool compact}) {
     return Row(children: [
       StatusPill(
         label: _playing ? 'LIVE' : 'Paused',
@@ -671,56 +811,103 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ]),
       ),
       const SizedBox(width: Fx.s12),
-      // The buttons wrap onto a second line in a narrow window instead of overflowing the bar.
+      // Three groups, in a fixed order: what to change (setup), the small tools, and Stop. In a narrow window a whole group moves
+      // to the next line, never a single button.
       Flexible(
-        child: Wrap(alignment: WrapAlignment.end, crossAxisAlignment: WrapCrossAlignment.center, spacing: Fx.s8, runSpacing: Fx.s8, children: [
-      if (_playing) ...[
-        _setupButton(),
-        _roadDetecting
-            ? FilledButton.tonalIcon(
-                key: const ValueKey('road-detect-toggle'),
-                onPressed: _toggleRoadDetect,
-                icon: const Icon(Icons.close),
-                label: const Text('Back to live'),
-              )
-            : OutlinedButton.icon(
-                key: const ValueKey('road-detect-toggle'),
-                onPressed: _toggleRoadDetect,
-                icon: const Icon(Icons.route),
-                label: const Text('Detect road'),
+        child: Wrap(alignment: WrapAlignment.end, crossAxisAlignment: WrapCrossAlignment.center, spacing: Fx.s12, runSpacing: Fx.s8, children: [
+          if (_playing)
+            _toolGroup([
+              _setupButton(compact: compact),
+              if (compact)
+                IconButton(
+                  key: const ValueKey('road-detect-toggle'),
+                  tooltip: _roadDetecting ? 'Back to live' : 'Detect road',
+                  onPressed: _toggleRoadDetect,
+                  icon: Icon(_roadDetecting ? Icons.close : Icons.route),
+                )
+              else if (_roadDetecting)
+                FilledButton.tonalIcon(
+                  key: const ValueKey('road-detect-toggle'),
+                  onPressed: _toggleRoadDetect,
+                  icon: const Icon(Icons.close),
+                  label: const Text('Back to live'),
+                )
+              else
+                TextButton.icon(
+                  key: const ValueKey('road-detect-toggle'),
+                  onPressed: _toggleRoadDetect,
+                  icon: const Icon(Icons.route),
+                  label: const Text('Detect road'),
+                ),
+            ]),
+          if (!_playing) _sourceMenu(),
+          _toolGroup([
+            if (_playing) ...[
+              _sourceMenu(compact: true),
+              IconButton(
+                key: const ValueKey('refresh-feed'),
+                tooltip: 'Refresh the feed (same setup)',
+                icon: const Icon(Icons.refresh),
+                onPressed: _refreshFeed,
               ),
-      ],
-      _sourceMenu(),
-      if (_playing) ...[
-        FilledButton.icon(
-          onPressed: _stopMonitoring,
-          icon: const Icon(Icons.stop),
-          label: const Text('Stop monitoring'),
-          style: FilledButton.styleFrom(backgroundColor: Fx.danger, foregroundColor: Colors.black),
-        ),
-      ],
-      IconButton(
-        tooltip: _showPanel ? 'Hide detections' : 'Show detections',
-        icon: Icon(_showPanel ? Icons.keyboard_double_arrow_right : Icons.keyboard_double_arrow_left),
-        onPressed: () => setState(() => _showPanel = !_showPanel),
-      ),
-      IconButton(
-        key: const ValueKey('performance-button'),
-        tooltip: 'Performance: CPU, GPU, RAM and every step of the pipeline',
-        icon: const Icon(Icons.speed),
-        onPressed: () => PerformanceDialog.show(context, _cameraApi),
-      ),
-      _moreMenu(),
+            ],
+            IconButton(
+              tooltip: _showPanel ? 'Hide detections' : 'Show detections',
+              icon: Icon(_showPanel ? Icons.keyboard_double_arrow_right : Icons.keyboard_double_arrow_left),
+              onPressed: () => setState(() => _showPanel = !_showPanel),
+            ),
+            IconButton(
+              key: const ValueKey('live-tickets-button'),
+              tooltip: 'Live tickets: read plates, set photos aside, merge',
+              icon: const Icon(Icons.fact_check_outlined),
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LiveTicketsScreen())),
+            ),
+            IconButton(
+              key: const ValueKey('performance-button'),
+              tooltip: 'Performance: CPU, GPU, RAM and every step of the pipeline',
+              icon: const Icon(Icons.speed),
+              onPressed: () => PerformanceDialog.show(context, _cameraApi),
+            ),
+            _moreMenu(),
+          ]),
+          if (_playing)
+            FilledButton.icon(
+              onPressed: _stopMonitoring,
+              icon: const Icon(Icons.stop),
+              label: Text(compact ? 'Stop' : 'Stop monitoring'),
+              style: FilledButton.styleFrom(backgroundColor: Fx.danger, foregroundColor: Colors.black),
+            ),
         ]),
       ),
     ]);
   }
 
+  /// A quiet box that holds buttons that belong together (one outline, thin dividers between them).
+  Widget _toolGroup(List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: Fx.panel(context),
+        borderRadius: BorderRadius.circular(Fx.radiusSm),
+        border: Border.all(color: Fx.border(context)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (var i = 0; i < children.length; i++) ...[
+          if (i > 0) SizedBox(height: 22, child: VerticalDivider(width: 8, thickness: 1, color: Fx.border(context))),
+          children[i],
+        ],
+      ]),
+    );
+  }
+
   /// "Set up violations": while monitoring it freezes one picture of the feed; from the paused screen it collects pictures of the source first.
-  Widget _setupButton({bool filled = true}) {
+  Widget _setupButton({bool filled = true, bool compact = false}) {
     final onPressed = (_roadDetecting || _preparingSetup || _uploading) ? null : _openSetup;
     final icon = _preparingSetup ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.tune);
     final label = Text(_playing ? 'Edit violations' : 'Set up violations');
+    if (compact) {
+      return IconButton(key: const ValueKey('live-setup-button'), tooltip: _playing ? 'Edit violations' : 'Set up violations', onPressed: onPressed, icon: icon);
+    }
     return filled
         ? FilledButton.tonalIcon(key: const ValueKey('live-setup-button'), onPressed: onPressed, icon: icon, label: label)
         : OutlinedButton.icon(
@@ -831,7 +1018,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(detecting ? Fx.radiusSm : 0),
-                child: VideoFeedWidget(stream: _broadcastStream!, boxDelayMs: _boxDelayMs, showFlow: _showFlowArrows, showRoadArrows: _showRoadArrows, showRoadZones: _showRoadZones),
+                child: VideoFeedWidget(stream: _broadcastStream!, onBuffer: _onBuffer, boxDelayMs: _boxDelayMs, showFlow: _showFlowArrows, showRoadArrows: _showRoadArrows, showRoadZones: _showRoadZones),
               ),
             ),
           ),
@@ -842,18 +1029,19 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   }
 
   /// "Change source": a phone, CCTV or another laptop (by address), or a video file.
-  Widget _sourceMenu() {
+  Widget _sourceMenu({bool compact = false}) {
     return MenuAnchor(
       menuChildren: [
         MenuItemButton(leadingIcon: const Icon(Icons.phone_android), onPressed: _connectPhone, child: const Text('Connect phone (one click)')),
         MenuItemButton(leadingIcon: const Icon(Icons.videocam_outlined), onPressed: _openCameraInput, child: const Text('Camera or address…')),
         MenuItemButton(leadingIcon: const Icon(Icons.upload_file), onPressed: _uploadVideoSource, child: const Text('Video file…')),
       ],
-      builder: (context, controller, _) => OutlinedButton.icon(
-        onPressed: _uploading ? null : () => controller.isOpen ? controller.close() : controller.open(),   // not while a file is going up
-        icon: const Icon(Icons.swap_horiz),
-        label: const Text('Change source'),
-      ),
+      builder: (context, controller, _) {
+        final onPressed = _uploading ? null : () => controller.isOpen ? controller.close() : controller.open();   // not while a file is going up
+        return compact
+            ? IconButton(key: const ValueKey('change-source'), tooltip: 'Change source', icon: const Icon(Icons.swap_horiz), onPressed: onPressed)
+            : OutlinedButton.icon(onPressed: onPressed, icon: const Icon(Icons.swap_horiz), label: const Text('Change source'));
+      },
     );
   }
 
@@ -892,12 +1080,24 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
             child: EmptyState(
               icon: Icons.videocam_off_outlined,
               title: 'Monitoring is off',
-              message: 'Source: $_sourceName\nPress Start to watch the live feed and catch violations.',
+              message: _canResume
+                  ? 'Source: $_sourceName\nMonitoring is stopped. Resume goes on with the same setup.'
+                  : 'Source: $_sourceName\nPress Start to watch the live feed and catch violations.',
               action: Column(mainAxisSize: MainAxisSize.min, children: [
+                if (_canResume) ...[
+                  FilledButton.icon(
+                    key: const ValueKey('resume-button'),
+                    onPressed: _uploading ? null : _resume,
+                    icon: const Icon(Icons.play_circle_outline),
+                    label: Text(_resumeLabel),
+                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
+                  ),
+                  const SizedBox(height: Fx.s12),
+                ],
                 FilledButton.icon(
                   onPressed: _uploading ? null : _startMonitoring,       // the new video is not the source yet
                   icon: const Icon(Icons.play_arrow),
-                  label: const Text('Start monitoring'),
+                  label: Text(_canResume ? 'Start over (set up again)' : 'Start monitoring'),
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
                 ),
                 const SizedBox(height: Fx.s12),

@@ -9,6 +9,7 @@ import '../../domain/line_paint.dart';
 import '../../domain/violation_catalog.dart';
 import '../../domain/zone_geometry.dart';
 import 'fx.dart';
+import 'zoomable_canvas.dart';
 import 'violation_params.dart';
 import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
@@ -409,7 +410,7 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
                   child: LayoutBuilder(
                     builder: (context, box) {
                       final size = box.biggest;
-                      return MouseRegion(
+                      return ZoomableCanvas(child: MouseRegion(
                         cursor: SystemMouseCursors.precise,
                         child: GestureDetector(
                           key: const ValueKey('solid-canvas'),
@@ -452,7 +453,7 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
                             ],
                           ),
                         ),
-                      );
+                      ));
                     },
                   ),
                 ),

@@ -21,7 +21,8 @@ def reread(ticket: dict, files: list[str], *, find_plates, read_plate, load_imag
     Returns (new ticket, summary); the input is not mutated.
 
     find_plates(image) -> [{"box": [x, y, w, h], "confidence": f}], best first
-    read_plate(crop)   -> (raw, cleaned, raw_image, enhanced_image, confidence)
+    read_plate(crop)   -> (raw, cleaned, raw_image, enhanced_image, confidence[, reads]); `reads` = the raw and the enhanced
+                          read of the crop (engine/plate_vote.py), when the reader gives them
     load_image(name)   -> image or None;  save_image(image) -> file name
 
     Earlier re-reads of the same frame are replaced, so reading twice does not count a frame twice. A plate the
@@ -57,10 +58,14 @@ def reread(ticket: dict, files: list[str], *, find_plates, read_plate, load_imag
         results[:] = [c for c in results if c["image_raw"] not in stale]
         paths[:] = [p for p in paths if p not in stale]
 
-        raw, cleaned, _, enhanced, confidence = read_plate(crop)
+        got = read_plate(crop)
+        raw, cleaned, _, enhanced, confidence = got[:5]
         crop_file, enhanced_file = save_image(crop), save_image(enhanced)
-        results.append({"image_raw": crop_file, "image_sr": enhanced_file, "image_context": None, "t": meta.get("t"),
-                        "raw": raw, "cleaned": cleaned, "confidence": confidence, "reread_of": meta["file"]})
+        entry = {"image_raw": crop_file, "image_sr": enhanced_file, "image_context": None, "t": meta.get("t"),
+                 "raw": raw, "cleaned": cleaned, "confidence": confidence, "reread_of": meta["file"]}
+        if len(got) > 5 and got[5]:
+            entry["reads"] = got[5]
+        results.append(entry)
         paths.append(crop_file)
         meta["crop"] = crop_file
         meta["plate"] = cleaned if cleaned not in UNREAD else None

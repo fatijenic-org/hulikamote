@@ -54,6 +54,8 @@ class TrackLedger:
         self.turn_entry: dict = {}        # key -> (x, y) where it entered the zone
         self.turn_heading: dict = {}      # key -> heading just after entering
         self.line_side: dict = {}         # key -> +1/-1 side of the line it came from, or "crossed"
+        self.line_watch: dict = {}        # (rule, zone index) -> LineWatch: what Crossing a solid line has learned about this vehicle
+        self.cross_points: list = []      # (t, x, y) where the vehicle was seen to cut a solid line (drawn on the live evidence photo)
         self.made_stop: set = set()       # keys of stop-sign zones where it came to a full stop
         self.votes: dict = {}             # violation -> deque of recent True/False looks (see vote)
         self.marks: dict = {}             # violation -> boxes showing why (see engine/marks.py)

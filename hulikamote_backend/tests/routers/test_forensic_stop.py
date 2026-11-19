@@ -97,9 +97,9 @@ def env(tmp_path, monkeypatch):
         img = np.zeros((8, 20, 3), np.uint8)
         # three crops per ticket: the first ticket reads ABC1234, the second one XYZ9876 (unless a test wants the same car twice)
         plate = "ABC1234" if hook["same_plate"] or (len(reads) - 1) // 3 == 0 else "XYZ9876"
-        return "RAW", plate, img, img, 0.9
+        return {"raw_crop": img, "enhanced_crop": img, "reads": [{"source": "enhanced", "raw": "RAW", "cleaned": plate, "confidence": 0.9}]}
 
-    monkeypatch.setattr(pipeline_module, "_extract_plate_text", fake_read)
+    monkeypatch.setattr(pipeline_module, "_extract_plate_reads", fake_read)
 
     FakePipeline.on_frame = None
     FakePipeline.tickets = []

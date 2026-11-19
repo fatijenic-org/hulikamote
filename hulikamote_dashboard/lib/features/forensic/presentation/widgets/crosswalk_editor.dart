@@ -6,6 +6,7 @@ import '../../domain/analysis_draft.dart';
 import '../../domain/crosswalk_overlay.dart';
 import '../../domain/zone_geometry.dart';
 import 'fx.dart';
+import 'zoomable_canvas.dart';
 import 'violation_params.dart';
 import 'zone_editor.dart';
 import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
@@ -286,7 +287,7 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
                 child: LayoutBuilder(
                   builder: (context, box) {
                     final size = box.biggest;
-                    return MouseRegion(
+                    return ZoomableCanvas(child: MouseRegion(
                       cursor: _placing ? SystemMouseCursors.precise : SystemMouseCursors.basic,
                       child: GestureDetector(
                         key: const ValueKey('cw-canvas'),
@@ -327,7 +328,7 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
                           ],
                         ),
                       ),
-                    );
+                    ));
                   },
                 ),
               ),

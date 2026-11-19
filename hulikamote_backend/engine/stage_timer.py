@@ -94,12 +94,13 @@ class StageTimer:
         return (len(recent) - 1) / (recent[-1] - recent[0])
 
     def snapshot(self) -> dict:
-        """{"steps": {name: {"avg_ms", "max_ms", "n"}}, "rates": {"pictures", "judged"}} - steps in picture order."""
+        """{"steps": {name: {"avg_ms", "max_ms", "n"}}, "rates": {"pictures" shown, "judged", "produced" (finished by the backend)}} - steps in picture order."""
         with self._lock:
             names = [n for n in ORDER if n in self._samples] + [n for n in self._samples if n not in ORDER]
             steps = {n: {"avg_ms": round(1000 * sum(self._samples[n]) / len(self._samples[n]), 2),
                          "max_ms": round(1000 * max(self._samples[n]), 2), "n": len(self._samples[n])} for n in names if self._samples[n]}
-        return {"steps": steps, "rates": {"pictures": round(self.rate("pictures"), 1), "judged": round(self.rate("judged"), 1)}}
+        return {"steps": steps, "rates": {"pictures": round(self.rate("pictures"), 1), "judged": round(self.rate("judged"), 1),
+                                                                                    "produced": round(self.rate("produced"), 1)}}
 
     def spans(self, window_s: float = 2.5) -> list[dict]:
         """The steps of the last `window_s` seconds, for a timeline: [{"name", "start" (s from the start of the window), "dur_ms"}].

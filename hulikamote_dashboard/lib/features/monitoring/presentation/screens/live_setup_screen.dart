@@ -14,6 +14,14 @@ import '../widgets/frame_picker_step.dart';
 import '../widgets/road_markings_panel.dart';
 import '../widgets/setup_layers_dialog.dart';
 
+/// What the setup hands back when it was opened with `deferApply`: the rules to send, and how many violations they switch on. The Live
+/// Monitor sends them itself, behind its "Processing" view, so the operator is back on the monitor the moment Apply is pressed.
+class LiveSetupPending {
+  const LiveSetupPending(this.config, this.count);
+  final Map<String, dynamic> config;
+  final int count;
+}
+
 /// "Set up violations" of the Live Monitor: the Forensic Analyzer's own steps (the same violations, zones and settings), drawn on ONE
 /// picture of the source. Apply sends them to the Live Monitor.
 ///
@@ -29,6 +37,7 @@ class LiveSetupScreen extends StatefulWidget {
     required this.cameraApi,
     this.shot,
     this.chooseFrame = false,
+    this.deferApply = false,
     this.api,
     this.media = const ForensicMedia(),
   }) : assert(chooseFrame || shot != null, 'Give the frozen picture, or let the operator choose one');
@@ -38,6 +47,9 @@ class LiveSetupScreen extends StatefulWidget {
   /// What [CameraApi.captureReference] answered: version, width, height, fps of the frozen picture. Null with [chooseFrame].
   final Map<String, dynamic>? shot;
   final bool chooseFrame;
+
+  /// Apply does not wait for the backend: the screen closes at once and pops a [LiveSetupPending] for the caller to send.
+  final bool deferApply;
   final ForensicApi? api;
   final ForensicMedia media;
 
@@ -205,12 +217,17 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   }
 
   Future<void> _apply() async {
+    final config = _draft.buildConfig(activePlateModel: _models.active('plate'));
+    if (widget.deferApply) {
+      Navigator.of(context).pop(LiveSetupPending(config, _draft.selection.length));
+      return;
+    }
     setState(() {
       _applying = true;
       _error = null;
     });
     try {
-      await _api.useForLive(_draft.buildConfig(activePlateModel: _models.active('plate')));
+      await _api.useForLive(config);
       if (mounted) Navigator.of(context).pop(_draft.selection.length);
     } catch (e) {
       if (mounted) {

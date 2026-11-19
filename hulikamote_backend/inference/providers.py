@@ -26,8 +26,11 @@ except Exception as e:
 # to the integrated Intel iGPU even when CUDAExecutionProvider is listed.
 _CUDA_PROVIDER_OPTIONS = {
     "device_id": 0,
-    "gpu_mem_limit": 4 * 1024 * 1024 * 1024,  # 4 GB — safe cap for RTX 3050 6 GB
-    "arena_extend_strategy": "kNextPowerOfTwo",
+    # Every model session has its own memory pool, and a pool may grow up to this limit. With 4 GB each, three or four sessions plus the
+    # tracker's neural net filled the 6 GB card (5.9 GB in use while idle): Windows then moves GPU memory to RAM, a picture stalls for
+    # seconds, or the allocation fails and the live feed stops. These models are small (12 MB), 1 GB is plenty. HK_ORT_GPU_MEM_MB changes it.
+    "gpu_mem_limit": int(os.environ.get("HK_ORT_GPU_MEM_MB", "1024")) * 1024 * 1024,
+    "arena_extend_strategy": "kSameAsRequested",     # grow by what is asked, not to the next power of two (which doubles the pool)
     "cudnn_conv_algo_search": "EXHAUSTIVE",
     "do_copy_in_default_stream": True,
 }

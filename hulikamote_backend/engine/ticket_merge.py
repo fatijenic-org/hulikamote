@@ -112,40 +112,31 @@ def split_ticket(ticket: dict, files: list[str]) -> tuple[dict, dict]:
 
 
 def _revote(t: dict, plate_format: str) -> None:
-    """Re-pick a ticket's plate from the per-crop reads it still has (same scoring as forensic Pass 2)."""
-    votes, conf = {}, {}
-    for c in t.get("crop_results", []):
-        text = c.get("cleaned", "")
-        if text in _UNIDENTIFIED or text == "OCR_NOT_INSTALLED":
-            continue
-        votes[text] = votes.get(text, 0) + 1
-        conf[text] = max(conf.get(text, 0.0), c.get("confidence", 0.0))
-    for k in ("vote_tally", "winning_crop", "plate_raw", "plate_length_warning"):
+    """Re-pick a ticket's plate from the per-crop reads it still has (raw and enhanced; grading in engine/plate_vote.py, the same as
+    the forensic pass). The graded candidates stay on the ticket as `plate_candidates`."""
+    from engine import plate_vote
+
+    cands = plate_vote.candidates(t.get("crop_results", []), plate_format)
+    for k in ("vote_tally", "winning_crop", "plate_raw", "plate_length_warning", "plate_candidates"):
         t.pop(k, None)
-    if not votes:
+    if not cands:
         t["plate_text"], t["plate_raw"] = "unidentified", "unidentified"
         return
+    best = cands[0]
+    t["plate_text"] = best["text"]
+    t["vote_tally"] = {c["text"]: c["points"] for c in cands}
+    t["plate_candidates"] = cands
+    t["plate_raw"] = best.get("raw", best["text"])
 
-    def score(item):
-        text, n = item
-        sc = n + conf[text]
-        if plate_format == "uk_standard" and len(text) == 7:
-            sc += 20
-        elif plate_format == "ph_standard" and len(text) in (6, 7):
-            sc += 20
-        return sc
+    def confidence_of(crop: dict) -> float:
+        return max((r.get("confidence") or 0.0 for r in plate_vote.crop_reads(crop) if r.get("cleaned") == best["text"]), default=-1.0)
 
-    best = max(votes.items(), key=score)[0]
-    t["plate_text"] = best
-    t["vote_tally"] = {text: round(score((text, n)), 3) for text, n in votes.items()}
-    matching = [c for c in t["crop_results"] if c.get("cleaned") == best]
-    top = max(matching, key=lambda c: c.get("confidence", 0.0))
-    t["plate_raw"] = top.get("raw", best)
+    top = max(t["crop_results"], key=confidence_of)
     t["winning_crop"] = top["image_raw"]
     t["crop_results"].sort(key=lambda c: 0 if c["image_raw"] == top["image_raw"] else 1)
     t["plate_crop_paths"].sort(key=lambda p: 0 if p == top["image_raw"] else 1)
     expected = 7 if plate_format in ("ph_standard", "uk_standard") else None
-    t["plate_length_warning"] = expected is not None and len(best) != expected
+    t["plate_length_warning"] = expected is not None and len(best["text"]) != expected
 
 
 def normalize_plate(text) -> str:

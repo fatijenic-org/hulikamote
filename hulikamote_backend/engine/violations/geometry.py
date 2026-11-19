@@ -7,9 +7,12 @@ Per-rule memory (timers, entry headings, line sides) lives on the ledger under a
 the rule name and zone number, so rules never share state.
 """
 import math
+from collections import namedtuple
 
 import cv2
 import numpy as np
+
+Cut = namedtuple("Cut", "point tangent")      # where a trip cut a line (x, y), and the direction of the piece it cut (a unit vector)
 
 STOP_SPEED = 25.0   # px/s; below this a vehicle counts as stopped (jitter filter: boxes "breathe" a little)
 TURN_MIN_ANGLE_COS = math.cos(math.radians(45.0))   # heading must swing at least 45 deg to count as a turn
@@ -228,6 +231,38 @@ def crossed_line(ledger, key, line) -> bool:
         return False
     ledger.line_side[key] = "crossed"
     return True
+
+
+def line_cut(points, line, tol: float = 0.0):
+    """
+    Where a trip of `points` ([(x, y), ...], in order) really cuts `line` (two or more points; a bent line is every straight piece of it),
+    as a Cut (the point of the first cut and the direction of the piece of line it cut), or None when the trip never touches the line.
+    The two ends of the line are lengthened by `tol` pixels, so a trip that cuts it a hair beyond its end still counts. This is the proof
+    that a vehicle drove ACROSS the line and not round its end.
+    """
+    pieces = [((float(x1), float(y1)), (float(x2), float(y2))) for (x1, y1), (x2, y2) in zip(line, line[1:]) if (x1, y1) != (x2, y2)]
+    if not pieces or len(points) < 2:
+        return None
+    if tol > 0:
+        (ax, ay), (bx, by) = pieces[0]
+        d = math.hypot(bx - ax, by - ay)
+        pieces[0] = ((ax - (bx - ax) / d * tol, ay - (by - ay) / d * tol), (bx, by))
+        (ax, ay), (bx, by) = pieces[-1]
+        d = math.hypot(bx - ax, by - ay)
+        pieces[-1] = ((ax, ay), (bx + (bx - ax) / d * tol, by + (by - ay) / d * tol))
+    for (px, py), (qx, qy) in zip(points, points[1:]):
+        rx, ry = qx - px, qy - py
+        for (ax, ay), (bx, by) in pieces:
+            sx, sy = bx - ax, by - ay
+            denom = rx * sy - ry * sx
+            if abs(denom) < 1e-9:
+                continue                                              # parallel: it never meets this piece
+            along_trip = ((ax - px) * sy - (ay - py) * sx) / denom
+            along_line = ((ax - px) * ry - (ay - py) * rx) / denom
+            if 0.0 <= along_trip <= 1.0 and 0.0 <= along_line <= 1.0:
+                length = math.hypot(sx, sy)
+                return Cut((px + along_trip * rx, py + along_trip * ry), (sx / length, sy / length))
+    return None
 
 
 def rider_boxes(moto_bbox: list, person_bboxes: list) -> list:

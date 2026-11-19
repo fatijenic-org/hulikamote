@@ -695,8 +695,10 @@ const List<DetectionRecipe> kRecipes = [
     covers: ['No plate'],
     source: 'violations/no_plate.py + engine/specialist_jobs.py (PlateJob)',
     plain:
-        'Every vehicle gets plate looks, whether or not no_plate is switched '
-        'on, because every ticket should carry a plate number. A look counts '
+        'Plate looks run only while no_plate is switched on. A ticket\'s plate '
+        'is not tracked on every vehicle: it is found and read afterwards, in '
+        'the evidence photos of the ticket (as seen and enhanced), when the '
+        'reviewer asks. A look counts '
         'only if it was fair: vehicle type settled, box at least 60 px wide, '
         'and a motorcycle showing its rear. After 6 fair looks with no plate '
         'ever found, the suspicion is pending. The decision waits until the '

@@ -1,7 +1,8 @@
 """
 Crossing a solid line, drawn or found: lines with any number of points (curves, corners), several lines, no road
 section needed, and the painted lines the road finder hands over when nothing was drawn (engine/auto_lines.py).
-Scripted vehicles only (no model, no video).
+Scripted vehicles only (no model, no video). A vehicle that crosses does so at a slant, as in a lane change: one that goes straight
+across is cross traffic (a turn, a side street) and not this rule's business (see engine/violations/line_watch.py).
 """
 import json
 from types import SimpleNamespace
@@ -33,13 +34,13 @@ def solid(mgr, zones):
 
 def test_a_bent_line_is_crossed_at_its_first_piece():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(700, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(BEND)]))          # up across the bottom piece
+    assert drive(mgr, [(450 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(BEND)]))   # up across the bottom piece
     assert "crossing_solid_line" in mgr.ledgers[1].violations
 
 
 def test_a_bent_line_is_crossed_at_its_second_piece():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1300 - 9 * i, 700) for i in range(40)], solid(mgr, [zone(BEND)]))          # left across the side piece
+    assert drive(mgr, [(1300 - 9 * i, 500 + 8 * i) for i in range(40)], solid(mgr, [zone(BEND)]))   # left across the side piece
 
 
 def test_driving_round_the_corner_on_one_side_is_not_crossing():
@@ -86,21 +87,21 @@ def test_each_line_is_watched_on_its_own():
     mgr = ActiveLedgerManager()
     assert not drive(mgr, [(1000, 900 - 5 * i) for i in range(40)], solid(mgr, TWO_LINES))         # stays between the two lines
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1000, 800 - 9 * i) for i in range(40)], solid(mgr, TWO_LINES))             # starts between them: crosses the upper (bent) line
+    assert drive(mgr, [(850 + 9 * i, 800 - 9 * i) for i in range(40)], solid(mgr, TWO_LINES))       # starts between them: crosses the upper (bent) line
     assert "crossing_solid_line" in mgr.ledgers[1].violations
 
 
 def test_a_line_alone_needs_no_road_section():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1000, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE)]))
+    assert drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE)]))
 
 
 def test_a_road_section_still_limits_the_line_when_one_was_drawn():
     mgr = ActiveLedgerManager()
     far_away = [[0, 0], [100, 0], [100, 100], [0, 100]]
-    assert not drive(mgr, [(1000, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE, far_away)]))
+    assert not drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE, far_away)]))
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1000, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE, BIG_ZONE)]))
+    assert drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE, BIG_ZONE)]))
 
 
 # ─── what the wizard writes, what the pipeline reads ─────────────────────────

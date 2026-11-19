@@ -18,12 +18,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from engine import marks, privacy
+from engine import marks, plate_vote, privacy
 from engine.flow_field import FlowField
 from engine.video_clock import OffsetClock, WallClock, start_from_text
 from engine.ledger import ActiveLedgerManager
 from engine.registry import ModelRegistry
 from engine.stage_timer import TIMER
+from engine.track_continuity import last_run
 from engine.specialist_jobs import JOBS
 from engine.violations import ALL as ALL_VIOLATIONS, ZONE_POINT_FIELDS, ZONE_RULES, ZONE_VIOLATIONS
 from engine.violations.overloading import DEFAULT_MAX_RIDERS
@@ -175,7 +176,7 @@ def _apply_realesrgan(image: np.ndarray) -> np.ndarray:
         h, w = image.shape[:2]
         return cv2.resize(image, (w * 4, h * 4), interpolation=cv2.INTER_LANCZOS4)
 
-def _extract_plate_text(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "lanczos") -> tuple[str, str, np.ndarray, np.ndarray, float]:
+def _ocr_plate_image(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "none") -> tuple[str, str, np.ndarray, np.ndarray, float]:
     """
     Run EasyOCR or PaddleOCR on a plate crop.
     Returns (raw_text, corrected_text, raw_crop, enhanced_crop).
@@ -269,6 +270,39 @@ def _extract_plate_text(plate_crop: np.ndarray, plate_format: str = "raw", ocr_e
         print(f"OCR Error: {e}")
         
     return "unidentified", "unidentified", raw_crop, sr_crop, 0.0
+
+
+def _enlarge_for_ocr(image: np.ndarray) -> np.ndarray:
+    """A plain enlargement (no enhancement model) for a plate that is only a few pixels tall, so the OCR can read the "as seen" crop at all."""
+    h, w = image.shape[:2]
+    if h == 0 or w == 0 or h >= 48:
+        return image
+    k = max(2, int(round(64 / h)))
+    return cv2.resize(image, (w * k, h * k), interpolation=cv2.INTER_CUBIC)
+
+
+def _extract_plate_reads(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "lanczos") -> dict:
+    """
+    Read a plate crop TWICE: as it was seen (only enlarged, never enhanced) and enhanced (realesrgan = the GAN, lapsrn, lanczos).
+    Returns {"raw_crop", "enhanced_crop", "reads": [{"source": "raw" | "enhanced", "raw", "cleaned", "confidence"}, ...]}.
+    With enhancement "none" there is nothing to compare: one read, "raw". engine/plate_vote.py grades the reads.
+    """
+    raw_crop = plate_crop.copy()
+    seen = _ocr_plate_image(_enlarge_for_ocr(raw_crop), plate_format, ocr_engine, "none")
+    reads = [{"source": "raw", "raw": seen[0], "cleaned": seen[1], "confidence": float(seen[4])}]
+    enhanced_crop = raw_crop
+    if enhancement not in ("none", "", None):
+        enhanced = _ocr_plate_image(raw_crop, plate_format, ocr_engine, enhancement)
+        enhanced_crop = enhanced[3]
+        reads.append({"source": "enhanced", "raw": enhanced[0], "cleaned": enhanced[1], "confidence": float(enhanced[4])})
+    return {"raw_crop": raw_crop, "enhanced_crop": enhanced_crop, "reads": reads}
+
+
+def _extract_plate_text(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "lanczos"):
+    """The best of the two reads of _extract_plate_reads, as (raw_text, cleaned_text, raw_crop, enhanced_crop, confidence)."""
+    got = _extract_plate_reads(plate_crop, plate_format, ocr_engine, enhancement)
+    top = plate_vote.best_read(got["reads"], plate_format)
+    return top["raw"], top["cleaned"], got["raw_crop"], got["enhanced_crop"], top["confidence"]
 
 
 # ─── Pipeline ─────────────────────────────────────────────────────────────────
@@ -499,6 +533,16 @@ class DecoupledPipeline:
                 violation.draw_zone(self, frame, i, zone)
         return frame
 
+    @staticmethod
+    def _crossing_vehicle_changed(ledger) -> bool:
+        """True for a ledger flagged ONLY for Crossing a solid line whose tracker number has gone to another vehicle since (a jump or a long
+        silence in its path, engine/track_continuity.py): the vehicle that crossed is gone from it, so the box that now carries its number
+        must not be called a violator and gets no evidence photo. The ticket keeps the photos taken while it still was the vehicle."""
+        if ledger.violations != {"crossing_solid_line"} or ledger.pending or not ledger.cross_points:
+            return False
+        run = last_run(list(ledger.path))
+        return bool(run) and run[0][0] > ledger.cross_points[-1][0]
+
     def _capture_evidence_frame(self, frame: np.ndarray, det, track_id: int, detections=()) -> None:
         """
         Save one proof-timeline frame for a flagged track.
@@ -534,7 +578,9 @@ class DecoupledPipeline:
         # Burn the vehicle bounding box
         annotated = yolo.draw_detections(base_frame, [det])
         marks.draw_marks(annotated, ledger, det.bbox)
-        
+        if getattr(self, "show_paths", False) and "crossing_solid_line" in ledger.violations:
+            marks.draw_path(annotated, ledger)       # the Live Monitor shows how the vehicle drove across the line
+
         path = YoloInference.save_snapshot(annotated, EVIDENCE_DIR)
 
         # Clean vehicle crop (taken from the raw frame, no drawn boxes/zones) for ReID training data
@@ -780,7 +826,7 @@ class DecoupledPipeline:
             if tid != -1:
                 # Sync violator state from ledger to ensure it persists across frames
                 ledger = self.ledger_manager.ledgers.get(tid)
-                if ledger and (ledger.violations or ledger.pending):
+                if ledger and (ledger.violations or ledger.pending) and not self._crossing_vehicle_changed(ledger):
                     det.is_violator = True
                     # Unified evidence: all concurrent violations on the box label; "?" = decided when it leaves
                     det.violation_type = "+".join(sorted(ledger.violations) + [f"{v}?" for v in sorted(ledger.pending)])

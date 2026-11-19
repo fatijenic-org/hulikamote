@@ -472,7 +472,7 @@ async def live_perf(window: float = 2.5):
             pass
     return {**TIMER.snapshot(), "overlap": stream.PIPELINE_OVERLAP, "infer_every": stream.INFER_EVERY_N_FRAMES + 1, "window_s": window,
             "spans": TIMER.spans(window), "step_info": STEP_INFO, "lanes": [{"id": i, "label": label} for i, label in LANES],
-            "system": STATS.snapshot(), "models": models}
+            "system": STATS.snapshot(), "models": models, "playout": stream.playout_status()}
 
 
 @router.get("/live/setup")

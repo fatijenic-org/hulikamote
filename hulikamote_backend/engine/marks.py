@@ -168,6 +168,73 @@ def draw_marks(frame: np.ndarray, ledger, vehicle: list) -> np.ndarray:
     return frame
 
 
+PATH_SECONDS = 8.0
+PATH_LIGHT = (255, 240, 140)     # a light line (BGR: pale cyan) that shows on dark and bright roads
+PATH_RING = (255, 255, 255)      # the ring where the path cut the line
+
+
+def _smooth(points: list) -> list:
+    """Each point is the average of its neighbours (2 each side; fewer near the ends, so the first and the last point stay where they are).
+    The box of a detector jitters a few pixels from picture to picture: the trail should look like the way a vehicle drives."""
+    out = []
+    for i in range(len(points)):
+        half = min(2, i, len(points) - 1 - i)
+        window = points[i - half:i + half + 1]
+        out.append((sum(p[0] for p in window) / len(window), sum(p[1] for p in window) / len(window)))
+    return out
+
+
+def draw_path(frame: np.ndarray, ledger, seconds: float = PATH_SECONDS) -> np.ndarray:
+    """The way the vehicle drove, as a light line from where it was `seconds` ago to where it is now (its ground point, in frame pixels),
+    in place. Only the part that is ONE vehicle is drawn: the ledger of a tracker number can hold another vehicle before a jump or a long
+    silence (engine/track_continuity.py), and the line must never run from one vehicle to another. It is smoothed, fades in toward the
+    vehicle, has a dot at the start and a bigger one at the vehicle's ground point, and a ring where it cut a solid line."""
+    from engine.track_continuity import last_run
+    run = last_run(list(getattr(ledger, "path", ()) or ()))
+    if len(run) < 2:
+        return frame
+    now = run[-1][0]
+    run = [p for p in run if now - p[0] <= seconds]
+    if len(run) < 2:
+        return frame
+    points = _smooth([(p[1], p[2]) for p in run])
+    points[-1] = (run[-1][1], run[-1][2])                         # the end is the vehicle's own ground point
+    rings = [(x, y) for t, x, y in getattr(ledger, "cross_points", ()) if run[0][0] <= t <= now]
+    thick = max(3, frame.shape[0] // 240)
+    pad = 6 * thick + 4
+    fh, fw = frame.shape[:2]
+    xs = [p[0] for p in points] + [r[0] for r in rings]
+    ys = [p[1] for p in points] + [r[1] for r in rings]
+    x0, x1 = max(0, int(min(xs)) - pad), min(fw, int(max(xs)) + pad + 1)      # work on the part of the picture the trail is in
+    y0, y1 = max(0, int(min(ys)) - pad), min(fh, int(max(ys)) + pad + 1)
+    if x1 <= x0 or y1 <= y0:
+        return frame
+    roi = frame[y0:y1, x0:x1]
+    layer = np.zeros_like(roi)
+    mask = np.zeros(roi.shape[:2], np.uint8)
+
+    def at(p):
+        return int(round(p[0])) - x0, int(round(p[1])) - y0
+
+    n = len(points)
+    for i in range(1, n):
+        fade = 0.35 + 0.65 * i / n                                # older = fainter
+        cv2.line(layer, at(points[i - 1]), at(points[i]), tuple(int(c * fade) for c in PATH_LIGHT), thick, cv2.LINE_AA)
+        cv2.line(mask, at(points[i - 1]), at(points[i]), 255, thick + 2, cv2.LINE_AA)
+    cv2.circle(layer, at(points[0]), thick + 1, PATH_LIGHT, -1, cv2.LINE_AA)
+    cv2.circle(layer, at(points[-1]), thick + 3, PATH_LIGHT, -1, cv2.LINE_AA)
+    cv2.circle(mask, at(points[0]), thick + 3, 255, -1, cv2.LINE_AA)
+    cv2.circle(mask, at(points[-1]), thick + 5, 255, -1, cv2.LINE_AA)
+    for r in rings:
+        cv2.circle(mask, at(r), 4 * thick + 2, 255, thick + 3, cv2.LINE_AA)
+        cv2.circle(layer, at(r), 4 * thick, PATH_RING, max(1, thick - 1), cv2.LINE_AA)
+    shade = cv2.GaussianBlur(mask, (0, 0), 1.5)[..., None].astype(np.float32) / 255.0   # a soft dark edge under the line, so it reads on a white road
+    roi[:] = np.clip(roi.astype(np.float32) * (1 - 0.45 * shade), 0, 255).astype(np.uint8)
+    painted = layer.any(axis=2)
+    roi[painted] = layer[painted]
+    return frame
+
+
 def draw_boxes(image: np.ndarray, items: list, note: str | None = None) -> np.ndarray:
     """Draw (box, label, colour) items, boxes in the image's OWN pixels, on a small crop in place (the close-ups kept
     as extra evidence). An optional note goes along the top. Returns the image."""
