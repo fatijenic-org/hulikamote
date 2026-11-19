@@ -1,3 +1,5 @@
+import '../../../forensic/presentation/widgets/replay_boxes.dart';
+
 /// A box that shows WHY a vehicle was flagged (the bare head, the phone, each rider...), in frame pixels [x, y, w, h].
 class DetectionMark {
   final List<int> bbox;
@@ -153,6 +155,7 @@ class VideoFrame {
   final Map<String, dynamic>? road; // what the road learner is doing (state, message, progress...)
   final List<RoadZone> roadZones; // the learned zones in use, for the overlay
   final FlowInfo? flow; // the learned traffic flow (arrows) and the demo reversal; null when no rule uses the flow
+  final List<BoxSpec>? boxes; // the boxes as the Forensic Analyzer draws them; null from an older backend (then [detections] are drawn)
 
   const VideoFrame({
     required this.type,
@@ -167,6 +170,7 @@ class VideoFrame {
     this.road,
     this.roadZones = const [],
     this.flow,
+    this.boxes,
   });
 
   factory VideoFrame.fromJson(Map<String, dynamic> json) => VideoFrame(
@@ -187,5 +191,8 @@ class VideoFrame {
         if (z is Map) RoadZone.fromJson(Map<String, dynamic>.from(z)),
     ],
     flow: json['flow'] is Map ? FlowInfo.fromJson(Map<String, dynamic>.from(json['flow'] as Map)) : null,
+    boxes: json['boxes'] is List
+        ? [for (final b in (json['boxes'] as List)) if (b is Map) BoxSpec.fromJson(Map<String, dynamic>.from(b))]
+        : null,
   );
 }

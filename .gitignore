@@ -105,3 +105,4 @@ benchmarks/_staging/
 
 # Car-matcher checkpoints of experiment / candidate runs (46 MB each); the deployed one lives in hulikamote_backend/engine/deep_sort/deep/checkpoint/
 training_lab/runs/reid/**/*.t7
+hulikamote_backend/road_presets.json

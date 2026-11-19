@@ -96,14 +96,29 @@ async def list_violations(
     user_id: str | None = Query(None, description="Filter by user ID"),
     status: str | None = Query(None, description="Filter by status (pending, approved, rejected)"),
     track_id: int | None = Query(None, description="Filter by tracker-assigned vehicle ID"),
+    since: str | None = Query(None, description="Only tickets made at or after this time (ISO 8601). A track number starts again from 1 "
+                                                 "at every live run: with track_id, send the time the vehicle was first seen."),
+    source: str | None = Query(None, description="live or forensic"),
 ):
+    from datetime import datetime, timezone
+    from fastapi import HTTPException
     from store import get_violations, update_violation_user, get_user_by_license
     import json
     import os
     import cv2
     import asyncio
     
-    results = await get_violations(page, size, user_id, status, track_id)
+    since_utc = None
+    if since:
+        try:
+            moment = datetime.fromisoformat(since.strip().replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="since must be an ISO 8601 time")
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        since_utc = moment.astimezone(timezone.utc).isoformat()          # the same form the tickets are stored in
+
+    results = await get_violations(page, size, user_id, status, track_id, since_utc, source)
 
     return results
     

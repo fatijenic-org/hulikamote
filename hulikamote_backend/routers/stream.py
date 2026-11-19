@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import random
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import store
 from engine.camera_source import CameraSource, mask_url, parse_source
 from engine.live_calibrator import LiveCalibrator, camera_key
+from engine.stage_timer import TIMER
 from store import add_violation, MOCK_CLASSES, MOCK_USERS
 from yolo_inference import get_inference
 
@@ -85,6 +87,17 @@ SNAPSHOTS_DIR = Path(__file__).parent.parent / "snapshots"
 # sequentially — the asyncio event loop stays unblocked between frames, but no
 # two frames ever race inside process_frame at the same time.
 _PIPELINE_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pipeline")
+
+# Stage A of the live pipeline (the detector and the trackers: DecoupledPipeline.detect_stage) has its own single thread, so it can
+# work on the NEXT picture while `_PIPELINE_EXECUTOR` (stage B: ledgers, learned flow, extra models, rules, and anything else that
+# changes them) still works on the one before. Each stage handles the pictures strictly in order.
+_DETECT_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="detect")
+# HK_PIPELINE_OVERLAP=0 goes back to one picture at a time (both stages in one thread, the loop waits for each).
+PIPELINE_OVERLAP = os.environ.get("HK_PIPELINE_OVERLAP", "1").strip() != "0"
+# Python hands its lock to another thread every 5 ms by default. The live loop has one thread for the dashboard and several for the
+# models, so every small step of the loop (shrink, send) waited several ms for the models' Python code (measured: send 17 ms, shrink 21 ms).
+# 1 ms keeps the loop quick. HK_SWITCH_INTERVAL=0.005 gives the old value back.
+sys.setswitchinterval(float(os.environ.get("HK_SWITCH_INTERVAL", "0.001")))
 
 # ── Module-level singleton ────────────────────────────────────────────────────
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "camera_config.json"
@@ -214,6 +227,14 @@ PICTURE_MAX_WIDTH = 960
 PICTURE_JPEG_QUALITY = 72
 
 
+def _picture_b64_timed(frame) -> str:
+    """_picture_b64 with its time kept (it runs in a worker thread, started as soon as the picture is read)."""
+    t0 = time.perf_counter()
+    out = _picture_b64(frame)
+    TIMER.add("encode", time.perf_counter() - t0)
+    return out
+
+
 def _picture_b64(frame) -> str:
     """The frame as a small JPEG (same shape, at most PICTURE_MAX_WIDTH wide) in base64, for the 'synced' mode."""
     h, w = frame.shape[:2]
@@ -307,6 +328,22 @@ def set_reference(jpeg: bytes, width: int, height: int, at: float | None = None)
     return {"ok": True, "version": version, "width": width, "height": height, "fps": fps}
 
 
+def start_clean() -> None:
+    """The Live Monitor was opened: forget the old road (saved and learned) and the learned traffic flow, so everything starts from nothing.
+    Skipped while a feed is running (it would pull the rules out from under it)."""
+    global _pipeline
+    if _active_source is not None:
+        return
+    road.reset_all()
+    _pipeline = None                      # a new pipeline is built when the feed starts: no learned flow comes along
+
+
+def clear_reference() -> None:
+    """Forget the setup picture (the Live Monitor starts empty)."""
+    global _reference
+    _reference = None
+
+
 def reference_at() -> float | None:
     """The time of the setup picture in its video file (seconds), or None."""
     return _reference.get("at") if _reference else None
@@ -336,14 +373,45 @@ def _setup_overlay(pipeline, w: int, h: int) -> list:
             if violation.key not in active:
                 continue
             for zone in pipeline.rois.get(violation.zone_key) or []:
+                if violation.key == "pedestrian_lane" and zone.get("overlay"):
+                    continue                                                  # a painted zebra is on the picture itself: no outline over it
                 polygon = pipeline._scale_polygon(zone.get("polygon") or [], w, h)
                 line = pipeline._scale_polygon(zone["stop_line"], w, h) if zone.get("stop_line") else []
                 if len(polygon) >= 3 or len(line) >= 2:
-                    items.append({"violation": violation.key, "polygon": polygon, "line": line, "best_effort": False, "drawn": True})
+                    item = {"violation": violation.key, "polygon": polygon, "line": line, "best_effort": False, "drawn": True}
+                    if zone.get("flow_path"):                       # Counterflow: the legal way, bent where the road bends
+                        item["arrow"] = pipeline._scale_polygon(zone["flow_path"], w, h)
+                    items.append(item)
     except Exception:
         items = []
+    try:
+        items.extend(_marking_arrows(pipeline, w, h, items))
+    except Exception:
+        pass                                                          # the arrows are only a help
     _setup_overlay_cache = (pipeline, w, h, items)
     return items
+
+
+def _marking_arrows(pipeline, w: int, h: int, shown: list) -> list:
+    """The roads and lanes of the setup's road markings that have a direction (Road step): the road and its arrow, bent as it was marked.
+    A road whose arrow a Counterflow zone already shows is not drawn twice."""
+    try:
+        markings = json.loads(CONFIG_PATH.read_text(encoding="utf-8")).get("road_markings") or []
+    except (OSError, ValueError):
+        return []
+
+    def same(a: list, b: list) -> bool:
+        return len(a) == len(b) and all(abs(p[0] - q[0]) <= 4 and abs(p[1] - q[1]) <= 4 for p, q in zip(a, b))
+    out = []
+    for m in markings:
+        if not isinstance(m, dict) or m.get("kind") not in ("road", "lane") or m.get("flow") not in ("in", "out"):
+            continue
+        arrow = pipeline._scale_polygon(m.get("arrow") or [], w, h)
+        polygon = pipeline._scale_polygon(m.get("polygon") or [], w, h)
+        if len(arrow) < 2 or len(polygon) < 3 or any(same(arrow, it.get("arrow") or []) for it in shown):
+            continue
+        out.append({"violation": "road", "polygon": polygon, "line": None, "best_effort": False, "hint": False, "flow": m["flow"], "arrow": arrow})
+    return out
 
 
 async def _real_loop(websocket: WebSocket):
@@ -376,140 +444,107 @@ async def _real_loop(websocket: WebSocket):
 
     frame_idx = 0
     last_yolo_results: list = []
-    annotated_high_res = None
 
     # track_id -> (violation_type, assigned_user) for mock mode
     flagged_tracks: dict = {}
 
-    try:
-        while True:
-            # If a new websocket has connected, OR the video source changed (new generation), this loop is obsolete.
-            if _current_ws_id != my_ws_id or my_gen != _stream_generation:
-                print(f"[Stream] Obsolete loop detected (ws_changed={_current_ws_id != my_ws_id}, gen_changed={my_gen != _stream_generation}). Shutting down.")
-                # Close the socket so the dashboard knows the source changed and reconnects.
-                try:
-                    await websocket.close()
-                except Exception:
-                    pass
-                break
+    loop = asyncio.get_event_loop()
+    print(f"[Stream] Pipeline overlap: {'on' if PIPELINE_OVERLAP else 'off (HK_PIPELINE_OVERLAP=0)'}")
+    # Overlap mode: the detector and the trackers (stage A, its own thread) work on the NEXT inference picture while the rules thread
+    # (stage B) and the sender finish the one before, so the loop does not wait for the models one picture after the other.
+    # `pending` = the newest inference picture that is not shown yet: {"fut": its stage A, "frames": the pictures that are shown with its
+    # boxes}. Boxes and pictures still go out together, as before; the picture is a little later (about one inference interval at most).
+    pending = None
+    next_due = None          # overlap mode, files: when the next picture is due (a steady pace that catches up after a slow one)
+    ahead = None             # overlap mode, files: the read of the next picture, started before this one is judged and sent
 
-            start_time = time.time()
-            # Live sources: the newest frame (older ones are dropped, so lag cannot build up).
-            # None = nothing arrived for a second: tell the dashboard the camera is offline and keep waiting.
-            item = await asyncio.get_event_loop().run_in_executor(None, source.read, 1.0)
-            if item is None:
-                if not source.live:
-                    break
-                await websocket.send_json({"type": "status", "camera": source.status()})
-                continue
-            frame = item.image
-            frame_time = item.captured_at if source.live else None   # live: when the camera delivered it
-            if start_time - _latest_picture_at >= 1.0:               # for "Set up violations": a copy, as the frame is worked on below
-                _latest_picture, _latest_picture_at = frame.copy(), start_time
+    def fetch():
+        """Read the next picture and shrink it: (item, small picture), or (None, None) when nothing came. Runs in a worker thread: for a
+        video file it works one picture ahead of the loop, so decoding (55 ms measured on a 4K file) and shrinking are off the loop's path."""
+        t0 = time.perf_counter()
+        got = source.read(1.0)
+        TIMER.add("decode", time.perf_counter() - t0)
+        if got is None:
+            return None, None
+        t0 = time.perf_counter()
+        big = got.image
+        # The road learner gets the camera's own picture, before the cap below: thin paint and pavement tiles are told
+        # apart far better at 1080p than at 720p (at 720p a tiled pavement strip can pass for a crosswalk).
+        # Cheap: most calls only check the clock; the reading runs in its own thread.
+        if not source.live:
+            road.feed(big, time.time())
+        # ── Resolution cap ─────────────────────────────────────────────
+        # Downscale tall frames (e.g. 1080p → 720p) before any processing.
+        # YOLO always rescales to 640px internally, so detection accuracy is
+        # unchanged. All other operations (frame.copy, cv2 drawing, JPEG
+        # encode) become significantly faster on the smaller array.
+        fh, fw = big.shape[:2]
+        small = big
+        if fh > MAX_PROCESSING_HEIGHT:
+            scale_down = MAX_PROCESSING_HEIGHT / fh
+            small = cv2.resize(big, (int(fw * scale_down), MAX_PROCESSING_HEIGHT), interpolation=cv2.INTER_LINEAR)
+        TIMER.add("prep", time.perf_counter() - t0)
+        return got, small
 
-            # The road learner gets the camera's own picture, before the cap below: thin paint and pavement tiles are told
-            # apart far better at 1080p than at 720p (at 720p a tiled pavement strip can pass for a crosswalk).
-            # Cheap: most calls only check the clock; the reading runs in its own thread.
-            if not source.live:
-                road.feed(frame, time.time())
+    async def save_tickets(tickets: list) -> None:
+        """Real pipeline tickets -> DB."""
+        for ticket in tickets:
+            # We save the ticket immediately with 'scanning'.
+            # This guarantees the live video NEVER freezes.
+            evidence_paths = ticket.get("evidence_paths") or []
+            snap_path = evidence_paths[0] if evidence_paths else ""
 
-            # ── Resolution cap ─────────────────────────────────────────────
-            # Downscale tall frames (e.g. 1080p → 720p) before any processing.
-            # YOLO always rescales to 640px internally, so detection accuracy is
-            # unchanged. All other operations (frame.copy, cv2 drawing, JPEG
-            # encode) become significantly faster on the smaller array.
-            fh, fw = frame.shape[:2]
-            if fh > MAX_PROCESSING_HEIGHT:
-                scale_down = MAX_PROCESSING_HEIGHT / fh
-                frame = cv2.resize(
-                    frame,
-                    (int(fw * scale_down), MAX_PROCESSING_HEIGHT),
-                    interpolation=cv2.INTER_LINEAR,
-                )
+            v_record = await add_violation(
+                cls=", ".join(ticket["violations"]),
+                confidence=1.0,
+                user_id="scanning",
+                image_path=snap_path,
+                notify=False,
+                evidence_paths=evidence_paths,
+                track_id=ticket.get("track_id", -1),
+            )
 
-            _last_size = (frame.shape[1], frame.shape[0])          # the size the pipeline (and its flow cells) works in
+            # Automatically trigger background OCR so the user doesn't have to click
+            from routers.violations import run_plate_extraction
+            asyncio.create_task(run_plate_extraction(v_record["id"]))
 
-            if road.version != road_version:                       # learned, forgotten or the view changed: swap the zones
-                road_version = road.version
-                pipeline.set_learned_zones(road.active_zones())
+    async def mock_violations(frame) -> None:
+        """Mock-mode violations (testing only), made on the newest results."""
+        if not store.USE_MOCK:
+            return
+        for d in last_yolo_results:
+            if d.track_id in flagged_tracks:
+                viol_type, assigned_user = flagged_tracks[d.track_id]
+                d.is_violator = True
+                d.violation_type = viol_type
+                d.assigned_user_id = assigned_user["id"]
+                d.assigned_user_name = assigned_user["name"]
 
-            frame_idx += 1
-            run_inference = True if INFER_EVERY_N_FRAMES == 0 else (frame_idx % (INFER_EVERY_N_FRAMES + 1) == 0)
+            elif random.random() < 0.03:
+                if d.cls in ["car", "motorcycle", "bus", "truck"]:
+                    viol_type = random.choice(MOCK_CLASSES)
+                    assigned_user = random.choice(MOCK_USERS)
+                    flagged_tracks[d.track_id] = (viol_type, assigned_user)
+                    d.is_violator = True
+                    d.violation_type = viol_type
 
-            t0 = time.time()
-            if run_inference:
-                # Run pipeline in the dedicated single-threaded executor.
-                # The IoU tracker and ONNX session are NOT thread-safe — using
-                # max_workers=1 prevents concurrent frame processing races.
-                annotated_high_res, last_yolo_results = (
-                    await asyncio.get_event_loop().run_in_executor(
-                        _PIPELINE_EXECUTOR, pipeline.process_frame, frame, frame_idx, frame_time
-                    )
-                )
+                    snap_frame = engine.draw_detections(frame.copy(), [d])
+                    snap_path = engine.save_snapshot(snap_frame, SNAPSHOTS_DIR)
 
-                # ── Drain real pipeline tickets → DB ─────────────────────
-                for ticket in pipeline.ledger_manager.drain_tickets():
-                    # We save the ticket immediately with 'scanning'.
-                    # This guarantees the live video NEVER freezes.
-                    evidence_paths = ticket.get("evidence_paths") or []
-                    snap_path = evidence_paths[0] if evidence_paths else ""
-
-                    v_record = await add_violation(
-                        cls=", ".join(ticket["violations"]),
-                        confidence=1.0,
-                        user_id="scanning",
+                    await add_violation(
+                        d.violation_type,
+                        d.confidence,
+                        user_id=assigned_user["id"],
                         image_path=snap_path,
-                        notify=False,
-                        evidence_paths=evidence_paths,
-                        track_id=ticket.get("track_id", -1),
                     )
-                    
-                    # Automatically trigger background OCR so the user doesn't have to click
-                    from routers.violations import run_plate_extraction
-                    asyncio.create_task(run_plate_extraction(v_record["id"]))
+                    d.assigned_user_id = assigned_user["id"]
+                    d.assigned_user_name = assigned_user["name"]
 
-                # ── Mock-mode violations (testing only) ──────────────────
-                if store.USE_MOCK:
-                    for d in last_yolo_results:
-                        if d.track_id in flagged_tracks:
-                            viol_type, assigned_user = flagged_tracks[d.track_id]
-                            d.is_violator = True
-                            d.violation_type = viol_type
-                            d.assigned_user_id = assigned_user["id"]
-                            d.assigned_user_name = assigned_user["name"]
-
-                        elif random.random() < 0.03:
-                            if d.cls in ["car", "motorcycle", "bus", "truck"]:
-                                viol_type = random.choice(MOCK_CLASSES)
-                                assigned_user = random.choice(MOCK_USERS)
-                                flagged_tracks[d.track_id] = (viol_type, assigned_user)
-                                d.is_violator = True
-                                d.violation_type = viol_type
-
-                                snap_frame = engine.draw_detections(frame.copy(), [d])
-                                snap_path = engine.save_snapshot(snap_frame, SNAPSHOTS_DIR)
-
-                                await add_violation(
-                                    d.violation_type,
-                                    d.confidence,
-                                    user_id=assigned_user["id"],
-                                    image_path=snap_path,
-                                )
-                                d.assigned_user_id = assigned_user["id"]
-                                d.assigned_user_name = assigned_user["name"]
-            else:
-                # Fast path: JSON Overlay Architecture
-                # We no longer burn tracking boxes into the video in Python!
-                # We just pass the raw frame, and let Flutter draw the JSON coordinates on top.
-                annotated_high_res = frame
-            t1 = time.time()
-
-            # ── Frame rendering ───────────────────────────────────────────
-            if annotated_high_res is None:
-                annotated_high_res = frame
-
-            h, w = frame.shape[:2]
-
+    async def send(picture_frame, encoding=None) -> None:
+        """One picture and the newest boxes to the dashboard. `encoding` = the JPEG job that was started when the picture was read (or None). (JSON Overlay Architecture: the boxes are not burned into the picture;
+        Flutter draws the JSON coordinates on top.)"""
+        h, w = picture_frame.shape[:2]
+        with TIMER.time("overlay"):
             # Send ALL detections to Flutter so the frontend can draw the boxes dynamically
             display_results = [
                 {
@@ -530,24 +565,26 @@ async def _real_loop(websocket: WebSocket):
                 for d in last_yolo_results
             ]
 
-            broadcaster = _get_broadcaster()
-            t2 = time.time()
-            picture = None
-            if PICTURE_MODE == "relay":
-                # ── video relay: ffmpeg -> MediaMTX (the picture arrives later than the boxes) ──
+            try:                                                    # the Forensic Analyzer's own boxes (label, colours, plate, why-marks, stopwatch)
+                box_specs = pipeline.box_specs(last_yolo_results)
+            except Exception:
+                box_specs = None                                    # the dashboard then draws plain boxes from `detections`
+
+        broadcaster = _get_broadcaster()
+        picture = None
+        if PICTURE_MODE == "relay":
+            # ── video relay: ffmpeg -> MediaMTX (the picture arrives later than the boxes) ──
+            with TIMER.time("encode"):
                 if not broadcaster._started:
-                    h_fr, w_fr = annotated_high_res.shape[:2]
+                    h_fr, w_fr = picture_frame.shape[:2]
                     print(f"[Stream] Starting broadcaster with {w_fr}x{h_fr}")
                     broadcaster.start(width=w_fr, height=h_fr)
-                await asyncio.get_event_loop().run_in_executor(None, broadcaster.push, annotated_high_res)
-            else:
-                # ── synced: the picture rides in the same message as the boxes ──
-                picture = await asyncio.get_event_loop().run_in_executor(None, _picture_b64, annotated_high_res)
-            t3 = time.time()
-            
-            if frame_idx % 30 == 0:
-                print(f"[Profiler] AI: {(t1-t0)*1000:.1f}ms | FFmpeg Push: {(t3-t2)*1000:.1f}ms")
-            
+                await loop.run_in_executor(None, broadcaster.push, picture_frame)
+        else:
+            # ── synced: the picture rides in the same message as the boxes ──
+            picture = await (encoding if encoding is not None else loop.run_in_executor(None, _picture_b64_timed, picture_frame))
+
+        with TIMER.time("send"):
             await websocket.send_json({
                 "type": "frame",
                 "transport": "hls" if PICTURE_MODE == "relay" else "jpeg",
@@ -557,15 +594,112 @@ async def _real_loop(websocket: WebSocket):
                 "mock": store.USE_MOCK,
                 "frame_base64": picture,   # synced mode: the picture itself; relay mode: None
                 "detections": display_results,
+                "boxes": box_specs,                                 # same data the replay's boxes.json holds, per frame
                 "camera": source.status(),
                 "road": road.status(),                              # learning progress / what was learned / why it could not
                 "road_zones": _setup_overlay(pipeline, w, h) + pipeline.learned_overlay(w, h) + road.hint_overlay(w, h) + road.region_overlay(w, h),   # set-up zones + learned zones in use + line hints
                 "flow": _flow_message(pipeline, w, h),              # the learned traffic-flow arrows + whether the demo reversal is on (None: no rule uses the flow)
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             })
+        TIMER.mark("pictures")
+        line = TIMER.report_every(5.0)
+        if line:
+            print(line)
+
+    async def finish(group: dict) -> None:
+        """Overlap mode: the pending inference picture is detected: judge it (stage B), save its tickets, and show it and the
+        pictures that waited for its boxes."""
+        nonlocal last_yolo_results
+        job = await group["fut"]                                   # stage A: ready by now, or the loop waits for it
+        _picture, last_yolo_results = await loop.run_in_executor(_PIPELINE_EXECUTOR, pipeline.judge_stage, job)
+        await save_tickets(pipeline.ledger_manager.drain_tickets())   # stage B is idle now, so the ledgers are read safely here
+        await mock_violations(group["frames"][0][0])
+        for picture_frame, encoding in group["frames"]:
+            await send(picture_frame, encoding)
+
+    try:
+        while True:
+            # If a new websocket has connected, OR the video source changed (new generation), this loop is obsolete.
+            if _current_ws_id != my_ws_id or my_gen != _stream_generation:
+                print(f"[Stream] Obsolete loop detected (ws_changed={_current_ws_id != my_ws_id}, gen_changed={my_gen != _stream_generation}). Shutting down.")
+                # Close the socket so the dashboard knows the source changed and reconnects.
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+                break
+
+            start_time = time.time()
+            # Live sources: the newest frame (older ones are dropped, so lag cannot build up).
+            # None = nothing arrived for a second: tell the dashboard the camera is offline and keep waiting.
+            if ahead is None:
+                ahead = loop.run_in_executor(None, fetch)
+            with TIMER.time("wait"):
+                item, frame = await ahead
+            ahead = None
+            if item is None:
+                if not source.live:
+                    if pending is not None:                        # the file is over: its last pictures still go out
+                        await finish(pending)
+                        pending = None
+                    break
+                await websocket.send_json({"type": "status", "camera": source.status()})
+                continue
+            if PIPELINE_OVERLAP and not source.live:
+                ahead = loop.run_in_executor(None, fetch)          # the next picture is decoded while this one is judged and sent
+            frame_time = item.captured_at if source.live else None   # live: when the camera delivered it
+            if start_time - _latest_picture_at >= 1.0:               # for "Set up violations": a copy, as the frame is worked on below
+                _latest_picture, _latest_picture_at = item.image.copy(), start_time
+
+            _last_size = (frame.shape[1], frame.shape[0])          # the size the pipeline (and its flow cells) works in
+
+            if road.version != road_version:                       # learned, forgotten or the view changed: swap the zones
+                road_version = road.version
+                pipeline.set_learned_zones(road.active_zones())
+            # The JPEG starts now, in a worker thread, so it is ready (or nearly) when the picture is shown.
+            encoding = None if PICTURE_MODE == "relay" else loop.run_in_executor(None, _picture_b64_timed, frame)
+
+            frame_idx += 1
+            run_inference = True if INFER_EVERY_N_FRAMES == 0 else (frame_idx % (INFER_EVERY_N_FRAMES + 1) == 0)
+
+            if not PIPELINE_OVERLAP:
+                # One picture at a time, as before: both stages in one thread, the loop waits for them.
+                # (The IoU tracker and ONNX session are NOT thread-safe: max_workers=1 prevents concurrent frame processing races.)
+                if run_inference:
+                    _picture, last_yolo_results = await loop.run_in_executor(
+                        _PIPELINE_EXECUTOR, pipeline.process_frame, frame, frame_idx, frame_time
+                    )
+                    await save_tickets(pipeline.ledger_manager.drain_tickets())
+                    await mock_violations(frame)
+                await send(frame, encoding)
+            elif run_inference:
+                # Stage A of this picture starts now, in its own thread; meanwhile the picture before it is finished here.
+                fut = loop.run_in_executor(_DETECT_EXECUTOR, pipeline.detect_stage, frame, frame_idx, frame_time)
+                if pending is not None:
+                    await finish(pending)
+                pending = {"fut": fut, "frames": [(frame, encoding)]}
+            elif pending is None:
+                await send(frame, encoding)                        # no inference picture waits for its boxes: show it at once
+            else:
+                pending["frames"].append((frame, encoding))        # shown with the boxes of the inference picture before it
+                if pending["fut"].done():                          # stage A is ready: do not hold the pictures any longer
+                    await finish(pending)
+                    pending = None
 
             if source.live:
                 await asyncio.sleep(0)   # the camera sets the pace; the next read waits for its next frame
+            elif PIPELINE_OVERLAP:
+                # Files: a steady pace. A slow picture is made up for by the quick ones after it (the pictures of one group are
+                # read quickly and shown together), so the video keeps its real speed when the models are fast enough on average.
+                period = 1.0 / float(source_fps)
+                next_due = (start_time if next_due is None else next_due) + period
+                wait = next_due - time.time()
+                if wait > 0:
+                    await asyncio.sleep(wait)
+                else:
+                    if wait < -6 * period:
+                        next_due = time.time()                     # far behind: do not try to catch up
+                    await asyncio.sleep(0)
             else:
                 elapsed = time.time() - start_time
                 await asyncio.sleep(max(0.001, 1.0 / float(source_fps) - elapsed))
@@ -577,6 +711,10 @@ async def _real_loop(websocket: WebSocket):
         import traceback
         traceback.print_exc()
     finally:
+        if pending is not None:
+            pending["fut"].cancel()
+        if ahead is not None:
+            ahead.cancel()
         source.stop()
         if _active_source is source:
             _active_source = None

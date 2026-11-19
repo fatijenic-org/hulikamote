@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hulikamote_dashboard/core/utils/app_toast.dart';
 import 'package:hulikamote_dashboard/core/shell/officer_mode.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 import 'package:hulikamote_dashboard/core/utils/external_apps.dart';
+
+import 'backend_status_tile.dart';
 
 import '../../features/forensic/presentation/widgets/fx.dart';
 
@@ -157,7 +160,38 @@ class _AppShellState extends State<AppShell> {
                   ],
                 ),
                 const SizedBox(height: Fx.s8),
+                BackendStatusTile(expanded: _isExpanded),   // stays here while the menu below scrolls
                 Expanded(child: ListView(children: _menu())),
+                const Divider(height: 1),
+                // Light look switch
+                ValueListenableBuilder<bool>(
+                  valueListenable: LightMode.on,
+                  builder: (context, light, _) => Tooltip(
+                    message: 'Light look: white screens instead of dark',
+                    child: InkWell(
+                      onTap: () => LightMode.set(!light),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: Fx.s8, horizontal: Fx.s12),
+                        child: Row(
+                          mainAxisAlignment: _isExpanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+                          children: [
+                            if (_isExpanded) const SizedBox(width: Fx.s12),
+                            Icon(light ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                                color: light ? Fx.accent : Fx.muted(context)),
+                            if (_isExpanded) ...[
+                              const SizedBox(width: Fx.s16),
+                              Expanded(
+                                child: Text('Light look',
+                                    style: TextStyle(color: light ? Fx.accent : Fx.muted(context), fontWeight: FontWeight.w500)),
+                              ),
+                              Switch(value: light, onChanged: LightMode.set),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 const Divider(height: 1),
                 // Officer view switch
                 Tooltip(

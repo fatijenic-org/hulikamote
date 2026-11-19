@@ -12,6 +12,7 @@ import '../../domain/forensic_models.dart';
 import '../../domain/review_controller.dart';
 import 'fx.dart';
 import 'replay_boxes.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Builds the result-video panel. The default uses media_kit; tests pass a stand-in
 /// because media_kit needs native libraries.
@@ -167,7 +168,7 @@ class _ForensicVideoPanelState extends State<ForensicVideoPanel> with SingleTick
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Video(controller: _video, controls: NoVideoControls),
+                    KeepColors(child: Video(controller: _video, controls: NoVideoControls)),
                     if (_boxes != null)
                       IgnorePointer(
                         child: CustomPaint(painter: ReplayBoxesPainter(boxes: _boxes!, seconds: _seconds, zoom: _zoom)),

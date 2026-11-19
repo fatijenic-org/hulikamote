@@ -12,6 +12,7 @@ Handles one frame at a time:
 import json
 import logging
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -22,11 +23,22 @@ from engine.flow_field import FlowField
 from engine.video_clock import OffsetClock, WallClock, start_from_text
 from engine.ledger import ActiveLedgerManager
 from engine.registry import ModelRegistry
+from engine.stage_timer import TIMER
 from engine.specialist_jobs import JOBS
 from engine.violations import ALL as ALL_VIOLATIONS, ZONE_POINT_FIELDS, ZONE_RULES, ZONE_VIOLATIONS
 from engine.violations.overloading import DEFAULT_MAX_RIDERS
 
 log = logging.getLogger(__name__)
+
+
+@dataclass
+class FrameJob:
+    """One picture between stage A (DecoupledPipeline.detect_stage) and stage B (judge_stage)."""
+    frame: np.ndarray
+    frame_count: int
+    timestamp: float | None
+    scaled_rois: dict
+    detections: list
 
 # Interval at which specialist models run (every N frames of inference).
 # Lower value = more frequent plate/helmet checks per vehicle.
@@ -409,7 +421,7 @@ class DecoupledPipeline:
                     zone = violation.whole_frame_zone(settings.get(violation.key) or {}, whole, (frame_w, frame_h), getattr(self, "flow", None))
                     scaled[violation.zone_key] = [zone] if zone else []       # None: nothing to judge yet (the junction is not found)
         for violation in self._learned_in_use():
-            scaled[violation.zone_key] = [self._scale_learned(z, frame_w, frame_h) for z in self.learned_rois[violation.zone_key]]
+            scaled[violation.zone_key] = [self._scale_learned(z, frame_w, frame_h) for z in (self.learned_rois.get(violation.zone_key) or [])]
         return scaled
 
     # ── zones learned from the live picture ──────────────────────────────────
@@ -719,24 +731,49 @@ class DecoupledPipeline:
     # ── Frame processing ─────────────────────────────────────────────────────
 
     def process_frame(self, frame: np.ndarray, frame_count: int, timestamp: float | None = None) -> tuple[np.ndarray, list]:
-        from yolo_inference import get_inference
-        yolo = get_inference()
+        """One picture, both stages one after the other (the Forensic Analyzer, the flow pre-scan and the tests use this)."""
+        return self.judge_stage(self.detect_stage(frame, frame_count, timestamp))
 
+    def detect_stage(self, frame: np.ndarray, frame_count: int, timestamp: float | None = None) -> "FrameJob":
+        """
+        Stage A of a picture: find the vehicles and people and give them track ids (the detector and the trackers).
+        It touches no ledger, so the live feed can run it on the next picture while stage B (judge_stage) still works on the one
+        before. Each stage must only ever run in one thread, and the pictures in order.
+        """
+        from yolo_inference import get_inference
+        t0 = time.perf_counter()
         fh, fw = frame.shape[:2]
         scaled_rois = self._get_scaled_rois(fw, fh)
+        found = get_inference().infer(frame)
+        t1 = time.perf_counter()
+        detections = self._filter_to_roi(found, scaled_rois)
+        TIMER.add("roi", time.perf_counter() - t1)
+        TIMER.add("A", time.perf_counter() - t0)
+        return FrameJob(frame, frame_count, timestamp, scaled_rois, detections)
 
-        detections = self._filter_to_roi(yolo.infer(frame), scaled_rois)
-        self.ledger_manager.update(detections, timestamp, frame)
+    def judge_stage(self, job: "FrameJob") -> tuple[np.ndarray, list]:
+        """
+        Stage B of a picture: the vehicle history (ledgers) and the learned flow, the extra models, the violation rules, the evidence
+        photos and the plate text. Everything that reads or writes a ledger is here.
+        """
+        t0 = time.perf_counter()
+        frame, frame_count, timestamp, scaled_rois, detections = job.frame, job.frame_count, job.timestamp, job.scaled_rois, job.detections
+        fh, fw = frame.shape[:2]
+        with TIMER.time("history"):
+            self.ledger_manager.update(detections, timestamp, frame)
 
-        if self.learns_flow:
-            self.flow.observe_frame(self.ledger_manager, detections, fw, fh)
-            if self.learn_only:                  # pre-scan: learn the flow, judge nothing, keep no evidence
-                return frame, detections
+            if self.learns_flow:
+                self.flow.observe_frame(self.ledger_manager, detections, fw, fh)
+                if self.learn_only:                  # pre-scan: learn the flow, judge nothing, keep no evidence
+                    return frame, detections
 
         active = self.registry.active_violations
-        self._run_specialists(frame, frame_count, detections, active)
-        self._judge(frame, detections, scaled_rois, active, timestamp if timestamp is not None else time.time())
+        with TIMER.time("models"):
+            self._run_specialists(frame, frame_count, detections, active)
+        with TIMER.time("rules"):
+            self._judge(frame, detections, scaled_rois, active, timestamp if timestamp is not None else time.time())
 
+        t_evidence = time.perf_counter()
         # ── Capture evidence for any flagged violators ───────────────────────
         for det in detections:
             tid = getattr(det, "track_id", -1)
@@ -764,8 +801,12 @@ class DecoupledPipeline:
             det.plate_bbox = ledger.plate_bbox
             det.marks = [{"bbox": b, "label": label} for b, label, _ in marks.current_marks(ledger, det.bbox) if b]
 
+        TIMER.add("evidence", time.perf_counter() - t_evidence)
+        TIMER.add("B", time.perf_counter() - t0)
+        TIMER.mark("judged")
         # The clean frame goes back to the streamer: boxes and zones are drawn from the JSON overlay by the dashboard.
         return frame, detections
+
 
     def reset_tracking(self) -> None:
         """Forget every tracked vehicle and restart the tracker, but keep the learned flow (after a pre-scan)."""

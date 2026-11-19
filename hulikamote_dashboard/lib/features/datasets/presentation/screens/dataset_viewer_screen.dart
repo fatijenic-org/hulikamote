@@ -8,6 +8,7 @@ import 'package:hulikamote_dashboard/core/utils/external_apps.dart';
 import 'package:hulikamote_dashboard/features/datasets/data/dataset_viewer_api.dart';
 import 'package:hulikamote_dashboard/features/datasets/presentation/widgets/dataset_reid_manager.dart';
 import 'package:hulikamote_dashboard/features/datasets/presentation/widgets/dataset_relabel_tab.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 typedef DatasetViewerConnect = Future<DatasetViewerApi> Function();
 
@@ -1400,7 +1401,7 @@ class _PictureTile extends StatelessWidget {
                   Center(
                     child: AspectRatio(
                       aspectRatio: ratio.toDouble(),
-                      child: Image.network(
+                      child: KeepColors(child: Image.network(
                         api
                             .imageUri(dataset, split, name, thumbnail: true)
                             .toString(),
@@ -1412,7 +1413,7 @@ class _PictureTile extends StatelessWidget {
                             child: Icon(Icons.broken_image_outlined),
                           ),
                         ),
-                      ),
+                      )),
                     ),
                   ),
                   if (showBoxes && boxes.isNotEmpty)
@@ -1762,7 +1763,7 @@ class _ItemDialogState extends State<_ItemDialog> {
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                Image.network(
+                                KeepColors(child: Image.network(
                                   widget.api
                                       .imageUri(
                                         widget.dataset,
@@ -1772,7 +1773,7 @@ class _ItemDialogState extends State<_ItemDialog> {
                                       .toString(),
                                   headers: widget.api.endpoint.headers,
                                   fit: BoxFit.fill,
-                                ),
+                                )),
                                 CustomPaint(
                                   painter: _BoxesPainter(
                                     boxRows,
@@ -2630,7 +2631,7 @@ class _CleanTabState extends State<_CleanTab> {
                     leading: SizedBox(
                       width: 72,
                       height: 52,
-                      child: Image.network(
+                      child: KeepColors(child: Image.network(
                         widget.api
                             .imageUri(
                               widget.dataset,
@@ -2643,7 +2644,7 @@ class _CleanTabState extends State<_CleanTab> {
                         fit: BoxFit.contain,
                         errorBuilder: (_, _, _) =>
                             const Icon(Icons.image_not_supported_outlined),
-                      ),
+                      )),
                     ),
                     title: Text('${sample['name']}'),
                     subtitle: Text('${sample['split']}'),
@@ -2876,7 +2877,7 @@ class _QuarantineTabState extends State<_QuarantineTab> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image.network(
+                              KeepColors(child: Image.network(
                                 widget.api
                                     .quarantineImageUri(
                                       widget.dataset,
@@ -2890,7 +2891,7 @@ class _QuarantineTabState extends State<_QuarantineTab> {
                                 errorBuilder: (_, _, _) => const Center(
                                   child: Icon(Icons.broken_image_outlined),
                                 ),
-                              ),
+                              )),
                               Positioned(
                                 left: 8,
                                 right: 8,

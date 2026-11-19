@@ -7,6 +7,10 @@ import 'road_markings.dart';
 /// The violations picked on a live picture, and the road markings drawn on it. A live camera has no recording to search, so a solid
 /// line cannot be "found in the video when the analysis starts": it must be drawn (or marked).
 class LiveSetupDraft extends AnalysisDraft {
+  /// A live picture, not a video file: the time is this computer's clock, and nothing can be read from a video path.
+  @override
+  bool get isLive => true;
+
   @override
   bool findsLinesItself(String key) => false;
 

@@ -12,6 +12,7 @@ import '../../domain/models/violation_config.dart';
 import '../widgets/video_feed_widget.dart';
 import '../widgets/alert_list_widget.dart';
 import '../widgets/violation_wizard_dialog.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 class OfflineVideoScreen extends StatefulWidget {
   const OfflineVideoScreen({super.key});
@@ -610,7 +611,7 @@ class _OfflineVideoScreenState extends State<OfflineVideoScreen> {
                           )
                         else if (_frameImageUrl.isNotEmpty)
                           Positioned.fill(
-                            child: Image.network(
+                            child: KeepColors(child: Image.network(
                               _frameImageUrl,
                               fit: BoxFit.fill,
                               errorBuilder: (context, error, stackTrace) =>
@@ -618,7 +619,7 @@ class _OfflineVideoScreenState extends State<OfflineVideoScreen> {
                                     'Error loading frame',
                                     style: TextStyle(color: Colors.red),
                                   ),
-                            ),
+                            )),
                           ),
                         // Keep every configured violation's ROI/arrow overlaid on the feed.
                         if (_frameImageUrl.isNotEmpty)

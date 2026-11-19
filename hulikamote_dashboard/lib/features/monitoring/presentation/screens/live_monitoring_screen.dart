@@ -13,9 +13,9 @@ import '../../data/video_upload.dart';
 import '../widgets/camera_input_dialog.dart';
 import '../widgets/camera_status_chip.dart';
 import '../widgets/flow_controls.dart';
+import '../widgets/performance_dialog.dart';
 import '../widgets/phone_connect_dialog.dart';
 import '../widgets/road_detect_view.dart';
-import '../widgets/road_learning_chip.dart';
 import '../widgets/upload_status_card.dart';
 import '../widgets/video_feed_widget.dart';
 import '../widgets/alert_list_widget.dart';
@@ -66,7 +66,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   /// The learned traffic-flow arrows on the live picture can be switched off; the choice is kept.
   static const _flowKey = 'live_show_flow_arrows';
+  static const _roadArrowsKey = 'live_show_road_arrows';
+  static const _roadZonesKey = 'live_show_road_zones';
   bool _showFlowArrows = true;
+  bool _showRoadArrows = true;
+  bool _showRoadZones = true;
   bool _flowBusy = false;        // a flow action (reverse / learn again) is on its way
 
   int _reconnectTries = 0;
@@ -99,14 +103,36 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     // so it doesn't run in the background and spam the database.
     _loadSource();
     _loadBoxDelay();
-    _loadSetup();
+    _setupEmptied = _emptySetup();
     _loadFlowChoice();
+  }
+
+  /// The Live Monitor starts empty each time it is opened: the setup of the last visit is cleared, then the (empty) count is read.
+  late final Future<void> _setupEmptied;
+
+  /// Clears the setup of the last visit on the backend, then reads the (empty) count. False when the backend could not do it.
+  Future<bool> _emptySetup() async {
+    var cleared = true;
+    try {
+      await _cameraApi.resetLiveSetup();
+    } catch (_) {
+      cleared = false;                                   // an older backend has no reset (restart it), or it did not answer
+    }
+    await _loadSetup();
+    return cleared;
   }
 
   Future<void> _loadFlowChoice() async {
     try {
-      final saved = (await SharedPreferences.getInstance()).getBool(_flowKey);
-      if (saved != null && mounted) setState(() => _showFlowArrows = saved);
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getBool(_flowKey), roads = prefs.getBool(_roadArrowsKey), zones = prefs.getBool(_roadZonesKey);
+      if (mounted) {
+        setState(() {
+          if (saved != null) _showFlowArrows = saved;
+          if (roads != null) _showRoadArrows = roads;
+          if (zones != null) _showRoadZones = zones;
+        });
+      }
     } catch (_) {}
   }
 
@@ -114,6 +140,20 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     setState(() => _showFlowArrows = on);
     try {
       await (await SharedPreferences.getInstance()).setBool(_flowKey, on);
+    } catch (_) {}
+  }
+
+  Future<void> _setShowRoadZones(bool on) async {
+    setState(() => _showRoadZones = on);
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_roadZonesKey, on);
+    } catch (_) {}
+  }
+
+  Future<void> _setShowRoadArrows(bool on) async {
+    setState(() => _showRoadArrows = on);
+    try {
+      await (await SharedPreferences.getInstance()).setBool(_roadArrowsKey, on);
     } catch (_) {}
   }
 
@@ -171,6 +211,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _preparingSetup = true);
     try {
+      await _setupEmptied;                                 // the clearing of the last visit is done before a setup is read
+      if (!mounted) return;
       final int? count;
       if (_playing) {
         Map<String, dynamic> shot = {'ok': false};
@@ -189,6 +231,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         );
       } else {
         if (!await _loadSource() || !mounted) return;     // the backend, or the video relay, is not ready: the reason is shown
+        if (!await _emptySetup() && mounted) {            // nothing runs: the last setup, road and learned flow are cleared for a clean start
+          messenger.showSnackBar(const SnackBar(content: Text('The old setup could not be cleared. Restart the backend, then try again.')));
+          return;
+        }
         count = await Navigator.of(context).push<int>(
           MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, chooseFrame: true)),
         );
@@ -278,14 +324,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       _camera = status;
       if (label.isNotEmpty) _sourceName = label;
     });
-  }
-
-  /// "Re-learn" / "Forget" of the road the camera learned; refreshes the status at once.
-  Future<void> _roadAction(Future<void> Function() action) async {
-    try {
-      await action();
-      await _pollCamera();
-    } catch (_) {}
   }
 
   /// Pick a CCTV / DVR, phone camera, another laptop or a file. The backend closes the feed when the source
@@ -630,12 +668,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               ),
             ),
           if (_camera != null && _playing) CameraStatusChip(status: _camera!),
-          if (_camera?['road'] is Map && _playing)
-            RoadLearningChip(
-              road: Map<String, dynamic>.from(_camera!['road'] as Map),
-              onRelearn: () => _roadAction(_cameraApi.relearnRoad),
-              onForget: () => _roadAction(_cameraApi.forgetRoad),
-            ),
         ]),
       ),
       const SizedBox(width: Fx.s12),
@@ -672,6 +704,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         icon: Icon(_showPanel ? Icons.keyboard_double_arrow_right : Icons.keyboard_double_arrow_left),
         onPressed: () => setState(() => _showPanel = !_showPanel),
       ),
+      IconButton(
+        key: const ValueKey('performance-button'),
+        tooltip: 'Performance: CPU, GPU, RAM and every step of the pipeline',
+        icon: const Icon(Icons.speed),
+        onPressed: () => PerformanceDialog.show(context, _cameraApi),
+      ),
       _moreMenu(),
         ]),
       ),
@@ -682,7 +720,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   Widget _setupButton({bool filled = true}) {
     final onPressed = (_roadDetecting || _preparingSetup || _uploading) ? null : _openSetup;
     final icon = _preparingSetup ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.tune);
-    const label = Text('Set up violations');
+    final label = Text(_playing ? 'Edit violations' : 'Set up violations');
     return filled
         ? FilledButton.tonalIcon(key: const ValueKey('live-setup-button'), onPressed: onPressed, icon: icon, label: label)
         : OutlinedButton.icon(
@@ -743,9 +781,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   /// The traffic flow controls over the live picture (bottom-left). Null while no rule uses the flow (the backend then reports none).
   Widget? _flowControls() {
     final flow = _camera?['flow'];
-    if (flow is! Map) return null;
     return FlowControls(
-      flow: flow,
+      flow: flow is Map ? flow : const {},
+      showRoadArrows: _showRoadArrows,
+      onShowRoadArrows: _setShowRoadArrows,
+      showRoadZones: _showRoadZones,
+      onShowRoadZones: _setShowRoadZones,
       showArrows: _showFlowArrows,
       busy: _flowBusy,
       onShowArrows: _setShowFlowArrows,
@@ -790,7 +831,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(detecting ? Fx.radiusSm : 0),
-                child: VideoFeedWidget(stream: _broadcastStream!, boxDelayMs: _boxDelayMs, showFlow: _showFlowArrows),
+                child: VideoFeedWidget(stream: _broadcastStream!, boxDelayMs: _boxDelayMs, showFlow: _showFlowArrows, showRoadArrows: _showRoadArrows, showRoadZones: _showRoadZones),
               ),
             ),
           ),

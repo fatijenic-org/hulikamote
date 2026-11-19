@@ -28,7 +28,7 @@ import evidence_files
 BACKEND_DIR = Path(__file__).resolve().parent
 ENV_FILE = BACKEND_DIR / ".env"
 ENV_KEYS = ("HK_NOTIFY_MODE", "HK_SMTP_HOST", "HK_SMTP_PORT", "HK_SMTP_SECURITY", "HK_SMTP_USER", "HK_SMTP_PASSWORD", "HK_SMTP_FROM",
-            "HK_SUPABASE_URL", "HK_SUPABASE_SERVICE_KEY")
+            "HK_SUPABASE_URL", "HK_SUPABASE_SERVICE_KEY", "HK_SUPABASE_ANON_KEY", "HK_SUPABASE_ACCESS_TOKEN")
 MODES = ("online", "offline")
 TIMEOUT_S = 10
 MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024        # Gmail refuses mail over 25 MB; stay well under

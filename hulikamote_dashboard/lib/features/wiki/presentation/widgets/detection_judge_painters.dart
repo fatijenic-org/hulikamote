@@ -53,7 +53,7 @@ class StoppedPainter extends FigurePainter {
   }
 }
 
-/// A heading dial: more than 135° off the legal arrow, held, is wrong-way.
+/// A heading dial: more than 120° off the legal arrow, held, is wrong-way.
 class WrongWayPainter extends FigurePainter {
   WrongWayPainter(super.t, super.dark);
 
@@ -78,14 +78,14 @@ class WrongWayPainter extends FigurePainter {
     final radius = s.h(0.30);
     final wedge = Rect.fromCircle(center: centre, radius: radius);
     canvas.drawCircle(centre, radius, fill(c.surface));
-    canvas.drawArc(wedge, 5 * math.pi / 4, math.pi / 2, true, fill(FigColors.fail.withValues(alpha: 0.22)));
+    canvas.drawArc(wedge, 7 * math.pi / 6, 2 * math.pi / 3, true, fill(FigColors.fail.withValues(alpha: 0.22)));   // 120 deg: +-60 deg around straight against
     canvas.drawCircle(centre, radius, stroke(c.line, 1.2));
     arrow(canvas, centre, centre + Offset(0, radius * 0.85), FigColors.pass, width: 1.8);
     final jitter = 0.05 * math.sin(t * 30);
     final head = -math.pi / 2 + jitter;
     arrow(canvas, centre, centre + Offset(math.cos(head), math.sin(head)) * radius * 0.9,
         FigColors.blue, width: 2.2);
-    label(canvas, 'more than 135° off', centre + Offset(0, -radius - 12), FigColors.fail,
+    label(canvas, 'more than 120° off', centre + Offset(0, -radius - 12), FigColors.fail,
         size: 9.5, align: TextAlign.center);
     label(canvas, 'its heading', centre + Offset(0, radius + 12), FigColors.blue,
         size: 9.5, align: TextAlign.center);

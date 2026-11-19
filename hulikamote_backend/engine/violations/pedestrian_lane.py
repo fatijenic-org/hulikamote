@@ -30,6 +30,13 @@ class PedestrianLane(StoppedInZone):
         zones = super().from_wizard(cfg)
         limit = float(cfg.get("time_limit", self.default_limit_s))
         realistic = bool(cfg.get("crosswalks_realistic", True))
+        drawn = [z for z in cfg.get("rois", []) if z.get("polygon")]
+        for zone, roi in zip(zones, drawn):                            # a drawn crosswalk that is "painted" (Road markings): the zebra is shown too
+            paint = roi.get("paint")
+            if paint:
+                look = crosswalk_overlay.look_of(paint if isinstance(paint, dict) else {})
+                zone["overlay"] = {"stripes": look["stripes"], "wear": look["wear"]}
+                zone["realistic"] = bool(paint.get("realistic", realistic)) if isinstance(paint, dict) else realistic
         extra = self._zone_extra({"classes": cfg.get("banned_classes")})          # same vehicle filter as a drawn zone
         for crosswalk in crosswalk_overlay.usable(cfg.get("crosswalks")):
             zones.append({"coordinates": crosswalk_overlay.polygon(crosswalk), "time_limit": limit,

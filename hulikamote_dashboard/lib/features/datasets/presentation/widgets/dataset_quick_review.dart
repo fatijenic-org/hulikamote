@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hulikamote_dashboard/features/datasets/data/dataset_viewer_api.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Quick review: look at every truck (or car) box as a small picture, pick the pickups, move on.
 /// One job, few buttons. A page is 6 x 5 boxes. "These are pickups" changes the picked ones and writes the rest of the page
@@ -572,12 +573,12 @@ class _DatasetQuickReviewState extends State<DatasetQuickReview> {
         child: Stack(fit: StackFit.expand, children: [
           Padding(
             padding: const EdgeInsets.all(4),
-            child: Image.network(
+            child: KeepColors(child: Image.network(
               widget.api.cropUri(widget.dataset, split, '${item['name']}', (item['index'] as num).toInt()).toString(),
               headers: widget.api.endpoint.headers,
               fit: BoxFit.contain,
               errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_outlined)),
-            ),
+            )),
           ),
           Positioned(
             left: 4,

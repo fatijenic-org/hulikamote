@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../data/harvest_labeling.dart';
 import '../../domain/harvest_labeling_models.dart';
 import 'harvest_parts.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Opens the "same car?" questions over the whole window (sidebar included): two pictures, one answer, next.
 Future<void> openPairLabeler(BuildContext context, {required HarvestLabeling labeling, String? taskId}) {
@@ -234,12 +235,12 @@ class _PairLabelerState extends State<PairLabeler> {
         border: Border.all(color: Colors.white12),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Image(
+      child: KeepColors(child: Image(
         image: widget.labeling.pairImage(item.id, side),
         fit: BoxFit.contain,
         gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.white38)),
-      ),
+      )),
     );
   }
 

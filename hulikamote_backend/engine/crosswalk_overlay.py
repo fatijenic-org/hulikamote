@@ -110,6 +110,32 @@ def polygon(overlay: dict) -> list[list[float]]:
     return [[round(overlay["x"] + dx, 1), round(overlay["y"] + dy, 1)] for dx, dy in corners(overlay)]
 
 
+def quad_of(polygon):
+    """The four corners (far-left, far-right, near-right, near-left) of a drawn crosswalk of any number of points: the shape's own corners
+    when it has four, else the smallest box around it. The two LONG edges are the far and the near one (the bars run across the short
+    side, side by side along the long one); the far one is the higher one on the picture. None when the shape is no area."""
+    try:
+        pts = np.array([[float(p[0]), float(p[1])] for p in polygon], np.float32)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if len(pts) < 3 or not np.isfinite(pts).all():
+        return None
+    hull = cv2.convexHull(pts).reshape(-1, 2)
+    if len(hull) != 4:
+        hull = cv2.boxPoints(cv2.minAreaRect(hull)).reshape(-1, 2)
+    if cv2.contourArea(hull) < 4.0:
+        return None
+    edges = [float(np.linalg.norm(hull[(i + 1) % 4] - hull[i])) for i in range(4)]
+    start = 0 if edges[0] + edges[2] >= edges[1] + edges[3] else 1          # the long edges are start and start + 2
+    a0, a1 = hull[start], hull[(start + 1) % 4]
+    b0, b1 = hull[(start + 2) % 4], hull[(start + 3) % 4]                    # b0 -> b1 runs against a0 -> a1
+    far, near = ((a0, a1), (b1, b0)) if (a0[1] + a1[1]) <= (b0[1] + b1[1]) else ((b1, b0), (a0, a1))
+    # far = (p, q), near = (p', q') with p' next to p and q' next to q: left/right by x along the far edge
+    if far[0][0] > far[1][0]:
+        far, near = (far[1], far[0]), (near[1], near[0])
+    return [tuple(map(float, far[0])), tuple(map(float, far[1])), tuple(map(float, near[1])), tuple(map(float, near[0]))]
+
+
 def _lerp(a, b, t):
     return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
 
@@ -169,10 +195,11 @@ def _layer(points: tuple, stripes: int, wear: float, realistic: bool, light: int
 def draw(frame: np.ndarray, zone_polygon, look: dict, realistic: bool = True, occluders=()) -> None:
     """The crosswalk on the picture: bars between the four corners of `zone_polygon` (frame pixels). Changes `frame`.
     `occluders` are boxes [x, y, w, h] of vehicles and people: the paint is on the road, so it goes UNDER them (soft edge)."""
-    if zone_polygon is None or len(zone_polygon) != 4:
+    quad = quad_of(zone_polygon) if zone_polygon is not None else None
+    if quad is None:
         return
     fh, fw = frame.shape[:2]
-    points = tuple(int(round(float(v))) for p in zone_polygon for v in p)
+    points = tuple(int(round(v)) for p in quad for v in p)
     layer = _layer(points, int(_clamp(int(look.get("stripes", DEFAULTS["stripes"])), MIN_STRIPES, MAX_STRIPES)),
                    round(_clamp(float(look.get("wear", DEFAULTS["wear"])), 0.0, 1.0), 2), bool(realistic), _light_of(frame))
     if layer is None:

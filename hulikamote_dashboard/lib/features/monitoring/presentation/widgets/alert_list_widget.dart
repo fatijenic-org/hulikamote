@@ -8,6 +8,7 @@ import '../../domain/models/detection.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../violations/domain/models/violation.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 class AlertListWidget extends StatefulWidget {
   final Stream<dynamic>? frameStream;
@@ -62,6 +63,8 @@ class _AlertListWidgetState extends State<AlertListWidget> {
           
           // JSON Overlay sends ALL cars so the video widget can draw green boxes.
           // We must filter to ONLY actual violators for the alert sidebar.
+          // When the backend saw this picture (its own clock, like the tickets' time): where the evidence of the alert starts.
+          final seenAt = DateTime.tryParse('${json['timestamp'] ?? ''}');
           final violatorDetections = rawDetections.where((d) {
             final map = d as Map<String, dynamic>;
             return (map['is_violator'] as bool?) == true;
@@ -86,7 +89,7 @@ class _AlertListWidgetState extends State<AlertListWidget> {
                   continue;
                 }
                 _seenKeys.add(key);
-                _items.insert(0, _Alert(detection: d, time: DateTime.now()));
+                _items.insert(0, _Alert(detection: d, time: DateTime.now(), seenAt: seenAt));
               }
               if (_items.length > _maxAlerts) {
                 _items.removeRange(_maxAlerts, _items.length);
@@ -150,7 +153,7 @@ class _AlertListWidgetState extends State<AlertListWidget> {
                         dense: true,
                         onTap: d.trackId == null
                             ? null
-                            : () => _showEvidenceDialog(context, d.trackId!),
+                            : () => _showEvidenceDialog(context, d.trackId!, a.seenAt ?? a.time),
                         leading: const Icon(
                           Icons.warning_amber_rounded,
                           color: Colors.orange,
@@ -204,7 +207,7 @@ class _AlertListWidgetState extends State<AlertListWidget> {
     return '${diff ~/ 60}m ago';
   }
 
-  void _showEvidenceDialog(BuildContext context, int trackId) {
+  void _showEvidenceDialog(BuildContext context, int trackId, DateTime since) {
     showDialog(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -213,7 +216,8 @@ class _AlertListWidgetState extends State<AlertListWidget> {
           width: 800,
           height: 540,
           child: FutureBuilder<Violation?>(
-            future: _api.fetchViolationByTrackId(trackId),
+            // Only a ticket made after the alert first showed is this vehicle's (the number alone also fits the tickets of older runs).
+            future: _api.fetchViolationByTrackId(trackId, since: since.subtract(const Duration(seconds: 1))),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -330,7 +334,7 @@ class _EvidenceViewerState extends State<_EvidenceViewer> {
                   cursor: SystemMouseCursors.click,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: Image.network(url, fit: BoxFit.contain),
+                    child: KeepColors(child: Image.network(url, fit: BoxFit.contain)),
                   ),
                 ),
               ),
@@ -508,7 +512,7 @@ class _FullScreenEvidenceViewerState extends State<_FullScreenEvidenceViewer> {
         body: Column(
           children: [
             Expanded(
-              child: Center(child: Image.network(url, fit: BoxFit.contain)),
+              child: Center(child: KeepColors(child: Image.network(url, fit: BoxFit.contain))),
             ),
             Container(
               color: Colors.black87,
@@ -560,5 +564,6 @@ class _FullScreenEvidenceViewerState extends State<_FullScreenEvidenceViewer> {
 class _Alert {
   final Detection detection;
   final DateTime time;
-  const _Alert({required this.detection, required this.time});
+  final DateTime? seenAt; // the backend's time of the picture that first showed it
+  const _Alert({required this.detection, required this.time, this.seenAt});
 }

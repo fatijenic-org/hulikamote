@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../../../core/utils/visible_poller.dart';
 import '../../data/forensic_media.dart';
 import 'fx.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Builds the preview shown on the Video tab while an analysis still runs. The default uses media_kit; tests pass a stand-in.
 typedef PreviewPanelBuilder = Widget Function(BuildContext context, String taskId, ForensicMedia media);
@@ -124,7 +125,7 @@ class _LivePreviewPanelState extends State<LivePreviewPanel> {
                         style: const TextStyle(color: Colors.white70),
                       ),
                     )
-                  : Video(controller: _video, controls: NoVideoControls),
+                  : KeepColors(child: Video(controller: _video, controls: NoVideoControls)),
             ),
           ),
         ),

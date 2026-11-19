@@ -10,6 +10,7 @@ import '../../domain/models/road_detect.dart';
 import '../../domain/road_markings.dart';
 import 'road_detect_view.dart';
 import 'road_zone_editor.dart';
+import 'saved_roads_dialog.dart';
 
 /// The "Road" step of the live setup: the road is marked ONCE, on the setup picture, with the same editor as "Detect road" (many points,
 /// zoom): crosswalks, solid lines, stop lines, lanes (with a type and a direction), roads (with a kind and a direction) and sidewalks.
@@ -40,6 +41,8 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
   bool _scanning = false;            // the walkthrough is on screen
   bool _starting = false;
   String? _notice;
+  String? _presetId;                 // the saved road the setup follows (used or saved last), if any
+  String? _presetName;
 
   @override
   void initState() {
@@ -67,12 +70,33 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
   }
 
   /// Back to the reference space, and on to the setup. A marking the finder found keeps its 'auto-' name; the others get plain numbers.
-  void _emit() {
+  void _emit() => widget.onChanged(_refAreas());
+
+  List<RoadArea> _refAreas() {
     final size = _size;
-    if (size == null) return;
+    if (size == null) return const [];
     final fx = ZoneGeometry.refWidth / size.width, fy = ZoneGeometry.refHeight / size.height;
     var n = 0;
-    widget.onChanged([for (final a in _areas) a.scaled(fx, fy).withId(a.id.startsWith('auto-') ? a.id : 'm${++n}')]);
+    return [for (final a in _areas) a.scaled(fx, fy).withId(a.id.startsWith('auto-') ? a.id : 'm${++n}')];
+  }
+
+  /// "Saved roads": save the road, use a saved one, duplicate, rename, delete.
+  Future<void> _openSaved() async {
+    final result = await showDialog<SavedRoadsResult>(
+      context: context,
+      builder: (_) => SavedRoadsDialog(api: widget.cameraApi, current: _refAreas(), loadedId: _presetId, loadedName: _presetName),
+    );
+    if (result == null || !mounted) return;
+    final size = _size;
+    setState(() {
+      _presetId = result.loadedId;
+      _presetName = result.loadedName;
+      if (result.markings != null && size != null) {
+        final fx = size.width / ZoneGeometry.refWidth, fy = size.height / ZoneGeometry.refHeight;
+        _areas = [for (final m in result.markings!) m.scaled(fx, fy)];
+      }
+    });
+    if (result.markings != null) _emit();
   }
 
   Future<void> _find() async {
@@ -123,21 +147,24 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
       );
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(spacing: 6, runSpacing: 6, children: [
-        for (final (marking, key) in RoadMarkingMap.uses)
-          StatusPill(label: '$marking → ${ViolationCatalog.of(key).label}', color: Fx.muted(context), dense: true),
-      ]),
-      const SizedBox(height: Fx.s12),
       if (_notice != null) ...[
         FxBanner(key: const ValueKey('markings-notice'), message: _notice!, color: Fx.warning, icon: Icons.info_outline),
         const SizedBox(height: Fx.s8),
       ],
       Expanded(child: _editor(context)),
       const SizedBox(height: Fx.s8),
-      Text('${_areas.length} marking${_areas.length == 1 ? '' : 's'}. You can skip this step: a violation then asks for its own zone.',
-          key: const ValueKey('markings-count'), style: Fx.caption(context)),
+      Text(
+        '${_areas.length} marking${_areas.length == 1 ? '' : 's'}${_presetName == null ? '' : ' · saved road: $_presetName'}',
+        key: const ValueKey('markings-count'),
+        style: Fx.caption(context),
+      ),
     ]);
   }
+
+  /// What the markings are for (the hover note): which marking feeds which violation.
+  static String get _uses => 'Mark the road once, on this picture. Each violation you pick next takes only what it needs:\n'
+      '${[for (final (marking, key) in RoadMarkingMap.uses) '$marking → ${ViolationCatalog.of(key).label}'].join('\n')}\n'
+      'You can skip this step: a violation then asks for its own zone.';
 
   Widget _editor(BuildContext context) {
     if (_error != null) return Center(child: Text(_error!, style: Fx.body(context), textAlign: TextAlign.center));
@@ -149,6 +176,16 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
       areas: _areas,
       markings: true,
       actions: [
+        Tooltip(
+          message: _uses,
+          child: const Icon(Icons.info_outline, size: 18),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('saved-roads-button'),
+          onPressed: _openSaved,
+          icon: const Icon(Icons.bookmarks_outlined, size: 18),
+          label: const Text('Saved roads'),
+        ),
         Tooltip(
           message: 'Takes a few seconds of the video from this picture on, and reads the road from how vehicles move: crosswalks, lines, '
               'lanes, the road and its direction. It shows each step.',

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// The one video player the trimmer uses (it opens whichever video is on screen). A small interface so tests can use a
 /// stand-in: media_kit needs native libraries.
@@ -104,7 +105,7 @@ class MediaKitTrimPlayer implements TrimPlayer {
   Future<void> seek(double seconds) => _player.seek(Duration(milliseconds: (seconds * 1000).round()));
 
   @override
-  Widget view() => Video(controller: _video, controls: NoVideoControls);   // the trimmer has its own controls
+  Widget view() => KeepColors(child: Video(controller: _video, controls: NoVideoControls));   // the trimmer has its own controls
 
   @override
   void dispose() {

@@ -10,6 +10,7 @@ import '../widgets/visualizers/illegal_parking_bf.dart';
 import '../widgets/visualizers/illegal_parking_fp.dart';
 import '../widgets/visualizers/illegal_parking_setup.dart';
 import '../widgets/visualizers/illegal_turn_bf.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 import '../widgets/visualizers/illegal_turn_fp.dart';
 import '../widgets/visualizers/illegal_turn_setup.dart';
 import '../widgets/visualizers/illegal_turn_visualizer.dart';
@@ -260,9 +261,11 @@ class _ViolationLabScreenState extends State<ViolationLabScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: Theme(
-                    data: ThemeData(brightness: Brightness.light, primarySwatch: Colors.blueGrey),
-                    child: Material(color: Colors.white, child: _buildVisualizer(v.visualizerType)),
+                  child: KeepColors(   // this block is light by design: keep it as it is in light mode
+                    child: Theme(
+                      data: ThemeData(brightness: Brightness.light, primarySwatch: Colors.blueGrey),
+                      child: Material(color: Colors.white, child: _buildVisualizer(v.visualizerType)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),

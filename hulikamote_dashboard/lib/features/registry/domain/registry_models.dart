@@ -52,6 +52,8 @@ class NoticeSettings {
     this.passwordSet = false,
     this.cloudUrl = '',
     this.cloudKeySet = false,
+    this.tokenSaved = false,
+    this.cloudReady = false,
     this.mailboxUrls = const [],
     this.notices = const [],
   });
@@ -65,6 +67,11 @@ class NoticeSettings {
   final String cloudUrl;
   final bool cloudKeySet;
 
+  /// A Supabase access token waits in the laptop's .env (the person ticked "remember"), and the cloud is fully set up
+  /// (so the phone app can find everything by itself).
+  final bool tokenSaved;
+  final bool cloudReady;
+
   /// Where a phone on the same network opens the mailbox, e.g. `http://192.168.68.112:8000/mailbox`.
   final List<String> mailboxUrls;
   final List<NoticeRecord> notices;
@@ -77,6 +84,8 @@ class NoticeSettings {
         passwordSet: json['password_set'] as bool? ?? false,
         cloudUrl: json['cloud_url'] as String? ?? '',
         cloudKeySet: json['cloud_key_set'] as bool? ?? false,
+        tokenSaved: json['token_saved'] as bool? ?? false,
+        cloudReady: json['cloud_ready'] as bool? ?? false,
         mailboxUrls: [for (final u in json['mailbox_urls'] as List? ?? const []) u as String],
         notices: [for (final n in json['notices'] as List? ?? const []) NoticeRecord.fromJson(Map<String, dynamic>.from(n as Map))],
       );
@@ -105,6 +114,38 @@ class CloudTestResult {
 
   factory CloudTestResult.fromJson(Map<String, dynamic> json) =>
       CloudTestResult(ok: json['ok'] as bool? ?? false, detail: json['detail'] as String? ?? '');
+}
+
+/// One line of the "Set up cloud" checklist.
+class SetupStep {
+  const SetupStep({required this.text, required this.ok, this.detail = '', this.warn = false});
+
+  final String text;
+  final bool ok;
+  final String detail;
+
+  /// A step that does not stop the setup when it fails (shown as a warning, not an error).
+  final bool warn;
+
+  factory SetupStep.fromJson(Map<String, dynamic> json) =>
+      SetupStep(
+          text: json['text'] as String? ?? '',
+          ok: json['ok'] as bool? ?? false,
+          detail: json['detail'] as String? ?? '',
+          warn: json['warn'] as bool? ?? false);
+}
+
+/// The answer to "Set up cloud": every step, in order, with the one that failed (if any).
+class CloudSetupResult {
+  const CloudSetupResult({required this.ok, required this.steps});
+
+  final bool ok;
+  final List<SetupStep> steps;
+
+  factory CloudSetupResult.fromJson(Map<String, dynamic> json) => CloudSetupResult(
+        ok: json['ok'] as bool? ?? false,
+        steps: [for (final s in json['steps'] as List? ?? const []) SetupStep.fromJson(Map<String, dynamic>.from(s as Map))],
+      );
 }
 
 /// One demo account that "Create demo accounts" tried to make in the cloud.

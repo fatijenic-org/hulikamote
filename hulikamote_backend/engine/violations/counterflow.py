@@ -7,13 +7,19 @@ Two ways to know the legal direction:
                 learns the flow on its own when this rule is on and has no zone).
                 Drawn zones, when there are any, still take priority.
 
-Zone heuristic: inside a drawn zone, the vehicle's CURRENT heading (ledger.path) points against the zone's
-legal-flow arrow (more than 135 deg off), it is really driving, and it keeps doing so for 1.5 s in a row.
+Zone heuristic: inside a drawn zone, the vehicle's CURRENT heading (steady_heading: the last 0.8 s of ledger.path) points against
+the zone's legal-flow arrow (more than 120 deg off), it is really moving, and it keeps doing so for 1.0 s.
   - a parked or crawling vehicle is never judged (box jitter and drift are not driving)
   - a sideways move, a turn or a single noisy frame is not enough
+  - a noisy frame or two in the run, or a step over the edge of the drawn road, does not break it (GRACE_S): the heading of a
+    far or small vehicle wobbles around the limit, and a rule that restarts its clock at each wobble misses most vehicles
+  - a vehicle just outside a drawn zone (within ZONE_MARGIN_WIDTHS box widths) is judged by the nearest zone
   - each zone has its own arrow, so a junction can have several flows
 Whole-picture heuristic: the same, against the learned dominant direction of the vehicle's cell.
 Cells that are not learned yet, or two-way, are never judged.
+
+A zone whose arrow bends (a road marked with many points) has a `flow_path`: the legal direction is then the direction of the part of the arrow
+nearest to the vehicle, so each stretch of a curved road is judged against its own direction.
 
 Two wizard settings of this violation (both only for looking at / testing the rule):
   show_flow    draw the learned flow arrows on the saved photos and the result video (default on)
@@ -24,10 +30,13 @@ Two wizard settings of this violation (both only for looking at / testing the ru
 import math
 
 from engine.violations.base import Violation
-from engine.violations.geometry import dot, heading, is_driving, point_in_polygon, unit
+from engine.violations.geometry import dot, is_travelling, point_in_polygon, polygon_gap, steady_heading, unit
 
-WRONG_WAY_S = 1.5        # how long it must keep heading against the flow
-AGAINST_COS = math.cos(math.radians(135.0))   # "against" = more than 135 deg off the legal direction
+WRONG_WAY_S = 1.0        # how long it must keep heading against the flow
+GRACE_S = 0.5            # a gap this long (not wrong, or off the road) does not break the run; 3 frames if frames come slower, at most GRACE_MAX_S
+GRACE_MAX_S = 1.0
+AGAINST_COS = math.cos(math.radians(120.0))   # "against" = more than 120 deg off the legal direction
+ZONE_MARGIN_WIDTHS = 0.4  # a vehicle this close (in box widths) outside a drawn zone still belongs to it
 
 
 class Counterflow(Violation):
@@ -45,8 +54,21 @@ class Counterflow(Violation):
         if not coords:
             return None
         vec = raw.get("legal_flow_vector", {})
-        return {"polygon": coords, "vector": (float(vec.get("x_dir", 1.0)), float(vec.get("y_dir", 0.0))),
+        zone = {"polygon": coords, "vector": (float(vec.get("x_dir", 1.0)), float(vec.get("y_dir", 0.0))),
                 "test_reversed": bool(raw.get("test_reversed", False))}
+        path = self._clean_path(raw.get("flow_path"))
+        if path:
+            zone["flow_path"] = path
+        return zone
+
+    @staticmethod
+    def _clean_path(raw) -> list | None:
+        """The arrow of a zone as points: two or more, each [x, y]; anything else = no arrow (the zone's vector is used)."""
+        try:
+            pts = [[float(p[0]), float(p[1])] for p in raw or []]
+        except (TypeError, ValueError, IndexError):
+            return None
+        return pts if len(pts) >= 2 and all(math.isfinite(v) for p in pts for v in p) else None
 
     def from_wizard(self, cfg):
         zones = []
@@ -60,8 +82,11 @@ class Counterflow(Violation):
             reverse = bool(cfg.get("invert_flow", False))              # the test: the opposite way is "legal"
             if reverse:
                 dx, dy = -dx, -dy
-            zones.append({"coordinates": z["polygon"], "legal_flow_vector": {"x_dir": dx, "y_dir": dy},
-                          "test_reversed": reverse})
+            item = {"coordinates": z["polygon"], "legal_flow_vector": {"x_dir": dx, "y_dir": dy}, "test_reversed": reverse}
+            path = self._clean_path(z.get("path") or z.get("ui_vector"))       # a bent arrow, else the straight one
+            if path:
+                item["flow_path"] = path[::-1] if reverse else path
+            zones.append(item)
         return zones
 
     def whole_frame_zone(self, cfg, polygon, frame_size, flow):
@@ -84,6 +109,8 @@ class Counterflow(Violation):
             if bool(zone.get("test_reversed")) != bool(on):
                 vx, vy = zone["vector"]
                 zone["vector"] = (-vx, -vy)
+                if zone.get("flow_path"):
+                    zone["flow_path"] = zone["flow_path"][::-1]
                 zone["test_reversed"] = bool(on)
         manager = getattr(pipe, "ledger_manager", None)
         for ledger in list(manager.ledgers.values()) if manager is not None else []:
@@ -100,39 +127,73 @@ class Counterflow(Violation):
             return False
 
         cx, cy = ledger.history[-1][1], ledger.history[-1][2]
-        found = next(((i, z) for i, z in enumerate(zones) if point_in_polygon(cx, cy, z["polygon"])), None)
+        found = self._zone_of(zones, cx, cy, ledger.path[-1][3])
         if found is None:
-            for key in [k for k in ledger.stop_timers if isinstance(k, tuple) and k[:1] == (self.key,)]:
-                del ledger.stop_timers[key]         # left the zones: the wrong-way run is broken
-            return False
+            return False                            # off the judged roads: _sustained breaks the run when the gap lasts
         index, zone = found
         if zone.get("whole_frame"):
             return self._evaluate_learned(ledger, zone)
 
         legal = unit(*zone.get("vector", (1.0, 0.0)))
-        current = heading(ledger)                   # None while barely moving
-        wrong = (legal != (0.0, 0.0) and current is not None and is_driving(ledger)
+        if zone.get("flow_path") and len(zone["flow_path"]) > 2:    # a bent arrow: the direction of the stretch the vehicle is on
+            legal = self._legal_here(zone["flow_path"], cx, cy) or legal
+        current = steady_heading(ledger)            # None while barely moving
+        wrong = (legal != (0.0, 0.0) and current is not None and is_travelling(ledger)
                  and dot(current, legal) < AGAINST_COS)
         return self._sustained(ledger, (self.key, index), wrong)
 
+    @staticmethod
+    def _zone_of(zones, cx: float, cy: float, width: float):
+        """(index, zone) of the first zone that holds the point; else of the nearest zone within ZONE_MARGIN_WIDTHS box widths of it
+        (a vehicle at the edge of a drawn road is still on that road); else None."""
+        for i, z in enumerate(zones):
+            if z.get("whole_frame") or point_in_polygon(cx, cy, z["polygon"]):
+                return i, z
+        reach, best = ZONE_MARGIN_WIDTHS * width, None
+        for i, z in enumerate(zones):
+            gap = polygon_gap(cx, cy, z["polygon"])
+            if gap <= reach and (best is None or gap < best[0]):
+                best = (gap, i, z)
+        return None if best is None else (best[1], best[2])
+
+    @staticmethod
+    def _legal_here(path, cx: float, cy: float):
+        """The unit direction of the piece of `path` nearest to (cx, cy), or None when the path has no length."""
+        best, best_d = None, float("inf")
+        for (x0, y0), (x1, y1) in zip(path, path[1:]):
+            dx, dy = x1 - x0, y1 - y0
+            length2 = dx * dx + dy * dy
+            if length2 <= 0:
+                continue
+            t = max(0.0, min(1.0, ((cx - x0) * dx + (cy - y0) * dy) / length2))
+            d = math.hypot(cx - (x0 + t * dx), cy - (y0 + t * dy))
+            if d < best_d:
+                best, best_d = (dx, dy), d
+        return unit(*best) if best else None
+
     def _evaluate_learned(self, ledger, zone) -> bool:
-        head = heading(ledger)                      # None while barely moving
+        head = steady_heading(ledger)               # None while barely moving
         _t, cx, cy, _w = ledger.path[-1]
         width, height = zone["frame_size"]
         verdict = zone["field"].verdict(cx, cy, width, height, head) if head is not None else "unknown"
         if zone.get("invert"):                      # the test: going WITH the learned flow counts as going against it
             verdict = {"with": "against", "against": "with"}.get(verdict, verdict)
-        wrong = head is not None and is_driving(ledger) and verdict == "against"
+        wrong = head is not None and is_travelling(ledger) and verdict == "against"
         return self._sustained(ledger, (self.key, "learned"), wrong)
 
     def _sustained(self, ledger, key, wrong_way: bool) -> bool:
-        """True once the vehicle has headed the wrong way for WRONG_WAY_S in a row; one bad frame never counts."""
+        """True once the vehicle has headed the wrong way for WRONG_WAY_S; one bad frame never counts. A run is broken only by a gap
+        of GRACE_S without a wrong-way frame (checked when the next one comes, so a stale run of an earlier zone is never continued)."""
         if not wrong_way:
-            ledger.stop_timers.pop(key, None)       # the wrong-way run is broken
             return False
         t = ledger.path[-1][0]
-        start = ledger.stop_timers.setdefault(key, t)
-        if t - start >= WRONG_WAY_S:
+        seen = key + ("seen",)                      # when the last wrong-way frame was
+        last = ledger.stop_timers.get(seen)
+        frame = t - ledger.path[-2][0] if len(ledger.path) > 1 else 0.0
+        if last is None or t - last > min(GRACE_MAX_S, max(GRACE_S, 3 * frame)):
+            ledger.stop_timers[key] = t             # a new run (a broken one starts again from here)
+        ledger.stop_timers[seen] = t
+        if t - ledger.stop_timers.setdefault(key, t) >= WRONG_WAY_S:
             ledger.violations.add(self.key)
             return True
         return False

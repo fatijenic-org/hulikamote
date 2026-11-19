@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hulikamote_dashboard/features/datasets/data/dataset_viewer_api.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Clean the car-matcher (ReID) data before it is trained on. A folder of photos is one vehicle (car, motorcycle, tricycle,
 /// jeepney, bus, truck ...), so a tracker jump is fixed by moving photos or merging two vehicles, and two vehicles under one
@@ -702,7 +703,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image.network(
+                              KeepColors(child: Image.network(
                                 _api
                                     .reidRemovedPhotoUri(
                                       items[i],
@@ -715,7 +716,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
                                   color: Color(0xFF242A32),
                                   child: Icon(Icons.broken_image_outlined),
                                 ),
-                              ),
+                              )),
                               if (chosen.contains(i))
                                 Container(
                                   color: Colors.blueAccent.withAlpha(70),
@@ -777,7 +778,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
       builder: (context) => Dialog(
         child: GestureDetector(
           onTap: () => Navigator.pop(context),
-          child: Image.network(
+          child: KeepColors(child: Image.network(
             _api.reidPhotoUri(key, name).toString(),
             headers: _api.endpoint.headers,
             fit: BoxFit.contain,
@@ -785,7 +786,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
               padding: EdgeInsets.all(40),
               child: Icon(Icons.broken_image_outlined, size: 48),
             ),
-          ),
+          )),
         ),
       ),
     );
@@ -846,7 +847,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
     return SizedBox(
       width: size,
       height: size,
-      child: Image.network(
+      child: KeepColors(child: Image.network(
         _api.reidPhotoUri(key, '$name', thumbnail: true).toString(),
         headers: _api.endpoint.headers,
         fit: BoxFit.cover,
@@ -854,7 +855,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
           color: Color(0xFF242A32),
           child: Icon(Icons.broken_image_outlined, size: 18),
         ),
-      ),
+      )),
     );
   }
 
@@ -1572,7 +1573,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
+            KeepColors(child: Image.network(
               _api.reidPhotoUri(_key!, name, thumbnail: true).toString(),
               headers: _api.endpoint.headers,
               fit: BoxFit.cover,
@@ -1580,7 +1581,7 @@ class _DatasetReidManagerState extends State<DatasetReidManager> {
                 color: Color(0xFF242A32),
                 child: Center(child: Icon(Icons.broken_image_outlined)),
               ),
-            ),
+            )),
             if (picked)
               Container(
                 color: Colors.blueAccent.withAlpha(70),

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:hulikamote_dashboard/features/datasets/data/dataset_viewer_api.dart';
 
 import 'dataset_quick_review.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 class DatasetRelabelTab extends StatefulWidget {
   final DatasetViewerApi api;
@@ -386,7 +387,7 @@ class _DatasetRelabelTabState extends State<DatasetRelabelTab> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.network(
+                        KeepColors(child: Image.network(
                           widget.api
                               .imageUri(
                                 widget.dataset,
@@ -396,7 +397,7 @@ class _DatasetRelabelTabState extends State<DatasetRelabelTab> {
                               .toString(),
                           headers: widget.api.endpoint.headers,
                           fit: BoxFit.fill,
-                        ),
+                        )),
                         CustomPaint(
                           painter: _HighlightPainter(box['box'] as List),
                         ),
@@ -429,7 +430,7 @@ class _DatasetRelabelTabState extends State<DatasetRelabelTab> {
     }
   }
 
-  Widget _cropImage(Map<String, dynamic> item) => Image.network(
+  Widget _cropImage(Map<String, dynamic> item) => KeepColors(child: Image.network(
     widget.api
         .cropUri(
           widget.dataset,
@@ -442,7 +443,7 @@ class _DatasetRelabelTabState extends State<DatasetRelabelTab> {
     fit: BoxFit.contain,
     errorBuilder: (_, _, _) =>
         const Center(child: Icon(Icons.broken_image_outlined)),
-  );
+  ));
 
   void _message(String text, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(

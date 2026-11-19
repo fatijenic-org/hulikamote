@@ -115,7 +115,7 @@ class ReferenceData {
       id: 'r_autoflow', category: _vio, group: 'Put two together',
       title: 'Counterflow with no drawing', short: 'automatic counterflow', recipe: ['v_heading', 'p_flow'],
       makes: 'Automatic counterflow',
-      says: 'No arrow needed: the legal direction is learned from the traffic itself. Heading against it for 1.5 seconds in a row is wrong-way.',
+      says: 'No arrow needed: the legal direction is learned from the traffic itself. Heading against it for 1 second is wrong-way.',
       code: [CodeAnchor('${_viol}counterflow.py', 'def _evaluate_learned(')],
     ),
     Slice(

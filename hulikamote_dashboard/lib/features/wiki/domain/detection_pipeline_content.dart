@@ -385,20 +385,20 @@ const List<DetectionRecipe> kRecipes = [
     plain:
         'Each zone has an arrow for the legal direction, or in auto mode the '
         'engine learns it from the traffic itself. If a vehicle is really '
-        'driving and its heading points more than 135° away from that arrow, '
-        'and it keeps doing so for 1.5 seconds in a row, it is flagged.',
+        'moving and its heading points more than 120° away from that arrow, '
+        'and it keeps doing so for 1 second, it is flagged.',
     facts: [
-      ('Against', 'heading more than 135° off the legal arrow'),
-      ('Really driving', 'at least 50 px/s, or a quarter of its width per second if that is more, over the last second'),
-      ('Held for', '1.5 s in a row; one bad frame resets the clock'),
+      ('Against', 'heading more than 120° off the legal arrow (heading read over the last 0.8 s of travel)'),
+      ('Really moving', 'at least 25 px/s, or a quarter of its width per second if that is more, over the last 0.6 s'),
+      ('Held for', '1 s; a noisy frame or two, or a step over the edge of the zone, does not reset the clock (a gap of 0.5 s does)'),
       ('Auto mode', 'legal direction learned per cell of the picture; cells not learned yet, or two-way, are never judged'),
       ('No-entry sign', 'moving along the forbidden arrow, within 45°'),
     ],
     guards: 'Parked or crawling vehicles, sideways moves, turns, and a single noisy frame.',
     figure: DetectionFigure.wrongWay,
     confirm: ConfirmKind.hold,
-    confirmLabel: 'Needs 1.5 s',
-    confirmNote: 'Wrong-way heading must hold for 1.5 s.',
+    confirmLabel: 'Needs 1 s',
+    confirmNote: 'Wrong-way heading must hold for 1 s.',
   ),
   DetectionRecipe(
     id: 'wrong_turn',

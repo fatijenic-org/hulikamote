@@ -110,6 +110,25 @@ class RegistryApi {
     return CloudTestResult.fromJson(_map(r));
   }
 
+  /// One click: reads the keys, builds the database, turns Confirm email off, checks, makes the demo accounts, checks push.
+  /// [accessToken] empty = the one saved on the laptop. It is used there and forgotten unless [rememberToken].
+  Future<CloudSetupResult> setUpCloud({String supabaseUrl = '', String accessToken = '', bool rememberToken = false}) async {
+    final r = await _call(
+      () => _client.post(_notify('/cloud-setup'),
+          headers: _json,
+          body: jsonEncode({'supabase_url': supabaseUrl, 'access_token': accessToken, 'remember_token': rememberToken})),
+      'Setting up the cloud',
+      timeout: const Duration(seconds: 240),
+    );
+    return CloudSetupResult.fromJson(_map(r));
+  }
+
+  /// Gives the laptop the Firebase service-account file (its text), so push works when the phone app is closed.
+  Future<PushResult> installPushKey(String keyJson) async {
+    final r = await _call(() => _client.post(_notify('/push-key'), headers: _json, body: jsonEncode({'key_json': keyJson})), 'Saving the Firebase key');
+    return PushResult.fromJson(_map(r));
+  }
+
   /// Creates the demo motorists (Juan, Maria, Pedro) in the phone cloud with all the plates they own here.
   Future<List<CloudAccountResult>> createCloudDemoAccounts() async {
     final r = await _call(() => _client.post(_notify('/cloud-demo-accounts'), headers: _json, body: jsonEncode({})), 'Creating the demo accounts',

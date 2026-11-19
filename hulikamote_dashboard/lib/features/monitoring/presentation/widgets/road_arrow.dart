@@ -26,6 +26,23 @@ void paintRoadArrow(Canvas canvas, Offset from, Offset to, Color colour, {double
   );
 }
 
+/// An arrow that follows [points] (two or more): a bent road has a bent arrow, the head is at the last point.
+void paintRoadPath(Canvas canvas, List<Offset> points, Color colour, {double width = 4, double head = 16}) {
+  if (points.length < 2) return;
+  if (points.length == 2) {
+    paintRoadArrow(canvas, points[0], points[1], colour, width: width, head: head);
+    return;
+  }
+  final line = Paint()
+    ..color = colour
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = width
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+  canvas.drawPath(Path()..addPolygon(points, false), line);
+  paintRoadArrow(canvas, points[points.length - 2], points.last, colour, width: width, head: head);   // the head (on the last piece)
+}
+
 /// The colour of a road area that has a direction: incoming (toward the camera) is blue, outgoing (away) is violet.
 Color flowColour(String? flow) => switch (flow) {
   'in' => Colors.lightBlueAccent,

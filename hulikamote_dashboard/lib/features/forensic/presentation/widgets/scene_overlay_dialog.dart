@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/forensic_api.dart';
 import '../../domain/analysis_draft.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// One thing that can be placed on the picture. [least] taps are needed; [auto] taps finish it at once (null = press Finish).
 class _Tool {
@@ -189,9 +190,9 @@ class _SceneOverlayDialogState extends State<SceneOverlayDialog> {
                             fit: StackFit.expand,
                             children: [
                               if (_image != null)
-                                Image.memory(_image!, fit: BoxFit.fill, gaplessPlayback: true)
+                                KeepColors(child: Image.memory(_image!, fit: BoxFit.fill, gaplessPlayback: true))
                               else if (widget.frame != null)
-                                Image(image: widget.frame!, fit: BoxFit.fill, gaplessPlayback: true)
+                                KeepColors(child: Image(image: widget.frame!, fit: BoxFit.fill, gaplessPlayback: true))
                               else
                                 const ColoredBox(color: Colors.black26),
                               CustomPaint(painter: _PendingPainter(_pending)),

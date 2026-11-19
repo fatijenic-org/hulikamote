@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/services/cloud_portal_api.dart';
+import '../../../core/services/laptop_finder.dart';
 import '../../../core/services/portal_api.dart';
 
 /// How this phone reaches the system: Online (the Supabase cloud, works anywhere) or Same Wi-Fi (the laptop's address,
@@ -10,22 +11,25 @@ Future<bool> showConnectionDialog(
   BuildContext context, {
   PortalApi Function(String baseUrl)? lanApi,
   Future<void> Function(String url, String anonKey)? checkCloud,
+  Future<ConnectResult> Function()? autoConnect,
 }) async {
   final saved = await showDialog<bool>(
     context: context,
     builder: (_) => _ConnectionDialog(
       lanApi: lanApi ?? (url) => PortalApi(baseUrl: () => url),
       checkCloud: checkCloud ?? CloudPortalApi.checkProject,
+      autoConnect: autoConnect ?? () => LaptopFinder().connect(),
     ),
   );
   return saved ?? false;
 }
 
 class _ConnectionDialog extends StatefulWidget {
-  const _ConnectionDialog({required this.lanApi, required this.checkCloud});
+  const _ConnectionDialog({required this.lanApi, required this.checkCloud, required this.autoConnect});
 
   final PortalApi Function(String baseUrl) lanApi;
   final Future<void> Function(String url, String anonKey) checkCloud;
+  final Future<ConnectResult> Function() autoConnect;
 
   @override
   State<_ConnectionDialog> createState() => _ConnectionDialogState();
@@ -37,7 +41,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
   late final _key = TextEditingController(text: AppConfig.cloudKey);
   late final _address = TextEditingController(text: AppConfig.address);
   String? _error;
+  String? _found;           // what the last automatic Connect said
   bool _busy = false;
+  bool _finding = false;
 
   @override
   void dispose() {
@@ -45,6 +51,32 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     _key.dispose();
     _address.dispose();
     super.dispose();
+  }
+
+  /// One press: find the laptop on the network and set the phone up (cloud if ready, else the laptop's Wi-Fi).
+  Future<void> _connect() async {
+    setState(() {
+      _busy = true;
+      _finding = true;
+      _error = null;
+      _found = null;
+    });
+    try {
+      final result = await widget.autoConnect();
+      if (!mounted) return;
+      if (result.ok) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() => _found = result.message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _finding = false;
+        });
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -86,6 +118,22 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       title: const Text('Connection'),
       content: SingleChildScrollView(
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Press Connect. The phone finds the laptop by itself (same Wi-Fi, hotspot or USB) and picks the right way in.'),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _busy ? null : _connect,
+            icon: _finding ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.wifi_find),
+            label: Text(_finding ? 'Looking for the laptop...' : 'Connect'),
+          ),
+          if (_found != null) ...[
+            const SizedBox(height: 8),
+            Text(_found!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          const Text('Or set it up by hand:'),
+          const SizedBox(height: 8),
           SegmentedButton<bool>(
             showSelectedIcon: false,
             segments: const [

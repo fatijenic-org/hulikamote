@@ -36,7 +36,7 @@ class RoadMarkingMap {
         case ('pedestrian_lane', 'crosswalk'):
         case ('sidewalk_driving', 'sidewalk'):
         case ('truck_ban', 'road'):
-          if (m.polygon.length >= 3) zones.add({'polygon': _points(m.polygon), 'marking': m.id});
+          if (m.polygon.length >= 3) zones.add({'polygon': _points(m.polygon), 'marking': m.id, if (m.kind == 'crosswalk' && m.paint) 'paint': {'stripes': m.stripes, 'wear': m.wear, 'realistic': m.realistic}});
         case ('tricycle_on_highway', 'road'):
           if (m.polygon.length >= 3 && m.roadClass == 'national_highway') zones.add({'polygon': _points(m.polygon), 'marking': m.id});
         case ('crossing_solid_line', 'solid_line'):
@@ -48,7 +48,7 @@ class RoadMarkingMap {
             zones.add({'polygon': _points(m.polygon), 'lane_type': m.laneType, 'marking': m.id});
           }
         case ('counterflow', 'road' || 'lane'):
-          if (m.polygon.length >= 3 && m.flow != null && m.arrow.length == 2) zones.add(_flowZone(m));
+          if (m.polygon.length >= 3 && m.flow != null && m.arrow.length >= 2) zones.add(_flowZone(m));
         default:
           break;
       }
@@ -71,11 +71,13 @@ class RoadMarkingMap {
 
   /// A road or lane with a direction becomes a Counterflow zone: its area, and the arrow as the legal way.
   static Map<String, dynamic> _flowZone(RoadArea m) {
-    final from = m.arrow[0], to = m.arrow[1];
+    final from = m.arrow.first, to = m.arrow.last;       // a bent arrow counts as the way from its first to its last point
     return {
       'polygon': _points(m.polygon),
       'vector': {'x_dir': to.dx - from.dx, 'y_dir': to.dy - from.dy},
       'ui_vector': _points([from, to]),
+      // a bent arrow (a road marked with many points): the rule judges each stretch against its own direction
+      if (m.arrow.length > 2) 'path': _points(m.arrow),
       'marking': m.id,
     };
   }

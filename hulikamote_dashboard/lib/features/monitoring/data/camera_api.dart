@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../../core/constants/api_constants.dart';
 import '../domain/models/frame_job.dart';
 import '../domain/models/road_detect.dart';
+import '../domain/models/road_preset.dart';
 
 /// A saved camera address. The backend never sends passwords back: they show as `***`.
 class CameraProfile {
@@ -159,6 +160,44 @@ class CameraApi {
 
   /// The frozen setup picture itself (JPEG), or null when there is none (the road markings are drawn on it).
   Future<Uint8List?> referenceFrameBytes() => _bytes('/settings/video/reference/frame');
+
+  // ── Saved roads: the road markings of the setup under a name, to use again, duplicate and edit later ──
+
+  Future<List<RoadPreset>> roadPresets() async {
+    final body = await _json(await _client.get(_uri('/settings/road-presets')));
+    return [for (final p in (body['presets'] as List? ?? const [])) RoadPreset.fromJson(Map<String, dynamic>.from(p as Map))];
+  }
+
+  /// The markings of a saved road (1920x1080 reference space).
+  Future<List<RoadArea>> roadPresetMarkings(String id) async {
+    final body = await _json(await _client.get(_uri('/settings/road-presets/$id')));
+    return [for (final m in (body['markings'] as List? ?? const [])) if (m is Map) RoadArea.fromJson(Map<String, dynamic>.from(m))];
+  }
+
+  Future<RoadPreset> saveRoadPreset(String name, List<RoadArea> markings) async => RoadPreset.fromJson(await _json(await _client.post(
+    _uri('/settings/road-presets'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'name': name, 'markings': [for (final m in markings) m.toJson()]}),
+  )));
+
+  /// Changes what is sent: the [name] and/or the [markings].
+  Future<RoadPreset> updateRoadPreset(String id, {String? name, List<RoadArea>? markings}) async => RoadPreset.fromJson(await _json(await _client.put(
+    _uri('/settings/road-presets/$id'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'name': ?name, if (markings != null) 'markings': [for (final m in markings) m.toJson()]}),
+  )));
+
+  Future<RoadPreset> duplicateRoadPreset(String id) async =>
+      RoadPreset.fromJson(await _json(await _client.post(_uri('/settings/road-presets/$id/duplicate'))));
+
+  Future<void> deleteRoadPreset(String id) async => _json(await _client.delete(_uri('/settings/road-presets/$id')));
+
+  /// Empties the setup (violations, zones, road markings, setup picture): the Live Monitor starts empty each time it is opened.
+  Future<void> resetLiveSetup() async => _json(await _client.post(_uri('/settings/live/reset')));
+
+  /// Everything the Performance popup shows (step times, a timeline of the last seconds, CPU / RAM / GPU load, the device of each model).
+  Future<Map<String, dynamic>> livePerf({double window = 2.5}) async =>
+      _json(await _client.get(_uri('/settings/live/perf', {'window': '$window'})).timeout(const Duration(seconds: 4)));
 
   /// The violations and settings the Live Monitor uses now, in the wizard's own shape ({} when none were set up).
   Future<Map<String, dynamic>> liveSetup() async => _json(await _client.get(_uri('/settings/live/setup')));

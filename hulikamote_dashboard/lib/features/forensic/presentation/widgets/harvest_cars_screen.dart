@@ -6,6 +6,7 @@ import '../../domain/harvest_labeling_models.dart';
 import 'harvest_car_viewer.dart';
 import 'harvest_pair_labeler.dart';
 import 'harvest_parts.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Opens the cars of one analysis over the whole window: a card per ticketed car, by number. Pick one to walk along its photos.
 Future<void> openCarsScreen(BuildContext context, {required HarvestLabeling labeling, required String taskId}) {
@@ -239,7 +240,7 @@ class _CarsScreenState extends State<CarsScreen> {
       child: Column(children: [
         Expanded(
           child: Stack(fit: StackFit.expand, children: [
-            Image(image: widget.labeling.carPhoto(list.evidenceDir, car.first, width: 320), fit: BoxFit.cover, gaplessPlayback: true),
+            KeepColors(child: Image(image: widget.labeling.carPhoto(list.evidenceDir, car.first, width: 320), fit: BoxFit.cover, gaplessPlayback: true)),
             if (car.state != CarState.open)
               Positioned(
                 top: 6,

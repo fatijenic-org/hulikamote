@@ -6,6 +6,7 @@ import '../../domain/forensic_models.dart';
 import '../../domain/plate_tools_models.dart';
 import '../../domain/review_controller.dart';
 import 'fx.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// "Draw plate": drag a box around the plate on a photo of this ticket. The system reads what is inside; check or
 /// fix the number and send it. It works whether or not the system found a plate by itself.
@@ -224,7 +225,7 @@ class _PlateDrawDialogState extends State<_PlateDrawDialog> {
             }),
             onPanEnd: (_) => _finishDrag(),
             child: Stack(fit: StackFit.expand, children: [
-              Image(image: _provider, fit: BoxFit.fill, gaplessPlayback: true),
+              KeepColors(child: Image(image: _provider, fit: BoxFit.fill, gaplessPlayback: true)),
               CustomPaint(painter: _BoxPainter(_box)),
             ]),
           );

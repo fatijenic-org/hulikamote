@@ -83,16 +83,23 @@ class ReplayBoxesPainter extends CustomPainter {
     canvas.save();
     canvas.translate((size.width - boxes.width * fit) / 2, (size.height - boxes.height * fit) / 2);
     canvas.scale(fit);
-    canvas.clipRect(Rect.fromLTWH(0, 0, boxes.width.toDouble(), boxes.height.toDouble()));
-    for (final b in boxes.at(seconds.value)) {
+    paintSpecs(canvas, boxes.at(seconds.value), boxes.width.toDouble(), boxes.height.toDouble(), px);
+    canvas.restore();
+  }
+
+  /// Draws [specs] in a picture of [width] x [height] pixels ([px] = one screen pixel in those units). The Live Monitor draws its
+  /// boxes with this too, so a box looks the same live and in a replay.
+  static void paintSpecs(Canvas canvas, List<BoxSpec> specs, double width, double height, double px) {
+    canvas.clipRect(Rect.fromLTWH(0, 0, width, height));
+    for (final b in specs) {
       if (b.note != null && b.noteAt != null) {
-        _note(canvas, b.note!, b.noteAt!, px);
+        _note(canvas, b.note!, b.noteAt!, width, height, px);
       } else if (b.timer != null && b.box != null) {
-        _timer(canvas, b, px);
+        _timer(canvas, b, width, height, px);
       } else if (b.box != null) {
         final r = Rect.fromLTWH(b.box![0], b.box![1], b.box![2], b.box![3]);
         canvas.drawRect(r, Paint()..style = PaintingStyle.stroke..strokeWidth = lineWidth * px..color = b.color);
-        _label(canvas, r, b, px);
+        _label(canvas, r, b, width, height, px);
         final p = b.plate;
         if (p != null) {
           canvas.drawRect(
@@ -102,12 +109,11 @@ class ReplayBoxesPainter extends CustomPainter {
         }
       }
     }
-    canvas.restore();
   }
 
   /// The label lines stacked above the box (the last line, the vehicle, nearest to it), kept inside the picture: a vehicle that is
   /// half outside gets its label on the visible part, inside its top edge when there is no room above.
-  void _label(Canvas canvas, Rect r, BoxSpec b, double px) {
+  static void _label(Canvas canvas, Rect r, BoxSpec b, double vw, double vh, double px) {
     if (b.lines.isEmpty) return;
     final dark = b.color.computeLuminance() > 0.6;
     final rows = [
@@ -120,10 +126,10 @@ class ReplayBoxesPainter extends CustomPainter {
     final pad = 2 * px;
     final width = rows.map((t) => t.width).reduce(math.max) + 2 * pad;
     final height = rows.fold<double>(0, (s, t) => s + t.height + pad);
-    final x = r.left.clamp(0.0, math.max(0.0, boxes.width - width)).toDouble();
+    final x = r.left.clamp(0.0, math.max(0.0, vw - width)).toDouble();
     var y = math.max(0.0, r.top) - height;
     if (y < 0) y = math.max(0.0, r.top);
-    y = math.min(y, math.max(0.0, boxes.height - height));
+    y = math.min(y, math.max(0.0, vh - height));
     for (final t in rows) {
       canvas.drawRect(Rect.fromLTWH(x, y, t.width + 2 * pad, t.height + pad), Paint()..color = b.color);
       t.paint(canvas, Offset(x + pad, y + pad / 2));
@@ -132,7 +138,7 @@ class ReplayBoxesPainter extends CustomPainter {
   }
 
   /// The stopwatch: a small chip sitting on the bottom edge of the vehicle's box (the labels above the box are not touched).
-  void _timer(Canvas canvas, BoxSpec b, double px) {
+  static void _timer(Canvas canvas, BoxSpec b, double vw, double vh, double px) {
     final box = b.box!;
     final dark = b.color.computeLuminance() > 0.6;
     final text = TextPainter(
@@ -141,21 +147,21 @@ class ReplayBoxesPainter extends CustomPainter {
     )..layout();
     final pad = 3 * px;
     final w = text.width + 2 * pad, h = text.height + pad;
-    final x = box[0].clamp(0.0, math.max(0.0, boxes.width - w)).toDouble();
-    final y = (box[1] + box[3] - h).clamp(0.0, math.max(0.0, boxes.height - h)).toDouble();
+    final x = box[0].clamp(0.0, math.max(0.0, vw - w)).toDouble();
+    final y = (box[1] + box[3] - h).clamp(0.0, math.max(0.0, vh - h)).toDouble();
     canvas.drawRect(Rect.fromLTWH(x, y, w, h), Paint()..color = b.color);
     text.paint(canvas, Offset(x + pad, y + pad / 2));
   }
 
-  void _note(Canvas canvas, String text, List<double> at, double px) {
+  static void _note(Canvas canvas, String text, List<double> at, double vw, double vh, double px) {
     final style = TextStyle(fontSize: fontSize * 1.2 * px, fontWeight: FontWeight.w700);
     final outline = TextPainter(
       text: TextSpan(text: text, style: style.copyWith(foreground: Paint()..style = PaintingStyle.stroke..strokeWidth = 3 * px..color = Colors.black)),
       textDirection: TextDirection.ltr,
     )..layout();
     final fill = TextPainter(text: TextSpan(text: text, style: style.copyWith(color: const Color(0xFFFF3B30))), textDirection: TextDirection.ltr)..layout();
-    final x = at[0].clamp(0.0, math.max(0.0, boxes.width - fill.width)).toDouble();
-    final y = at[1].clamp(0.0, math.max(0.0, boxes.height - fill.height)).toDouble();
+    final x = at[0].clamp(0.0, math.max(0.0, vw - fill.width)).toDouble();
+    final y = at[1].clamp(0.0, math.max(0.0, vh - fill.height)).toDouble();
     outline.paint(canvas, Offset(x, y));
     fill.paint(canvas, Offset(x, y));
   }

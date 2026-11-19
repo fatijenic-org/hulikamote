@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import database, create_tables, run_migrations
 from store import seed_users, seed_registry
-from routers import stream, model, violations, notifications, auth, settings, forensic, training, feedback, demerit, registry, notify, mailbox, appeals, trimmer, dev
+from routers import stream, model, violations, notifications, auth, settings, forensic, training, feedback, demerit, registry, notify, mailbox, appeals, pair, trimmer, dev
 
 SNAPSHOTS_DIR = Path(__file__).parent / "snapshots"
 SNAPSHOTS_DIR.mkdir(exist_ok=True)
@@ -67,6 +67,7 @@ app.include_router(registry.router)
 app.include_router(notify.router)
 app.include_router(mailbox.router)
 app.include_router(appeals.router)
+app.include_router(pair.router)
 app.include_router(trimmer.router)
 app.include_router(dev.router)      # temporary developer tools (HK_DEV=1 only)
 
