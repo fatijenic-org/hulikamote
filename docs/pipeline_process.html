@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline: now and proposal</title>
+<style>
+  :root { --bg:#f7f8fa; --card:#fff; --ink:#1b1f24; --mute:#667085; --line:#d9dde3; --gpu:#2f6fed; --cpu:#d98a00; --ok:#1c9a5b; --bad:#d6453d; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1c2027; --ink:#e8eaed; --mute:#9aa3af; --line:#323844; --gpu:#5b93ff; --cpu:#f0a62a; --ok:#37c983; --bad:#ff6b62; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; } h2 { font-size:17px; margin:0 0 8px; }
+  .sub { color:var(--mute); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .chip { border:2px solid var(--line); border-radius:8px; padding:4px 9px; font-size:13px; background:var(--card); }
+  .chip.gpu { border-color:var(--gpu); } .chip.cpu { border-color:var(--cpu); } .chip.maybe { border-style:dashed; }
+  .arrow { color:var(--mute); }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:13px; color:var(--mute); margin-top:10px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  .controls { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin:8px 0 14px; font-size:13px; }
+  .controls label { display:flex; gap:5px; align-items:center; color:var(--mute); }
+  .controls input[type=number] { width:56px; padding:3px 5px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
+  button { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:5px 12px; cursor:pointer; }
+  .tl { position:relative; margin-top:6px; }
+  .lane { display:grid; grid-template-columns:132px 1fr; align-items:center; margin:3px 0; }
+  .lane .name { font-size:12px; color:var(--mute); padding-right:8px; }
+  .track { position:relative; height:26px; background:color-mix(in srgb, var(--line) 35%, transparent); border-radius:5px; overflow:hidden; }
+  .blk { position:absolute; top:2px; bottom:2px; border-radius:4px; font-size:10px; line-height:22px; color:#fff; text-align:center; overflow:hidden; white-space:nowrap; opacity:.22; transition:opacity .15s; }
+  .blk.on { opacity:1; }
+  .blk.cpu { background-image:repeating-linear-gradient(135deg, rgba(0,0,0,.18) 0 4px, transparent 4px 8px); }
+  .gpubar { position:absolute; top:6px; bottom:6px; background:var(--gpu); border-radius:3px; opacity:.25; }
+  .gpubar.on { opacity:1; }
+  .head { position:absolute; top:0; bottom:0; width:2px; background:var(--bad); pointer-events:none; }
+  .headwrap { position:absolute; left:132px; right:0; top:0; bottom:0; pointer-events:none; }
+  .res { display:flex; gap:24px; flex-wrap:wrap; margin-top:10px; font-size:14px; }
+  .res b { font-size:20px; }
+  .bad { color:var(--bad); } .ok { color:var(--ok); }
+  ul { margin:6px 0 0; padding-left:20px; } li { margin:3px 0; }
+  .note { font-size:13px; color:var(--mute); }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:16px; } @media (max-width:760px){ .two{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>How one picture is handled</h1>
+  <p class="sub">Now, and what I propose. Step times below are <b>examples, not measured</b>. Change them. Step 1 of the plan (a timer in the log) gives the real numbers.</p>
+
+  <div class="card">
+    <h2>The steps (in the code today)</h2>
+    <div class="chips" id="steps"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--gpu)"></i>GPU work</span>
+      <span><i class="dot" style="background:var(--cpu)"></i>CPU work (striped in the charts)</span>
+      <span>Dashed box = runs only when a violation needs it (one vehicle at a time, on every 5th picture)</span>
+    </div>
+    <p class="note">The camera gives about 30 pictures a second. The detector runs on 1 of every 3. The chart shows only those pictures.</p>
+  </div>
+
+  <div class="card">
+    <h2>Step times (ms, examples)</h2>
+    <div class="controls" id="inputs"></div>
+    <label class="note"><input type="checkbox" id="models"> A violation that needs the helmet / plate / cabin models is ON</label>
+    <div class="controls"><button id="play">Pause</button><button id="restart">Restart</button>
+      <label>Speed <select id="speed"><option value="0.5">slow</option><option value="1" selected>normal</option><option value="2">fast</option></select></label></div>
+  </div>
+
+  <div class="card">
+    <h2>NOW: one worker does every step, one picture at a time</h2>
+    <div class="tl" id="now"></div>
+    <div class="res" id="nowRes"></div>
+    <p class="note">The GPU waits while the worker does the CPU steps (striped). The next picture does not start until the last one ends.</p>
+  </div>
+
+  <div class="card">
+    <h2>PROPOSAL: a work line, and two trackers side by side</h2>
+    <div class="tl" id="new"></div>
+    <div class="res" id="newRes"></div>
+    <ul>
+      <li><b>A</b> reads and finds the vehicles. It already works on picture 6 while the rest handle picture 5.</li>
+      <li>The <b>vehicle tracker</b> and the <b>people tracker</b> do not need each other. They run at the same time.</li>
+      <li><b>B</b> updates the vehicle history, runs the extra models (only if on) and checks the rules.</li>
+      <li><b>C</b> makes the JPEG and sends it.</li>
+    </ul>
+    <p class="note">Same models, same rules, same tickets in the same order. Each tracker still sees the pictures in order.</p>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <h2>What limits the gain</h2>
+      <ul>
+        <li>The slowest worker sets the speed. If A is slow, A is the limit.</li>
+        <li>Plain Python cannot run in two places at once. GPU and image work can. If the rules are the slow part, we need a second process.</li>
+        <li>A, B and C each take memory for pictures in transit. A small queue (2 pictures) keeps it low.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Plan</h2>
+      <ul>
+        <li><b>1.</b> Timer on each step. Writes times in the log. No change in behavior.</li>
+        <li><b>2.</b> Split into A / trackers / B / C. Decide with the real numbers from step 1.</li>
+        <li><b>3.</b> If the GPU steps dominate: FP16 or TensorRT, and batch the tiles.</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  var ST = [
+    { k:'read',   n:'Read',            s:'Rd',  res:'cpu', ms:3  },
+    { k:'resize', n:'Resize to 720p',  s:'Rs',  res:'cpu', ms:2  },
+    { k:'detect', n:'Detect (YOLO)',   s:'Det', res:'gpu', ms:8  },
+    { k:'nms',    n:'NMS',             s:'NMS', res:'cpu', ms:3  },
+    { k:'trackV', n:'Track vehicles',  s:'TrV', res:'gpu', ms:12 },
+    { k:'trackP', n:'Track people',    s:'TrP', res:'gpu', ms:4  },
+    { k:'hist',   n:'History + flow',  s:'His', res:'cpu', ms:3  },
+    { k:'models', n:'Helmet/plate/cabin models', s:'Mod', res:'gpu', ms:10, maybe:true },
+    { k:'rules',  n:'Rules',           s:'Rul', res:'cpu', ms:5  },
+    { k:'send',   n:'JPEG + send',     s:'Snd', res:'cpu', ms:10 }
+  ];
+  var FRAMES = 6, modelsOn = false, playing = true, speed = 1, t = 0, nowSched, newSched;
+  var by = {}; ST.forEach(function (x) { by[x.k] = x; });
+
+  function dur(k) { return k === 'models' && !modelsOn ? 0 : by[k].ms; }
+  function color(f) { return 'hsl(' + (f * 57 + 205) % 360 + ',62%,48%)'; }
+
+  // chips
+  var chips = document.getElementById('steps');
+  ST.forEach(function (x, i) {
+    var c = document.createElement('span');
+    c.className = 'chip ' + x.res + (x.maybe ? ' maybe' : '');
+    c.textContent = x.n;
+    chips.appendChild(c);
+    if (i < ST.length - 1) { var a = document.createElement('span'); a.className = 'arrow'; a.textContent = '→'; chips.appendChild(a); }
+  });
+
+  // inputs
+  var inp = document.getElementById('inputs');
+  ST.forEach(function (x) {
+    var l = document.createElement('label');
+    l.appendChild(document.createTextNode(x.n + ' '));
+    var i = document.createElement('input'); i.type = 'number'; i.min = 0; i.max = 200; i.value = x.ms;
+    i.addEventListener('input', function () { x.ms = Math.max(0, +i.value || 0); build(); });
+    l.appendChild(i); inp.appendChild(l);
+  });
+  document.getElementById('models').addEventListener('change', function (e) { modelsOn = e.target.checked; build(); });
+  document.getElementById('speed').addEventListener('change', function (e) { speed = +e.target.value; });
+  document.getElementById('play').addEventListener('click', function (e) { playing = !playing; e.target.textContent = playing ? 'Pause' : 'Play'; });
+  document.getElementById('restart').addEventListener('click', function () { t = 0; });
+
+  // schedules: list of blocks {lane, f, k, start, d}
+  function sequential() {
+    var blocks = [], clock = 0, order = ['read','resize','detect','nms','trackV','trackP','hist','models','rules','send'];
+    for (var f = 0; f < FRAMES; f++) order.forEach(function (k) {
+      var d = dur(k); if (!d) return;
+      blocks.push({ lane:'W', f:f, k:k, start:clock, d:d }); clock += d;
+    });
+    return { blocks:blocks, end:clock };
+  }
+  function pipelined() {
+    var blocks = [], free = { A:0, V:0, P:0, B:0, C:0 }, end = 0;
+    for (var f = 0; f < FRAMES; f++) {
+      var s = free.A;
+      ['read','resize','detect','nms'].forEach(function (k) { var d = dur(k); blocks.push({ lane:'A', f:f, k:k, start:s, d:d }); s += d; });
+      free.A = s;
+      var v0 = Math.max(free.V, s), p0 = Math.max(free.P, s);
+      blocks.push({ lane:'V', f:f, k:'trackV', start:v0, d:dur('trackV') }); free.V = v0 + dur('trackV');
+      blocks.push({ lane:'P', f:f, k:'trackP', start:p0, d:dur('trackP') }); free.P = p0 + dur('trackP');
+      var b = Math.max(free.B, free.V, free.P);
+      ['hist','models','rules'].forEach(function (k) { var d = dur(k); if (!d) return; blocks.push({ lane:'B', f:f, k:k, start:b, d:d }); b += d; });
+      free.B = b;
+      var c = Math.max(free.C, b);
+      blocks.push({ lane:'C', f:f, k:'send', start:c, d:dur('send') }); free.C = c + dur('send'); end = free.C;
+    }
+    return { blocks:blocks.filter(function (x) { return x.d > 0; }), end:end };
+  }
+
+  function gpuIntervals(blocks) {
+    var iv = blocks.filter(function (b) { return by[b.k].res === 'gpu'; }).map(function (b) { return [b.start, b.start + b.d]; })
+      .sort(function (a, b) { return a[0] - b[0]; });
+    var out = [];
+    iv.forEach(function (x) { var l = out[out.length - 1]; if (l && x[0] <= l[1]) l[1] = Math.max(l[1], x[1]); else out.push([x[0], x[1]]); });
+    return out;
+  }
+
+  var drawn = [];
+  function draw(el, sched, lanes, maxEnd) {
+    el.innerHTML = '';
+    var wrap = document.createElement('div'); wrap.className = 'headwrap';
+    var head = document.createElement('div'); head.className = 'head'; wrap.appendChild(head);
+    var items = [];
+    lanes.concat([{ id:'GPU', label:'GPU busy' }]).forEach(function (ln) {
+      var row = document.createElement('div'); row.className = 'lane';
+      var nm = document.createElement('div'); nm.className = 'name'; nm.textContent = ln.label; row.appendChild(nm);
+      var tr = document.createElement('div'); tr.className = 'track'; row.appendChild(tr); el.appendChild(row);
+      if (ln.id === 'GPU') {
+        gpuIntervals(sched.blocks).forEach(function (iv) {
+          var g = document.createElement('div'); g.className = 'gpubar';
+          g.style.left = iv[0] / maxEnd * 100 + '%'; g.style.width = (iv[1] - iv[0]) / maxEnd * 100 + '%';
+          tr.appendChild(g); items.push({ el:g, start:iv[0] });
+        });
+      } else sched.blocks.filter(function (b) { return b.lane === ln.id; }).forEach(function (b) {
+        var d = document.createElement('div'); d.className = 'blk ' + by[b.k].res;
+        d.style.left = b.start / maxEnd * 100 + '%'; d.style.width = b.d / maxEnd * 100 + '%';
+        d.style.background = color(b.f); d.title = 'Picture ' + (b.f + 1) + ' · ' + by[b.k].n + ' · ' + b.d + ' ms · ' + by[b.k].res.toUpperCase();
+        if (b.d / maxEnd * el.clientWidth > 30) d.textContent = by[b.k].s;
+        tr.appendChild(d); items.push({ el:d, start:b.start });
+      });
+    });
+    el.appendChild(wrap);
+    drawn.push({ head:head, items:items, maxEnd:maxEnd });
+  }
+
+  function util(sched) { var busy = 0; gpuIntervals(sched.blocks).forEach(function (iv) { busy += iv[1] - iv[0]; }); return Math.round(busy / sched.end * 100); }
+  function fps(sched) { return (FRAMES - 1) / ((sched.end - lastStart(sched)) / 1000); }
+  function lastStart(sched) { // time the first picture is done, so the rate is the steady one
+    var firstDone = 0; sched.blocks.forEach(function (b) { if (b.f === 0 && b.start + b.d > firstDone) firstDone = b.start + b.d; }); return firstDone;
+  }
+
+  function build() {
+    drawn = [];
+    nowSched = sequential(); newSched = pipelined();
+    var maxEnd = Math.max(nowSched.end, newSched.end) * 1.02;
+    draw(document.getElementById('now'), nowSched, [{ id:'W', label:'One worker' }], maxEnd);
+    draw(document.getElementById('new'), newSched,
+      [{ id:'A', label:'A: read + detect' }, { id:'V', label:'Track vehicles' }, { id:'P', label:'Track people' },
+       { id:'B', label:'B: history, models, rules' }, { id:'C', label:'C: send' }], maxEnd);
+    var nf = fps(nowSched), pf = fps(newSched);
+    document.getElementById('nowRes').innerHTML = '<span>Speed: <b class="bad">' + nf.toFixed(0) + '</b> pictures/s</span><span>GPU busy: <b>' + util(nowSched) + '%</b></span><span>One picture takes: <b>' + Math.round(nowSched.end / FRAMES) + ' ms</b></span>';
+    document.getElementById('newRes').innerHTML = '<span>Speed: <b class="ok">' + pf.toFixed(0) + '</b> pictures/s (' + (pf / nf).toFixed(1) + '×)</span><span>GPU busy: <b>' + util(newSched) + '%</b></span><span>Slowest worker: <b>' + slowest() + '</b></span>';
+    t = 0;
+  }
+  function slowest() {
+    var tot = { A:0, V:0, P:0, B:0, C:0 };
+    newSched.blocks.forEach(function (b) { if (b.f === 0) tot[b.lane] += b.d; });
+    var names = { A:'A', V:'vehicle tracker', P:'people tracker', B:'B', C:'C' }, best = 'A', bv = -1;
+    Object.keys(tot).forEach(function (k) { if (tot[k] > bv) { bv = tot[k]; best = k; } });
+    return names[best] + ' (' + bv + ' ms)';
+  }
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = now - last; last = now;
+    if (playing && drawn.length) {
+      var maxEnd = drawn[0].maxEnd;
+      t += dt * speed * maxEnd / 9000;
+      if (t > maxEnd * 1.08) t = 0;
+    }
+    drawn.forEach(function (d) {
+      d.head.style.left = Math.min(100, t / d.maxEnd * 100) + '%';
+      d.items.forEach(function (it) { if (t >= it.start) it.el.classList.add('on'); else it.el.classList.remove('on'); });
+    });
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', build);
+  build(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
