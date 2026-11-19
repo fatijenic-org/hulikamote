@@ -19,7 +19,10 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+from concurrent.futures import ThreadPoolExecutor
+
 from engine import marks, specialists
+from engine.stage_timer import TIMER
 from inference.providers import make_session, active_provider, get_providers
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -435,7 +438,18 @@ class YoloInference:
         track=False returns the boxes only and leaves the trackers alone: for a second caller (the road scan) that must not
         disturb the live tracking.
         """
+        detections, ready = self.detect(frame)
+        if ready and track:
+            self.assign_tracks(detections, frame)
+        return detections
+
+    def detect(self, frame: np.ndarray) -> tuple[list[YoloDetection], bool]:
+        """
+        The boxes of one BGR frame (model, cutoffs, NMS), without track ids: (detections, ready).
+        `ready` is False when the model found nothing worth tracking: the trackers are then left alone (as infer() always did).
+        """
         detections: list[YoloDetection] = []
+        t0 = time.perf_counter()
         boxes_xyxy, confidences, class_ids = self._candidates(frame)
         if self.small_people:
             parts = [(boxes_xyxy, confidences, class_ids)]
@@ -446,8 +460,10 @@ class YoloInference:
             boxes_xyxy = np.concatenate([p[0] for p in parts])
             confidences = np.concatenate([p[1] for p in parts])
             class_ids = np.concatenate([p[2] for p in parts])
+        TIMER.add("detect", time.perf_counter() - t0)
         if len(confidences) == 0:
-            return detections
+            return detections, False
+        t1 = time.perf_counter()
 
         # Filter by confidence (one cutoff per class, see CLASS_CONFIDENCE); an unsure person only when on a vehicle
         thresholds = self._class_thresholds(self._n_classes)
@@ -459,7 +475,7 @@ class YoloInference:
             weak &= np.array([on_a_vehicle(b, vehicles) for b in boxes_xyxy], dtype=bool)
         mask |= weak
         if not mask.any():
-            return detections
+            return detections, False
 
         boxes_xyxy = boxes_xyxy[mask]
         confidences = confidences[mask]
@@ -503,19 +519,33 @@ class YoloInference:
             ))
 
         # ── Tracking ─────────────────────────────────────────────────────────
-        # Riders / pedestrians and vehicles are tracked apart (see PERSON_ID_BASE): the trackers know nothing
-        # about classes, so in one pool a rider box takes over the motorcycle's id whenever the bike is missed.
-        if not track:
-            return detections
+        TIMER.add("nms", time.perf_counter() - t1)
+        return detections, True
+
+    def assign_tracks(self, detections: list[YoloDetection], frame: np.ndarray) -> None:
+        """
+        Give every detection its track id. Riders / pedestrians and vehicles are tracked apart (see PERSON_ID_BASE): the trackers know
+        nothing about classes, so in one pool a rider box takes over the motorcycle's id whenever the bike is missed.
+        The two trackers are separate objects that share nothing, so when both have boxes the people tracker runs in a helper thread
+        beside the vehicle tracker (the neural-net and image work in both release Python's lock).
+        """
         people = [d for d in detections if d.cls == "person"]
         vehicles = [d for d in detections if d.cls != "person"]
-        self._track(self.tracker, vehicles, frame, 0)
-        self._track(self.people_tracker, people, frame, PERSON_ID_BASE)
+        if people and vehicles:
+            helper = _PEOPLE_TRACK_POOL.submit(self._timed_track, "trackP", self.people_tracker, people, frame, PERSON_ID_BASE)
+            self._timed_track("trackV", self.tracker, vehicles, frame, 0)
+            helper.result()                         # an error in the helper surfaces here, as it did when they ran one after the other
+        else:
+            self._timed_track("trackV", self.tracker, vehicles, frame, 0)
+            self._timed_track("trackP", self.people_tracker, people, frame, PERSON_ID_BASE)
         for d in vehicles:
             if d.track_id != -1:                    # one frame of "car" on a motorcycle does not change its class
                 d.cls = d.violation_type = self._stable_class(d.track_id, d.cls, d.confidence)
 
-        return detections
+    def _timed_track(self, name: str, tracker, dets: list, frame: np.ndarray, id_offset: int) -> None:
+        t0 = time.perf_counter()
+        self._track(tracker, dets, frame, id_offset)
+        TIMER.add(name, time.perf_counter() - t0)
 
     def draw_detections(self, frame: np.ndarray, detections: list[YoloDetection]) -> np.ndarray:
         """Draw the vehicle boxes and labels on a copy of the frame."""
@@ -565,6 +595,11 @@ def on_a_vehicle(person_xyxy, vehicles_xyxy) -> bool:
         if vx1 <= px <= vx2 and vy1 - 0.15 * (vy2 - vy1) <= py <= vy2:
             return True
     return False
+
+
+# The people tracker, when it has work beside the vehicle tracker (YoloInference.assign_tracks). One thread: it is only ever used by
+# the one pipeline that tracks, one picture at a time.
+_PEOPLE_TRACK_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="track-people")
 
 
 def get_inference(force_reload: bool = False, session_factory=None, tracker_type: str = "bytetrack") -> YoloInference:

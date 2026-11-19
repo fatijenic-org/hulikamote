@@ -134,6 +134,16 @@ def save_road(key: str, entry: dict, path: Path | None = None) -> None:
         _write_atomic(path, config)
 
 
+def forget_all_roads(path: Path | None = None) -> None:
+    """Remove the saved road of EVERY camera from the config file."""
+    path = path or DEFAULT_CONFIG
+    with _FILE_LOCK:
+        config = _read(path)
+        if CONFIG_KEY in config:
+            config.pop(CONFIG_KEY, None)
+            _write_atomic(path, config)
+
+
 def forget_road(key: str, path: Path | None = None) -> bool:
     path = path or DEFAULT_CONFIG
     with _FILE_LOCK:
@@ -275,7 +285,7 @@ def clean_zones(zones, size: tuple[int, int]) -> list[dict] | None:
         if kind == "road" and z.get("flow") in FLOWS:
             item["flow"] = z["flow"]
             arrow = clamp(z.get("arrow"), 2) if z.get("arrow") is not None else None
-            if arrow is not None and len(arrow) == 2:
+            if arrow is not None:                                       # two points or more: a bent arrow follows a bent road
                 item["arrow"] = arrow
         out.append(item)
     return out
@@ -316,7 +326,10 @@ def marks_overlay(result: dict, colour_size: tuple[int, int], lines_are_rules: b
         poly, colour = pts(band["polygon"]), (blue if band["flow"] == "in" else violet)
         cv2.fillPoly(out, [poly], colour[:3] + (60,))
         cv2.polylines(out, [poly], True, colour, 4, cv2.LINE_AA)
-        a, b = (tuple(int(v) for v in pts(band["arrow"])[i]) for i in (0, 1))
+        path = pts(band["arrow"])
+        if len(path) > 2:
+            cv2.polylines(out, [path[:-1]], False, colour, 10, cv2.LINE_AA)
+        a, b = (tuple(int(v) for v in path[i]) for i in (-2, -1))
         cv2.arrowedLine(out, a, b, colour, 10, cv2.LINE_AA, tipLength=0.22)
         _label(out, "Incoming (toward the camera)" if band["flow"] == "in" else "Outgoing (away from the camera)",
                (int(poly[:, 0].min()) + 8, int(poly[:, 1].min()) + 34), colour)
@@ -679,6 +692,19 @@ class LiveCalibrator:
             self._verify = None
             self._start_learning(1)
             return True
+
+    def reset_all(self) -> None:
+        """Back to a clean start: every saved road is removed and nothing is known about any camera. The next camera that connects learns its
+        road from nothing."""
+        with self._lock:
+            forget_all_roads(self.config_path)
+            self.key = None
+            self._epoch += 1
+            self._set_zones({})
+            self._reset_state()
+            self._clear_buffers()
+            self._ring_clear()
+            self._detect = None
 
     def forget(self) -> bool:
         """Remove what is saved for this camera and stop using it. It learns again the next time the camera connects, or on Re-learn."""

@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 import cloud
+import cloud_setup
 import emailer
 import env_file
 import store
@@ -26,6 +27,16 @@ class SettingsBody(BaseModel):
     supabase_service_key: str = ""  # secret; empty = keep the saved one
 
 
+class CloudSetupBody(BaseModel):
+    supabase_url: str = ""          # empty = the saved one
+    access_token: str = ""          # empty = the saved one (only there if "remember" was ticked once)
+    remember_token: bool = False
+
+
+class PushKeyBody(BaseModel):
+    key_json: str                   # the text of the Firebase service-account file
+
+
 class TestBody(BaseModel):
     to: str = ""                    # where to send the test; empty = the sender itself
 
@@ -40,6 +51,8 @@ def _view(request: Request, notices: list[dict]) -> dict:
         "password_set": bool(cfg["password"]),
         "cloud_url": cloud.settings()[0],
         "cloud_key_set": bool(cloud.settings()[1]),
+        "token_saved": bool(cloud_setup.saved_token()),
+        "cloud_ready": bool(cloud.configured() and cloud_setup.saved_anon_key()),
         "mailbox_urls": [f"http://{ip}:{port}/mailbox" for ip in lan_ips()],
         "notices": [{"id": n["id"], "user_name": n["user_name"] or "", "to_email": n["to_email"], "subject": n["subject"],
                      "status": n["status"], "detail": n["detail"], "created_at": n["created_at"], "frames": n["frames"]} for n in notices],
@@ -112,12 +125,7 @@ async def cloud_test():
         return {"ok": False, "detail": str(exc)}
 
 
-@router.post("/cloud-demo-accounts")
-async def cloud_demo_accounts():
-    """Create the demo motorists (Juan, Maria, Pedro) in the phone cloud, with all the plates they own on the laptop, so the
-    online demo works straight away. An account that exists is only given the plates it is missing."""
-    if not cloud.configured():
-        raise HTTPException(status_code=400, detail="Save the Supabase project address and service key first")
+async def _demo_accounts() -> list[dict]:
     registry = {m["id"]: m for m in await store.list_registry()}
     accounts = []
     for demo in store.MOCK_USERS:
@@ -127,7 +135,37 @@ async def cloud_demo_accounts():
         login_plate = store.DEMO_PLATES.get(demo["id"]) or motorist["plates"][0]
         accounts.append({"name": motorist["name"], "plate": login_plate, "plates": motorist["plates"],
                          "password": demo["password"], "email": motorist["email"]})
-    return {"results": await asyncio.to_thread(cloud.sync_accounts, accounts)}
+    return accounts
+
+
+@router.post("/cloud-demo-accounts")
+async def cloud_demo_accounts():
+    """Create the demo motorists (Juan, Maria, Pedro) in the phone cloud, with all the plates they own on the laptop, so the
+    online demo works straight away. An account that exists is only given the plates it is missing."""
+    if not cloud.configured():
+        raise HTTPException(status_code=400, detail="Save the Supabase project address and service key first")
+    return {"results": await asyncio.to_thread(cloud.sync_accounts, await _demo_accounts())}
+
+
+@router.post("/cloud-setup")
+async def cloud_setup_all(body: CloudSetupBody):
+    """One click: read the keys, build the database, turn Confirm email off, check, make the demo accounts, check push.
+    Answers {ok, steps: [{text, ok, detail}]}; the access token is used here and forgotten (unless remember_token)."""
+    url = body.supabase_url.strip() or cloud.settings()[0]
+    result = await asyncio.to_thread(cloud_setup.run, url, body.access_token, body.remember_token, await _demo_accounts())
+    push = store.push_status()
+    result["steps"].append({"text": "Push to phones", "ok": push["ready"], "detail": push["detail"], "warn": True})
+    result["push_ready"] = push["ready"]
+    return result
+
+
+@router.post("/push-key")
+async def push_key(body: PushKeyBody):
+    """Install the Firebase service-account file the user picked (push when the phone app is closed)."""
+    try:
+        return store.install_firebase_key(body.key_json)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/push-check")

@@ -74,6 +74,38 @@ def heading(ledger):
     return None
 
 
+HEADING_S = 0.8   # steady_heading: look at this much time of travel
+TRAVEL_S = 0.6    # is_travelling: look at this much time of travel
+
+
+def is_travelling(ledger) -> bool:
+    """Moving over the last 0.6 s: at least STOP_SPEED and a quarter of a box width per second. A shorter look and a lower floor than
+    is_driving, so a quick vehicle that is in view for a few seconds only, and a far one (it moves only a few px a second on the
+    picture), still count. A parked vehicle's jitter (a few px, back and forth) stays far below it."""
+    speed = recent_speed(ledger, TRAVEL_S)
+    return speed != math.inf and speed >= max(STOP_SPEED, MIN_SPEED_WIDTHS * ledger.path[-1][3])
+
+
+def steady_heading(ledger):
+    """Direction of travel over the last 0.8 s (at least `step` px of it), or None if barely moving. A longer look than heading(),
+    which uses half a box width of travel: box jitter then swings the direction by tens of degrees, and a rule that judges the angle
+    flips between right and wrong from frame to frame."""
+    t_last, cx, cy, _w = ledger.path[-1]
+    needed = step(ledger)
+    for t, px, py, _pw in ledger.path:                  # oldest first: the first point inside the window is the longest look
+        if t_last - t <= HEADING_S:
+            if math.hypot(cx - px, cy - py) >= needed:
+                return unit(cx - px, cy - py)
+            break
+    return heading(ledger)
+
+
+def polygon_gap(x: float, y: float, polygon: list) -> float:
+    """Pixels from the point to the polygon: 0 or less inside (or on the edge), more outside."""
+    poly = np.array(polygon, dtype=np.int32)
+    return -cv2.pointPolygonTest(poly, (float(x), float(y)), True)
+
+
 def moving_along(ledger, arrow) -> bool:
     """True if the vehicle is heading within 45 deg of `arrow`."""
     current, arrow = heading(ledger), unit(*(arrow or (0.0, 0.0)))

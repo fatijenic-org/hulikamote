@@ -1,8 +1,9 @@
 import shutil
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from engine.frame_grabber import FrameGrabber
 from engine.setup_scan import SetupScan
+from engine.road_presets import PresetError, RoadPresets
 from engine.hls_broadcaster import server_status
 from engine.camera_source import mask_url, parse_source, restore_password, test_connection
 from routers.trimmer import local_only
@@ -330,6 +331,57 @@ async def discard_road_scan():
     return {"ok": True}
 
 
+# Saved road configurations (the road markings of the setup, under a name): use again, duplicate, edit later.
+road_presets = RoadPresets()
+
+
+def _preset_or_404(preset: dict | None) -> dict:
+    if preset is None:
+        raise HTTPException(status_code=404, detail="There is no such saved road")
+    return preset
+
+
+def _preset_call(fn, *args):
+    try:
+        return fn(*args)
+    except PresetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/road-presets")
+async def list_road_presets():
+    return {"presets": road_presets.list()}
+
+
+@router.get("/road-presets/{preset_id}")
+async def get_road_preset(preset_id: str):
+    return _preset_or_404(road_presets.get(preset_id))
+
+
+@router.post("/road-presets")
+async def save_road_preset(payload: dict = Body(...)):
+    """{"name", "markings": [...]} -> the saved road (with its id)."""
+    return _preset_call(road_presets.create, payload.get("name"), payload.get("markings"))
+
+
+@router.put("/road-presets/{preset_id}")
+async def update_road_preset(preset_id: str, payload: dict = Body(...)):
+    """Any of {"name", "markings"}: only what is sent changes."""
+    return _preset_or_404(_preset_call(road_presets.update, preset_id, payload.get("name"), payload.get("markings")))
+
+
+@router.post("/road-presets/{preset_id}/duplicate")
+async def duplicate_road_preset(preset_id: str):
+    return _preset_or_404(_preset_call(road_presets.duplicate, preset_id))
+
+
+@router.delete("/road-presets/{preset_id}")
+async def delete_road_preset(preset_id: str):
+    if not road_presets.delete(preset_id):
+        raise HTTPException(status_code=404, detail="There is no such saved road")
+    return {"ok": True}
+
+
 # The setup's "pick a frame" step: a few pictures of the CURRENT source (a file: spread over the video; a camera: one a second for a few
 # seconds). They arrive one by one; the operator picks one and it becomes the setup picture (/video/reference/frame).
 _grab: FrameGrabber | None = None
@@ -391,11 +443,59 @@ async def relearn_live_flow():
     return await asyncio.get_running_loop().run_in_executor(stream._PIPELINE_EXECUTOR, stream.relearn_flow)
 
 
+@router.get("/live/timing")
+async def live_timing():
+    """How long each step of the live pipeline takes (average and worst of the last ~150 pictures, in ms) and how many pictures a second
+    are sent and judged. The same numbers go to the log every 5 seconds. "overlap" says whether the detector and the rules work on
+    different pictures at the same time (HK_PIPELINE_OVERLAP=0 turns that off)."""
+    from engine.stage_timer import TIMER
+    return {**TIMER.snapshot(), "overlap": stream.PIPELINE_OVERLAP}
+
+
+@router.get("/live/perf")
+async def live_perf(window: float = 2.5):
+    """Everything the Live Monitor's Performance popup shows, in one call: the step times (as /live/timing), the steps of the last `window`
+    seconds with their start times (a timeline), CPU / RAM / GPU load now and for the last 90 s, and the device each model runs on."""
+    import yolo_inference
+    from engine.stage_timer import LANES, STEP_INFO, TIMER
+    from engine.system_stats import STATS
+    window = min(max(window, 0.5), 10.0)
+    models = []
+    detector = getattr(yolo_inference, "_inference", None)
+    if detector is not None:
+        models.append({"name": "detector", "provider": detector._session.get_providers()[0]})
+    registry = getattr(getattr(stream, "_pipeline", None), "registry", None)
+    for name, session in (getattr(registry, "models", None) or {}).items():
+        try:
+            models.append({"name": name, "provider": session.get_providers()[0]})
+        except Exception:
+            pass
+    return {**TIMER.snapshot(), "overlap": stream.PIPELINE_OVERLAP, "infer_every": stream.INFER_EVERY_N_FRAMES + 1, "window_s": window,
+            "spans": TIMER.spans(window), "step_info": STEP_INFO, "lanes": [{"id": i, "label": label} for i, label in LANES],
+            "system": STATS.snapshot(), "models": models}
+
+
 @router.get("/live/setup")
 async def get_live_setup():
     """The violations and settings the Live Monitor uses now, in the wizard's own shape (empty when none were set up)."""
     config = _read_config()
     return {key: config[key] for key in LIVE_SETUP_KEYS if key in config}
+
+
+@router.post("/live/reset")
+async def reset_live_setup():
+    """The Live Monitor starts empty each time it is opened: no violations, no zones, no road markings, no setup picture, no saved or learned
+    road, no learned traffic flow. The camera, the saved camera addresses, the saved roads (road_presets.json) and the pipeline settings are kept."""
+    config = _read_config()
+    config["active_violations"] = []
+    for key in ("per_violation_configs", "road_markings"):
+        config.pop(key, None)
+    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    scan.cancel()
+    stream.clear_reference()
+    stream.mark_pipeline_stale()                 # the next feed is built without the old rules
+    stream.start_clean()                         # no saved or learned road, no learned traffic flow
+    return {"ok": True}
 
 
 # ─── Camera profiles: named addresses (CCTV / DVR, phone camera, another laptop, a file) ────────

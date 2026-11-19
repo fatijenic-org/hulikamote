@@ -21,7 +21,7 @@ import math
 
 import numpy as np
 
-from engine.violations.geometry import dot, heading, is_driving
+from engine.violations.geometry import dot, is_travelling, steady_heading
 
 BINS = 8                      # 45 deg each
 CELLS_X, CELLS_Y = 16, 9
@@ -30,7 +30,7 @@ MIN_VOTES = 15                # pooled over the 3 x 3 block of cells around the 
 MIN_TRACKS = 3
 MIN_OWN_VOTES = 2             # the cell itself must have been driven through (no judging of grass next to the road)
 DOMINANT_SHARE = 0.70         # share of the votes (peak bin +-1) that must agree before a cell is judged
-AGAINST_COS = math.cos(math.radians(135.0))   # heading further than 135 deg from the flow = against it
+AGAINST_COS = math.cos(math.radians(120.0))   # heading further than 120 deg from the flow = against it
 _FORGET_AFTER = 200_000       # bookkeeping entries; cleared when exceeded (only loosens the per-track vote cap)
 
 
@@ -92,8 +92,8 @@ class FlowField:
                 continue
             if "counterflow" in ledger.violations:
                 continue
-            head = heading(ledger)                  # None while barely moving
-            if head is not None and is_driving(ledger):     # a creeping or drifting car must not teach a direction
+            head = steady_heading(ledger)           # None while barely moving
+            if head is not None and is_travelling(ledger):  # a creeping or drifting car must not teach a direction
                 self.observe(ledger.track_id, ledger.path[-1][1], ledger.path[-1][2], head, frame_w, frame_h)
 
     # ── asking ───────────────────────────────────────────────────────────────

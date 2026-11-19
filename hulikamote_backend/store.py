@@ -82,6 +82,31 @@ if os.path.exists(FIREBASE_KEY_PATH):
 else:
     print(f"Warning: {FIREBASE_KEY_PATH} not found. Push notifications will be mocked.")
 
+def install_firebase_key(raw: str) -> dict:
+    """Save a Firebase service-account file the user picked and start Firebase with it. Raises ValueError (safe to show) when it
+    is not such a file. Returns push_status()."""
+    global _firebase_initialized
+    try:
+        data = json.loads(raw)
+    except (TypeError, ValueError):
+        raise ValueError("That is not a JSON file. Pick the service-account file from Firebase: Project settings > Service accounts > Generate new private key.")
+    if not isinstance(data, dict) or data.get("type") != "service_account" or not data.get("private_key") or not data.get("project_id"):
+        raise ValueError("That JSON is not a Firebase service-account key (it has no private_key / project_id).")
+    try:
+        cred = credentials.Certificate(data)
+    except Exception as exc:
+        raise ValueError(f"Firebase would not accept that key: {exc}")
+    with open(FIREBASE_KEY_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+    try:
+        firebase_admin.delete_app(firebase_admin.get_app())
+    except ValueError:
+        pass                                  # none was started yet
+    firebase_admin.initialize_app(cred)
+    _firebase_initialized = True
+    return push_status()
+
+
 # ─── Users ────────────────────────────────────────────────────────────────────
 
 async def get_all_users() -> list[dict]:
@@ -260,7 +285,11 @@ async def _get_tokens_for_user(user_id: str) -> list[str]:
 
 # ─── Violations ───────────────────────────────────────────────────────────────
 
-async def get_violations(page: int = 1, size: int = 20, user_id: str | None = None, status: str | None = None, track_id: int | None = None) -> dict:
+async def get_violations(page: int = 1, size: int = 20, user_id: str | None = None, status: str | None = None, track_id: int | None = None,
+                         since: str | None = None, source: str | None = None) -> dict:
+    """One page of tickets, newest first. `since` (an ISO time in UTC, as the tickets store it) keeps only tickets made at or after it:
+    a vehicle's track number starts again from 1 each time the live feed starts, so a track number alone also finds the tickets of
+    older runs. `source` is "live" or "forensic"."""
     query = (
         db.violations_table.select()
         .add_columns(db.users_table.c.name.label("user_name"))
@@ -282,11 +311,20 @@ async def get_violations(page: int = 1, size: int = 20, user_id: str | None = No
     if track_id is not None:
         where_clauses.append(db.violations_table.c.track_id == track_id)
         count_query += f" AND track_id = {int(track_id)}"
-        
+    values: dict = {}
+    if since:
+        where_clauses.append(db.violations_table.c.timestamp >= since)
+        count_query += " AND timestamp >= :since"
+        values["since"] = since
+    if source:
+        where_clauses.append(db.violations_table.c.source == source)
+        count_query += " AND source = :source"
+        values["source"] = source
+
     for clause in where_clauses:
         query = query.where(clause)
 
-    total = await db.database.fetch_val(count_query)
+    total = await db.database.fetch_val(count_query, values) if values else await db.database.fetch_val(count_query)
     offset = (page - 1) * size
     rows = await db.database.fetch_all(
         query.order_by(db.violations_table.c.timestamp.desc()).limit(size).offset(offset)
