@@ -15,6 +15,7 @@ import '../../domain/zone_geometry.dart';
 import 'box_object.dart';
 import 'fx.dart';
 import 'violation_params.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 enum ZoneTool { zone, arrow, light, sign }
 
@@ -174,7 +175,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
   static const _findable = {'crossing_solid_line', 'red_light', 'pedestrian_lane'};
   bool _finding = false;
 
-  bool get _canFindLines => widget.api != null && widget.draft.videoPath != null && _findable.contains(key);
+  bool get _canFindLines => widget.api != null && !widget.draft.isLive && widget.draft.videoPath != null && _findable.contains(key);
 
   Future<void> _findLines() async {
     final api = widget.api;
@@ -641,12 +642,12 @@ class _ZoneEditorState extends State<ZoneEditor> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image(
+                              KeepColors(child: Image(
                                 image: widget.frame,
                                 fit: BoxFit.fill,
                                 gaplessPlayback: true,
-                              ),
-                              CustomPaint(
+                              )),
+                              KeepColors(child: CustomPaint(
                                 painter: _ZonePainter(
                                   saved: saved,
                                   poly: List.of(_poly),
@@ -665,7 +666,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                   boxSigns: _boxSigns ? _boxObjects() : const [],
                                   loadingHandles: _boxSigns && _tool == ZoneTool.sign,
                                 ),
-                              ),
+                              )),
                               if (_poly.isEmpty && saved.isEmpty && (!(_isLane || _boxSigns) || _signs.isEmpty))
                                 Center(
                                   child: Container(
@@ -1858,7 +1859,14 @@ class _ZonePainter extends CustomPainter {
       final shown = (z['ui_vectors'] is List && (z['ui_vectors'] as List).isNotEmpty)
           ? (z['ui_vectors'] as List)
           : [if (z['ui_vector'] != null) z['ui_vector']];
-      for (final raw in shown) {
+      final bent = z['path'];                        // a bent arrow: one line through all its points, the head at the end
+      if (bent is List && bent.length > 2) {
+        final trail = [for (final p in ZoneGeometry.fromReference(bent)) _px(p, size)];
+        for (var k = 0; k < trail.length - 1; k++) {
+          _arrowShape(canvas, trail[k], trail[k + 1], Fx.accent, line: k < trail.length - 2);
+        }
+      }
+      for (final raw in (bent is List && bent.length > 2) ? const [] : shown) {
         if (raw is! List || raw.length != 2) continue;
         final v = ZoneGeometry.fromReference(raw);
         _arrowShape(

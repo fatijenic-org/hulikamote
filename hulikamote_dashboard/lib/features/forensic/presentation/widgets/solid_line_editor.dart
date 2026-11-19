@@ -10,6 +10,7 @@ import '../../domain/violation_catalog.dart';
 import '../../domain/zone_geometry.dart';
 import 'fx.dart';
 import 'violation_params.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Draws the solid lines of "Crossing a solid line" on the first frame of the video.
 ///
@@ -311,7 +312,7 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
     setState(() {});
   }
 
-  bool get _canFind => widget.api != null && widget.draft.videoPath != null;
+  bool get _canFind => widget.api != null && !widget.draft.isLive && widget.draft.videoPath != null;
 
   /// Runs the same search the analysis would run and adds what it finds as ordinary lines, to check and fix by hand.
   Future<void> _findLines() async {
@@ -430,8 +431,8 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
-                              Image(image: widget.frame, fit: BoxFit.fill, gaplessPlayback: true),
-                              CustomPaint(painter: _LinesPainter(saved: saved, current: List.of(_line), paints: paints)),
+                              KeepColors(child: Image(image: widget.frame, fit: BoxFit.fill, gaplessPlayback: true)),
+                              KeepColors(child: CustomPaint(painter: _LinesPainter(saved: saved, current: List.of(_line), paints: paints))),
                               if (_line.isEmpty && saved.isEmpty)
                                 Align(
                                   alignment: Alignment.bottomCenter,

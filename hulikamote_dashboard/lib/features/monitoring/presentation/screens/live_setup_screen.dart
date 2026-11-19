@@ -12,6 +12,7 @@ import '../../domain/live_setup_draft.dart';
 import '../../domain/models/road_detect.dart';
 import '../widgets/frame_picker_step.dart';
 import '../widgets/road_markings_panel.dart';
+import '../widgets/setup_layers_dialog.dart';
 
 /// "Set up violations" of the Live Monitor: the Forensic Analyzer's own steps (the same violations, zones and settings), drawn on ONE
 /// picture of the source. Apply sends them to the Live Monitor.
@@ -47,7 +48,7 @@ class LiveSetupScreen extends StatefulWidget {
 class _LiveSetupScreenState extends State<LiveSetupScreen> {
   late final List<String> _steps = widget.chooseFrame
       ? const ['Frame', 'Road', 'Violations', 'Rules & zones', 'Settings', 'Apply']
-      : const ['Road', 'Violations', 'Rules & zones', 'Settings', 'Apply'];
+      : const ['Violations', 'Rules & zones', 'Settings', 'Apply'];      // the monitor runs: only the violations are edited, the road stays
 
   late final ForensicApi _api = widget.api ?? ForensicApi();
   final LiveSetupDraft _draft = LiveSetupDraft();
@@ -86,11 +87,14 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     if (mounted) setState(() => _models = models);
   }
 
-  /// Reads what the Live Monitor uses now, so a second setup changes it instead of starting from nothing.
+  /// A new setup (Start was pressed) starts EMPTY: nothing of the last one comes back (a road to use again is kept under "Saved roads").
+  /// While the monitor runs ([chooseFrame] is false) the screen EDITS the violations it watches now: they and the road markings are loaded.
   Future<void> _loadSaved() async {
-    try {
-      _saved = await widget.cameraApi.liveSetup();
-    } catch (_) {}
+    if (!widget.chooseFrame) {
+      try {
+        _saved = await widget.cameraApi.liveSetup();
+      } catch (_) {}
+    }
     if (!mounted) return;
     if (!widget.chooseFrame) _attachFrame(widget.shot!);     // the picture is already frozen
     setState(() => _loading = false);
@@ -171,6 +175,13 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     }
   }
 
+  /// "Show layers": the picture with the road markings, zones and overlay signs, and a checklist of what to show.
+  void _showLayers() {
+    final url = _draft.frameUrl;
+    if (url == null) return;
+    showDialog<void>(context: context, builder: (_) => SetupLayersDialog(draft: _draft, frame: widget.media.frame(url), api: _api));
+  }
+
   /// Frame step, Continue: the picked picture becomes the setup picture, then on to the violations.
   Future<void> _useFrame() async {
     final id = _pickedFrame;
@@ -217,7 +228,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     return Scaffold(
       backgroundColor: Fx.page(context),
       appBar: AppBar(
-        title: const Text('Set up violations'),
+        title: Text(widget.chooseFrame ? 'Set up violations' : 'Edit violations'),
         leading: IconButton(
           tooltip: 'Close without changes',
           icon: const Icon(Icons.close),
@@ -231,9 +242,9 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
               builder: (context, _) {
                 if (_stepName == 'Rules & zones') _ensureRulesKey();
                 return Column(children: [
-                  Padding(padding: const EdgeInsets.fromLTRB(Fx.s24, Fx.s12, Fx.s24, Fx.s12), child: _stepper(context)),
+                  Padding(padding: const EdgeInsets.fromLTRB(Fx.s16, Fx.s8, Fx.s16, Fx.s8), child: _stepper(context)),
                   Divider(height: 1, color: Fx.border(context)),
-                  Expanded(child: Padding(padding: const EdgeInsets.all(Fx.s24), child: _body(context))),
+                  Expanded(child: Padding(padding: const EdgeInsets.all(Fx.s12), child: _body(context))),
                   Divider(height: 1, color: Fx.border(context)),
                   _footer(context),
                 ]);
@@ -244,6 +255,15 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
 
   Widget _stepper(BuildContext context) {
     return Row(children: [
+      Tooltip(
+        key: const ValueKey('step-info'),
+        richMessage: TextSpan(children: [
+          TextSpan(text: '${_stepInfo.$1}\n', style: const TextStyle(fontWeight: FontWeight.w700)),
+          TextSpan(text: _stepInfo.$2),
+        ]),
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: Padding(padding: const EdgeInsets.only(right: Fx.s12), child: Icon(Icons.info_outline, size: 20, color: Fx.muted(context))),
+      ),
       for (var i = 0; i < _steps.length; i++) ...[
         InkWell(
           borderRadius: BorderRadius.circular(Fx.radiusSm),
@@ -269,15 +289,17 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     ]);
   }
 
-  Widget _body(BuildContext context) {
-    final title = switch (_stepName) {
+  /// What the step is for: (title, hint). It is a hover note beside the steps, so the picture can have the room.
+  (String, String) get _stepInfo => switch (_stepName) {
       'Frame' => ('Pick a picture of the video', 'The violations are set up on this one picture. Pictures appear while they are collected: pick one at any time.'),
       'Road' => ('Set up the road', 'Mark the road once, on this picture: crosswalks, lines, lanes, direction. Let the system find it, then correct it. Each violation you pick next takes only what it needs.'),
       'Violations' => ('What should the monitor look for?', _hadSetup ? 'Your current live setup is loaded. Change it as you need.' : 'Pick every violation to watch. Each one is set up in the next step.'),
       'Rules & zones' => ('Set up the rules', 'Draw each area on this picture, and set the limits. A rule marked as needing no drawing watches the whole picture.'),
       'Settings' => ('Fine-tune the pipeline', 'The defaults suit most cameras. Change a setting only when you know why.'),
       _ => ('Review and apply', widget.chooseFrame ? 'Monitoring starts as soon as you apply.' : 'The live picture restarts for a few seconds with the new rules, then goes on.'),
-    };
+  };
+
+  Widget _body(BuildContext context) {
     // The Frame step stays alive (hidden) behind the other steps, so going back to it does not collect new pictures.
     final Widget? picker = widget.chooseFrame
         ? Offstage(
@@ -308,17 +330,12 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
         media: widget.media,
         current: _rulesKey ?? (_draft.selection.isEmpty ? '' : _draft.selection.first),
         onPick: (k) => setState(() => _rulesKey = k),
+        api: _api,                                    // the realistic overlay objects (hydrant, signs, painted lines) are drawn by the backend
       ),
       'Settings' => SettingsStep(draft: _draft, models: _models),
       _ => _review(context),
     };
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title.$1, style: Fx.title(context)),
-      const SizedBox(height: 4),
-      Text(title.$2, style: Fx.caption(context)),
-      const SizedBox(height: Fx.s16),
-      Expanded(child: Stack(fit: StackFit.expand, children: [?picker, ?content])),
-    ]);
+    return Stack(fit: StackFit.expand, children: [?picker, ?content]);
   }
 
   Widget _review(BuildContext context) {
@@ -388,13 +405,23 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     final last = _step == _steps.length - 1;
     final onFrame = _stepName == 'Frame';
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Fx.s24, vertical: Fx.s12),
+      padding: const EdgeInsets.symmetric(horizontal: Fx.s16, vertical: Fx.s8),
       child: Row(children: [
         TextButton.icon(
           onPressed: (_step == 0 || _applying || _busyFrame) ? null : () => _goto(_step - 1),
           icon: const Icon(Icons.arrow_back, size: 16),
           label: const Text('Back'),
         ),
+        if (!onFrame && _stepName != 'Road' && _draft.frameUrl != null)
+          Padding(
+            padding: const EdgeInsets.only(left: Fx.s8),
+            child: OutlinedButton.icon(
+              key: const ValueKey('show-layers'),
+              onPressed: _showLayers,
+              icon: const Icon(Icons.layers_outlined, size: 18),
+              label: const Text('Show layers'),
+            ),
+          ),
         const Spacer(),
         if (reason != null && !last)
           Flexible(

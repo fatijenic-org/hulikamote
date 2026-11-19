@@ -40,6 +40,10 @@ class RoadArea {
     this.rule = false,
     this.laneType,
     this.roadClass,
+    this.paint = false,
+    this.stripes = 8,
+    this.wear = 0.2,
+    this.realistic = true,
   });
 
   static const kinds = ['crosswalk', 'road', 'sidewalk']; // what an area can be after "Detect road"
@@ -67,6 +71,8 @@ class RoadArea {
     'other': 'Other road',
   };
   static const lineStyles = ['solid_white', 'solid_yellow', 'double_yellow'];
+  static const minStripes = 3;
+  static const maxStripes = 16;
   static const maxPoints = 64; // what the backend accepts for one shape
 
   static String labelOf(String kind) => switch (kind) {
@@ -89,11 +95,15 @@ class RoadArea {
   final List<Offset> polygon; // the points: closed for an area, an open line for a line (the name is kept from the first version)
   final String? side; // left | right, for a sidewalk
   final String? flow; // in | out, for a road area that has a direction
-  final List<Offset> arrow; // two points: the way the traffic goes (only with a flow)
+  final List<Offset> arrow; // two points or more: the way the traffic goes, bent where the road bends (only with a flow)
   final String style; // solid_white | solid_yellow | double_yellow, for a solid line
   final bool rule; // a solid line that counts crossings as violations (a found line starts as a hint)
   final String? laneType; // a lane: a key of [laneTypes]; null = any vehicle may use it (the lane only gives a direction)
   final String? roadClass; // a road: a key of [roadClasses]; null = not said
+  final bool paint; // a crosswalk shown as a painted zebra on the live video (vehicles drive over it)
+  final int stripes; // the zebra's bars (3 to 16)
+  final double wear; // how worn the paint is (0 = new, 1 = very worn)
+  final bool realistic; // soft edge, grain, dulled to the scene's light; off = flat clean paint
 
   bool get isLine => lineKinds.contains(kind);
 
@@ -118,6 +128,10 @@ class RoadArea {
       rule: json['rule'] as bool? ?? false,
       laneType: json['lane_type'] as String?,
       roadClass: json['road_class'] as String?,
+      paint: json['paint'] as bool? ?? false,
+      stripes: ((json['stripes'] as num?)?.toInt() ?? 8).clamp(minStripes, maxStripes),
+      wear: ((json['wear'] as num?)?.toDouble() ?? 0.2).clamp(0.0, 1.0),
+      realistic: json['realistic'] as bool? ?? true,
     );
   }
 
@@ -127,10 +141,11 @@ class RoadArea {
     isLine ? 'line' : 'polygon': [for (final p in polygon) [p.dx, p.dy]],
     if (side != null) 'side': side,
     if (hasDirection && flow != null) 'flow': flow,
-    if (hasDirection && flow != null && arrow.length == 2) 'arrow': [for (final p in arrow) [p.dx, p.dy]],
+    if (hasDirection && flow != null && arrow.length >= 2) 'arrow': [for (final p in arrow) [p.dx, p.dy]],
     if (kind == 'solid_line') ...{'style': style, 'rule': rule},
     if (kind == 'lane' && laneType != null) 'lane_type': laneType,
     if (kind == 'road' && roadClass != null) 'road_class': roadClass,
+    if (kind == 'crosswalk' && paint) ...{'paint': true, 'stripes': stripes, 'wear': wear, 'realistic': realistic},
   };
 
   /// A road area or a lane can have a direction.
@@ -146,6 +161,10 @@ class RoadArea {
     bool? rule,
     String? laneType,
     String? roadClass,
+    bool? paint,
+    int? stripes,
+    double? wear,
+    bool? realistic,
     bool clearFlow = false,
     bool clearLaneType = false,
     bool clearRoadClass = false,
@@ -160,6 +179,10 @@ class RoadArea {
     rule: rule ?? this.rule,
     laneType: clearLaneType ? null : (laneType ?? this.laneType),
     roadClass: clearRoadClass ? null : (roadClass ?? this.roadClass),
+    paint: paint ?? this.paint,
+    stripes: stripes ?? this.stripes,
+    wear: wear ?? this.wear,
+    realistic: realistic ?? this.realistic,
   );
 
   /// The same shape with every point multiplied by [fx] and [fy] (from the picture's pixels to the 1920x1080 reference space and back).
@@ -174,6 +197,10 @@ class RoadArea {
     rule: rule,
     laneType: laneType,
     roadClass: roadClass,
+    paint: paint,
+    stripes: stripes,
+    wear: wear,
+    realistic: realistic,
   );
 
   /// The same shape under another name.
@@ -188,6 +215,10 @@ class RoadArea {
     rule: rule,
     laneType: laneType,
     roadClass: roadClass,
+    paint: paint,
+    stripes: stripes,
+    wear: wear,
+    realistic: realistic,
   );
 
   /// The middle of the shape's points, left to right (to say "incoming on the left").

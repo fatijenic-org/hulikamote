@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../domain/timeline_geometry.dart';
 import 'trim_timeline.dart' show PlayheadPainter, paintTimelineRuler;
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// One range on a timeline: the part of the video to keep. Drag the left or right end to move it (the video jumps to that
 /// frame so the cut can be judged), drag anywhere else (or along the ruler) to scrub through the video like a player.
@@ -194,7 +195,7 @@ class _RangeTimelineState extends State<RangeTimeline> {
                         padding: const EdgeInsets.only(top: _rulerHeight),
                         child: Opacity(
                           opacity: 0.6,
-                          child: Image.network(widget.filmstripUrl!, fit: BoxFit.fill, gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                          child: KeepColors(child: Image.network(widget.filmstripUrl!, fit: BoxFit.fill, gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink())),
                         ),
                       ),
                     CustomPaint(

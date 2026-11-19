@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/forensic_models.dart';
 import '../../domain/violation_catalog.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Design tokens and small shared pieces for the forensic feature.
 /// One spacing scale (4/8/12/16/24/32), one radius, one set of status colours.
@@ -238,7 +239,7 @@ class FxImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
-      child: Image(
+      child: KeepColors(child: Image(
         image: image,
         fit: fit,
         gaplessPlayback: true,
@@ -266,7 +267,7 @@ class FxImage extends StatelessWidget {
             ],
           ]),
         ),
-      ),
+      )),
     );
   }
 }

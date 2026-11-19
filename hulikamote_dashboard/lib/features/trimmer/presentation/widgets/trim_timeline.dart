@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../domain/time_format.dart';
 import '../../domain/timeline_geometry.dart';
 import '../../domain/trim_session.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Colours of the clips. Every clip also shows its number, so colour is never the only sign.
 const clipColors = [
@@ -230,7 +231,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
                         padding: const EdgeInsets.only(top: _rulerHeight),
                         child: Opacity(
                           opacity: 0.55,
-                          child: Image.network(widget.filmstripUrl!, fit: BoxFit.fill, gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                          child: KeepColors(child: Image.network(widget.filmstripUrl!, fit: BoxFit.fill, gaplessPlayback: true, errorBuilder: (_, _, _) => const SizedBox.shrink())),
                         ),
                       ),
                     ListenableBuilder(

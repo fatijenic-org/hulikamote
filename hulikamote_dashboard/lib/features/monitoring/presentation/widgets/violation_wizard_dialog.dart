@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../domain/models/violation_config.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Pushes the full-screen step-by-step wizard for adding or editing a single
 /// violation pipeline (one or more zones). Returns the saved [ViolationConfig],
@@ -508,10 +509,10 @@ class _ViolationWizardScreenState extends State<_ViolationWizardScreen> {
                     child: Stack(
                       children: [
                         Positioned.fill(
-                          child: Image.network(
+                          child: KeepColors(child: Image.network(
                             widget.imageUrl,
                             fit: BoxFit.fill,
-                          ),
+                          )),
                         ),
                         Positioned.fill(
                           child: CustomPaint(

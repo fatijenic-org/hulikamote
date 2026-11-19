@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
 import '../../domain/models/frame_job.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// The first step of the live setup: pictures of the source, one by one, and one to pick. A file gives pictures spread over the
 /// whole video; a camera gives one a second for a few seconds, so a moment with the road clear and the paint easy to see can be
@@ -109,12 +110,11 @@ class _FramePickerStepState extends State<FramePickerStep> {
     if (_error != null) return _problem(_error!);
     if (job == null) return _message(const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3)), 'Getting the first picture…');
     if (job.failed && job.frames.isEmpty) return _problem(job.error);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      _header(job),
-      const SizedBox(height: Fx.s12),
-      Expanded(child: _preview(job)),
-      const SizedBox(height: Fx.s12),
-      _strip(job),
+    // The picture takes the whole step; the status and the other pictures float over its edges.
+    return Stack(fit: StackFit.expand, children: [
+      _preview(job),
+      Positioned(top: Fx.s8, left: Fx.s8, right: Fx.s8, child: _header(job)),
+      Positioned(bottom: Fx.s8, left: Fx.s8, right: Fx.s8, child: _strip(job)),
     ]);
   }
 
@@ -128,21 +128,28 @@ class _FramePickerStepState extends State<FramePickerStep> {
     } else {
       status = '$count pictures. Pick the one to set up on.';
     }
-    return Row(children: [
-      if (job.working) ...[const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)), const SizedBox(width: Fx.s8)],
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(status, key: const ValueKey('frames-status'), style: Fx.body(context).copyWith(fontWeight: FontWeight.w600)),
-          Text('Pick a picture where the road is clear and the paint is easy to see.', style: Fx.caption(context)),
-        ]),
-      ),
-      OutlinedButton.icon(
-        key: const ValueKey('frames-refresh'),
-        onPressed: _again,
-        icon: const Icon(Icons.refresh, size: 18),
-        label: const Text('Get new pictures'),
-      ),
-    ]);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: Fx.s12, vertical: 4),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.62), borderRadius: BorderRadius.circular(Fx.radiusSm)),
+      child: Row(children: [
+        if (job.working) ...[const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)), const SizedBox(width: Fx.s8)],
+        Expanded(
+          child: Text(status, key: const ValueKey('frames-status'), maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        ),
+        const Tooltip(
+          message: 'Pick a picture where the road is clear and the paint is easy to see. The violations are set up on this one picture.',
+          child: Padding(padding: EdgeInsets.symmetric(horizontal: Fx.s8), child: Icon(Icons.info_outline, size: 18, color: Colors.white)),
+        ),
+        TextButton.icon(
+          key: const ValueKey('frames-refresh'),
+          onPressed: _again,
+          style: TextButton.styleFrom(foregroundColor: Colors.white),
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Get new pictures'),
+        ),
+      ]),
+    );
   }
 
   Widget _preview(FrameJob job) {
@@ -160,13 +167,13 @@ class _FramePickerStepState extends State<FramePickerStep> {
         borderRadius: BorderRadius.circular(Fx.radius),
         child: picked == null
             ? const SizedBox.shrink()
-            : Image.network(
+            : KeepColors(child: Image.network(
                 widget.api.frameUrl(job.job, picked.id),
                 key: ValueKey('frame-preview-${job.job}-${picked.id}'),
                 fit: BoxFit.contain,
                 loadingBuilder: (context, child, progress) => progress == null ? child : const Center(child: CircularProgressIndicator()),
                 errorBuilder: (context, error, stack) => Center(child: Text('This picture could not be loaded.', style: Fx.caption(context))),
-              ),
+              )),
       ),
     );
   }
@@ -174,7 +181,7 @@ class _FramePickerStepState extends State<FramePickerStep> {
   Widget _strip(FrameJob job) {
     final slots = job.expected > job.frames.length ? job.expected : job.frames.length;
     return SizedBox(
-      height: 96,
+      height: 72,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: slots,
@@ -190,20 +197,20 @@ class _FramePickerStepState extends State<FramePickerStep> {
       key: ValueKey('frame-thumb-${f.id}'),
       onTap: () => _pick(f.id),
       child: Container(
-        width: 160,
+        width: 128,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Fx.radiusSm),
-          border: Border.all(color: selected ? Fx.accent : Fx.border(context), width: selected ? 3 : 1),
+          border: Border.all(color: selected ? Fx.accent : Colors.white54, width: selected ? 3 : 1),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(Fx.radiusSm - 1),
           child: Stack(fit: StackFit.expand, children: [
-            Image.network(
+            KeepColors(child: Image.network(
               widget.api.frameUrl(job.job, f.id),
               fit: BoxFit.cover,
               cacheWidth: 320,
               errorBuilder: (context, error, stack) => ColoredBox(color: Fx.raised(context)),
-            ),
+            )),
             Positioned(
               left: 6,
               bottom: 6,
@@ -220,7 +227,7 @@ class _FramePickerStepState extends State<FramePickerStep> {
   }
 
   Widget _waiting() => Container(
-        width: 160,
+        width: 128,
         decoration: BoxDecoration(color: Fx.raised(context), borderRadius: BorderRadius.circular(Fx.radiusSm), border: Border.all(color: Fx.border(context))),
         child: const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
       );

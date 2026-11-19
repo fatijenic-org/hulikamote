@@ -22,9 +22,12 @@ class ApiService {
 
   /// Looks up the persisted violation record for a tracked vehicle, once the
   /// backend has finalized its ticket (vehicle left the ROI/frame).
-  Future<Violation?> fetchViolationByTrackId(int trackId) async {
+  /// A track number starts again from 1 at every live run, so [since] (the time the vehicle was first seen, by the backend's clock)
+  /// is needed to leave out the tickets of older runs that have the same number.
+  Future<Violation?> fetchViolationByTrackId(int trackId, {DateTime? since}) async {
     final uri = Uri.parse(
-      '${ApiConstants.violations}?track_id=$trackId&size=1',
+      '${ApiConstants.violations}?track_id=$trackId&size=1'
+      '${since == null ? '' : '&since=${Uri.encodeQueryComponent(since.toUtc().toIso8601String())}&source=live'}',
     );
     final response = await _client.get(uri);
     if (response.statusCode != 200) {

@@ -8,6 +8,7 @@ import '../../data/harvest_labeling.dart';
 import '../../domain/harvest_labeling_models.dart';
 import '../../domain/harvest_models.dart';
 import 'harvest_parts.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Opens the labeler over the whole window (sidebar included): one picture at a time, nothing else.
 Future<void> openHarvestLabeler(
@@ -594,7 +595,7 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
                         onPanEnd: _panEnd,
                         onTapUp: _tapUp,
                         child: Stack(fit: StackFit.expand, children: [
-                          Image(image: widget.labeling.image(widget.model.key, item.id), fit: BoxFit.fill, gaplessPlayback: true),
+                          KeepColors(child: Image(image: widget.labeling.image(widget.model.key, item.id), fit: BoxFit.fill, gaplessPlayback: true)),
                           CustomPaint(painter: _BoxesPainter(labels: _labelBoxes, blurs: _blurBoxes, blurMode: _blurMode, selected: _selected, classes: _classes, zoom: _zoom)),
                         ]),
                       ),

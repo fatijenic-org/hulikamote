@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -29,12 +32,15 @@ class _NoticeCardState extends State<NoticeCard> {
   final _testTo = TextEditingController();
   final _cloudUrl = TextEditingController();
   final _cloudKey = TextEditingController();
+  final _token = TextEditingController();
 
   NoticeSettings? _settings;
   String? _error;
   String _choice = 'offline';          // the segment on screen; "online" shows the Gmail form even before it is saved
   bool _busy = false;
   String? _pushDetail;        // what the last push check or test said
+  bool _remember = false;     // keep the Supabase access token on the laptop (off: it is forgotten after the setup)
+  CloudSetupResult? _setup;   // the checklist of the last "Set up cloud"
 
   @override
   void initState() {
@@ -55,6 +61,7 @@ class _NoticeCardState extends State<NoticeCard> {
     _testTo.dispose();
     _cloudUrl.dispose();
     _cloudKey.dispose();
+    _token.dispose();
     super.dispose();
   }
 
@@ -145,6 +152,63 @@ class _NoticeCardState extends State<NoticeCard> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _setUpCloud() async {
+    setState(() {
+      _busy = true;
+      _setup = null;
+    });
+    try {
+      final r = await widget.api.setUpCloud(supabaseUrl: _cloudUrl.text.trim(), accessToken: _token.text.trim(), rememberToken: _remember);
+      if (!mounted) return;
+      if (r.ok) _token.clear();                 // done: the token is not needed here any more (a failed run keeps it for the retry)
+      setState(() => _setup = r);
+      final failed = r.steps.where((s) => !s.ok && !s.warn).toList();
+      widget.onMessage(r.ok
+          ? 'Cloud is ready.'
+          : failed.isNotEmpty
+              ? 'Setup stopped at: ${failed.first.text}. ${failed.first.detail}'
+              : 'Cloud is ready, with a warning. See the list.');
+      await _load();
+    } on RegistryApiException catch (e) {
+      if (mounted) widget.onMessage(e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pickKeyFile() async {
+    final picked = await FilePicker.pickFile(dialogTitle: 'Firebase service-account file (.json)', type: FileType.custom, allowedExtensions: ['json']);
+    final path = picked?.path;
+    if (path == null) return;
+    setState(() => _busy = true);
+    try {
+      final r = await widget.api.installPushKey(await File(path).readAsString());
+      if (mounted) {
+        setState(() => _pushDetail = r.detail);
+        widget.onMessage(r.detail);
+      }
+    } on RegistryApiException catch (e) {
+      if (mounted) widget.onMessage(e.message);
+    } on FileSystemException {
+      if (mounted) widget.onMessage('Cannot read that file.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _stepRow(SetupStep step) {
+    final color = step.ok ? Fx.success : (step.warn ? Fx.warning : Fx.danger);
+    final icon = step.ok ? Icons.check_circle_outline : (step.warn ? Icons.warning_amber_rounded : Icons.cancel_outlined);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Fx.s4),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: Fx.s8),
+        Expanded(child: Text(step.detail.isEmpty ? step.text : '${step.text}: ${step.detail}', style: Fx.caption(context))),
+      ]),
+    );
   }
 
   Future<void> _push({required bool send}) async {
@@ -274,8 +338,8 @@ class _NoticeCardState extends State<NoticeCard> {
       const SizedBox(height: Fx.s12),
       Text('Phone app (works anywhere)', style: Fx.heading(context)),
       Text(
-        'Confirmed tickets and their photos are copied to your Supabase project, and the phone gets a push. '
-        'Needs the project address and the secret service_role key (see supabase/README.md).',
+        'One click builds everything in your Supabase project (tables, photo bucket, demo accounts). Paste the project address and an '
+        'access token once (supabase.com/dashboard/account/tokens, full access). The token is forgotten afterwards unless you tick "remember".',
         style: Fx.caption(context),
       ),
       const SizedBox(height: Fx.s12),
@@ -292,41 +356,93 @@ class _NoticeCardState extends State<NoticeCard> {
         SizedBox(
           width: 220,
           child: TextField(
-            controller: _cloudKey,
+            controller: _token,
             obscureText: true,
             onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               isDense: true,
-              labelText: 'Service key (secret)',
-              hintText: s.cloudKeySet ? 'Saved. Type to change it' : 'service_role key',
+              labelText: 'Access token (secret)',
+              hintText: s.tokenSaved ? 'Saved on this laptop' : 'sbp_...',
               border: const OutlineInputBorder(),
             ),
           ),
         ),
-        FilledButton(
-          onPressed: _busy || !_cloudChanged
-              ? null
-              : () => _save(mode: 'online', cloudUrl: _cloudUrl.text.trim(), cloudKey: _cloudKey.text, done: 'Cloud saved.'),
-          child: const Text('Save cloud'),
-        ),
-        OutlinedButton(
-          onPressed: _busy || !s.cloudKeySet || _cloudChanged ? null : _testCloud,
-          child: const Text('Test cloud'),
+        FilledButton.icon(
+          icon: const Icon(Icons.cloud_done_outlined, size: 18),
+          onPressed: _busy || _cloudUrl.text.trim().isEmpty || !(_token.text.trim().isNotEmpty || s.tokenSaved) ? null : _setUpCloud,
+          label: Text(s.cloudReady ? 'Set up cloud again' : 'Set up cloud'),
         ),
       ]),
+      Row(children: [
+        Checkbox(value: _remember, onChanged: _busy ? null : (v) => setState(() => _remember = v ?? false)),
+        Flexible(child: Text('Remember this token on this laptop (kept in backend/.env, never in git)', style: Fx.caption(context))),
+      ]),
+      if (_busy && _setup == null) const Padding(padding: EdgeInsets.symmetric(vertical: Fx.s8), child: LinearProgressIndicator()),
+      if (_setup != null) ...[
+        const SizedBox(height: Fx.s8),
+        for (final step in _setup!.steps) _stepRow(step),
+        if (_setup!.ok) ...[
+          const SizedBox(height: Fx.s8),
+          Text('Done. In the phone app, press Connect (it finds this laptop and the cloud by itself).', style: Fx.caption(context)),
+        ],
+      ],
       const SizedBox(height: Fx.s12),
       Wrap(spacing: Fx.s8, runSpacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        OutlinedButton(
-          onPressed: _busy || !s.cloudKeySet || _cloudChanged ? null : _createDemoAccounts,
-          child: const Text('Create demo accounts'),
-        ),
         OutlinedButton(onPressed: _busy ? null : () => _push(send: false), child: const Text('Check push')),
         OutlinedButton(onPressed: _busy ? null : () => _push(send: true), child: const Text('Send test push')),
+        OutlinedButton.icon(
+          icon: const Icon(Icons.vpn_key_outlined, size: 18),
+          onPressed: _busy ? null : _pickKeyFile,
+          label: const Text('Choose Firebase key file'),
+        ),
       ]),
       if (_pushDetail != null) ...[
         const SizedBox(height: Fx.s8),
         Text('Push: $_pushDetail', style: Fx.caption(context)),
       ],
+      Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: Text('Advanced: type the service key myself', style: Fx.caption(context)),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(spacing: Fx.s8, runSpacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                SizedBox(
+                  width: 220,
+                  child: TextField(
+                    controller: _cloudKey,
+                    obscureText: true,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      labelText: 'Service key (secret)',
+                      hintText: s.cloudKeySet ? 'Saved. Type to change it' : 'service_role key',
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: _busy || !_cloudChanged
+                      ? null
+                      : () => _save(mode: 'online', cloudUrl: _cloudUrl.text.trim(), cloudKey: _cloudKey.text, done: 'Cloud saved.'),
+                  child: const Text('Save cloud'),
+                ),
+                OutlinedButton(
+                  onPressed: _busy || !s.cloudKeySet || _cloudChanged ? null : _testCloud,
+                  child: const Text('Test cloud'),
+                ),
+                OutlinedButton(
+                  onPressed: _busy || !s.cloudKeySet || _cloudChanged ? null : _createDemoAccounts,
+                  child: const Text('Create demo accounts'),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
     ]);
   }
 

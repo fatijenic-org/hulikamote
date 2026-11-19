@@ -326,7 +326,7 @@ class RulesStep extends StatelessWidget {
     final keys = draft.selection;
     return LayoutBuilder(
       builder: (context, box) {
-        final overlays = api != null && draft.videoPath != null
+        final overlays = api != null && !draft.isLive && draft.videoPath != null
             ? Padding(
                 padding: const EdgeInsets.only(right: Fx.s12),
                 child: OutlinedButton.icon(

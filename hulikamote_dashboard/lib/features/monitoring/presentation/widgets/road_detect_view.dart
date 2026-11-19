@@ -7,6 +7,7 @@ import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
 import '../../domain/models/road_detect.dart';
 import 'road_zone_editor.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// "Detect road": the frame that was frozen when the button was pressed, shown large, and every step the road finder takes swept
 /// over it from left to right, one at a time, until the crosswalk and the lines it found are drawn. The pictures are the finder's
@@ -322,8 +323,8 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
             fit: StackFit.expand,
             children: [
               const ColoredBox(color: Colors.black),
-              if (shown != null) Image.memory(shown, fit: BoxFit.fill, gaplessPlayback: true),
-              if (_layer != null) Image.memory(_layer!, fit: BoxFit.fill, gaplessPlayback: true),
+              if (shown != null) KeepColors(child: Image.memory(shown, fit: BoxFit.fill, gaplessPlayback: true)),
+              if (_layer != null) KeepColors(child: Image.memory(_layer!, fit: BoxFit.fill, gaplessPlayback: true)),
               if (status?.state == 'collecting')
                 Align(
                   alignment: Alignment.bottomCenter,
@@ -355,7 +356,7 @@ class _RoadDetectViewState extends State<RoadDetectView> with SingleTickerProvid
                 if (_incoming != null)
                   ClipRect(
                     clipper: _LeftOf(x),
-                    child: Image.memory(_incoming!, fit: BoxFit.fill, width: box.maxWidth, height: box.maxHeight, gaplessPlayback: true),
+                    child: KeepColors(child: Image.memory(_incoming!, fit: BoxFit.fill, width: box.maxWidth, height: box.maxHeight, gaplessPlayback: true)),
                   ),
                 Positioned(
                   left: x - 140,

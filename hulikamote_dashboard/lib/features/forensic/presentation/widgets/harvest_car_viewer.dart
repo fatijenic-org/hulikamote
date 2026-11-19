@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../data/harvest_labeling.dart';
 import '../../domain/harvest_labeling_models.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// Opens one car over the whole window: the big photo on top, every photo of that car in a flat strip below. Walk along
 /// the strip and mark the photos that show a different car than the first one. Returns true when it was saved.
@@ -239,12 +240,12 @@ class _CarViewerState extends State<CarViewer> {
               border: Border.all(color: isDifferent ? _marked : Colors.transparent, width: 4),
             ),
             clipBehavior: Clip.antiAlias,
-            child: Image(
+            child: KeepColors(child: Image(
               image: widget.labeling.carPhoto(d.evidenceDir, photo),
               fit: BoxFit.contain,
               gaplessPlayback: true,
               errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image_outlined, size: 48, color: Colors.white38)),
-            ),
+            )),
           ),
         ),
       ),
@@ -265,7 +266,7 @@ class _CarViewerState extends State<CarViewer> {
               SizedBox(
                 height: 104,
                 width: 112,
-                child: Image(image: widget.labeling.carPhoto(d.evidenceDir, d.photos.first, width: 240), fit: BoxFit.cover),
+                child: KeepColors(child: Image(image: widget.labeling.carPhoto(d.evidenceDir, d.photos.first, width: 240), fit: BoxFit.cover)),
               ),
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 3),
@@ -324,7 +325,7 @@ class _CarViewerState extends State<CarViewer> {
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(fit: StackFit.expand, children: [
-                Image(image: widget.labeling.carPhoto(d.evidenceDir, photo, width: 160), fit: BoxFit.cover, gaplessPlayback: true),
+                KeepColors(child: Image(image: widget.labeling.carPhoto(d.evidenceDir, photo, width: 160), fit: BoxFit.cover, gaplessPlayback: true)),
                 if (different) Container(color: _marked.withValues(alpha: 0.25)),
                 Positioned(
                   left: 3,

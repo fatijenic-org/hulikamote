@@ -8,6 +8,7 @@ import '../../domain/zone_geometry.dart';
 import 'fx.dart';
 import 'violation_params.dart';
 import 'zone_editor.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// "Pedestrian lane": draw a zone as before, or place an overlay crosswalk on the picture to test the rule on a road that has none.
 /// Both are crosswalk zones and can be mixed; this widget only chooses which one is being edited.
@@ -303,7 +304,7 @@ class _CrosswalkOverlayEditorState extends State<CrosswalkOverlayEditor> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Image(image: widget.frame, fit: BoxFit.fill, gaplessPlayback: true),
+                            KeepColors(child: Image(image: widget.frame, fit: BoxFit.fill, gaplessPlayback: true)),
                             CustomPaint(
                               painter: _CrosswalkPainter(
                                 items: [for (final c in _items) Map<String, dynamic>.of(c)],

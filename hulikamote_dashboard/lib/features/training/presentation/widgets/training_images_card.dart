@@ -10,6 +10,7 @@ import '../../../forensic/domain/violation_catalog.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../../forensic/presentation/widgets/harvest_parts.dart';
 import '../../data/dataset_browser.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 /// One picture to show: how to load it, what to draw on it, and its short story.
 class PictureRef {
@@ -565,7 +566,7 @@ class _TrainingImagesCardState extends State<TrainingImagesCard> {
                         physics: const NeverScrollableScrollPhysics(),
                         children: [
                           for (final p in pics)
-                            ClipRRect(borderRadius: BorderRadius.circular(3), child: Image(image: p.image(120), fit: BoxFit.cover)),
+                            ClipRRect(borderRadius: BorderRadius.circular(3), child: KeepColors(child: Image(image: p.image(120), fit: BoxFit.cover))),
                         ],
                       ),
               ),

@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../../domain/models/detection.dart';
+import '../../../forensic/presentation/widgets/replay_boxes.dart';
 import 'road_arrow.dart';
+import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
 class VideoFeedWidget extends StatefulWidget {
   final Stream<dynamic>? stream;
@@ -20,7 +22,13 @@ class VideoFeedWidget extends StatefulWidget {
   /// Draw the learned traffic-flow arrows. The "TEST: FLOW REVERSED" banner is drawn whatever this says.
   final bool showFlow;
 
-  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.boxDelayMs = 0, this.showFlow = true});
+  /// The arrows of the incoming / outgoing sides of the road (set up in the Road step): shown or hidden.
+  final bool showRoadArrows;
+
+  /// The outlines, fills and labels of the set-up and learned zones (the arrows have their own switch).
+  final bool showRoadZones;
+
+  const VideoFeedWidget({super.key, this.stream, this.onFrame, this.boxDelayMs = 0, this.showFlow = true, this.showRoadArrows = true, this.showRoadZones = true});
 
   @override
   State<VideoFeedWidget> createState() => _VideoFeedWidgetState();
@@ -32,6 +40,10 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
   List<Detection>? _detections;
   List<RoadZone> _roadZones = const [];
   FlowInfo? _flow;
+  List<BoxSpec>? _specs;
+  final TransformationController _zoom = TransformationController();   // mouse wheel, drag or the buttons, like the Forensic replay
+  final GlobalKey _viewKey = GlobalKey();
+  static const double _maxZoom = 10;
   int? _frameWidth;
   int? _frameHeight;
   final List<DateTime> _frameTimestamps = [];
@@ -113,10 +125,12 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                 _detections = frame.detections;
                 _roadZones = frame.roadZones;
                 _flow = frame.flow;
+                _specs = frame.boxes;
               } else {
                 final boxes = frame.detections;
                 final zones = frame.roadZones;
                 final flow = frame.flow;
+                final specs = frame.boxes;
                 late final Timer timer;
                 timer = Timer(Duration(milliseconds: widget.boxDelayMs), () {
                   _waiting.remove(timer);
@@ -125,6 +139,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                       _detections = boxes;
                       _roadZones = zones;
                       _flow = flow;
+                      _specs = specs;
                     });
                   }
                 });
@@ -203,7 +218,49 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
     }
     _sub?.cancel();
     _player?.dispose();
+    _zoom.dispose();
     super.dispose();
+  }
+
+  /// Zoom by [factor] about the middle of the picture (1 = whole picture).
+  void _zoomBy(double factor) {
+    final size = _viewKey.currentContext?.size;
+    if (size == null) return;
+    final now = _zoom.value.getMaxScaleOnAxis();
+    final target = (now * factor).clamp(1.0, _maxZoom);
+    if (target <= 1.001) {
+      _zoom.value = Matrix4.identity();
+      return;
+    }
+    final k = target / now;
+    final c = Offset(size.width / 2, size.height / 2);
+    _zoom.value = Matrix4.translationValues(c.dx, c.dy, 0) * Matrix4.diagonal3Values(k, k, 1) * Matrix4.translationValues(-c.dx, -c.dy, 0) * _zoom.value;
+  }
+
+  Widget _zoomBar() {
+    return ListenableBuilder(
+      listenable: _zoom,
+      builder: (context, _) {
+        final z = _zoom.value.getMaxScaleOnAxis();
+        Widget button(String tip, IconData icon, VoidCallback? onTap) => IconButton(
+          tooltip: tip,
+          onPressed: onTap,
+          icon: Icon(icon, size: 18, color: onTap == null ? Colors.white30 : Colors.white),
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+        );
+        return Container(
+          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(6)),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            button('Zoom out', Icons.zoom_out, z > 1.001 ? () => _zoomBy(1 / 1.5) : null),
+            SizedBox(width: 40, child: Text('${(z * 100).round()}%', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 11))),
+            button('Zoom in', Icons.zoom_in, z < _maxZoom - 0.001 ? () => _zoomBy(1.5) : null),
+            button('Whole picture', Icons.fit_screen, z > 1.001 ? () => _zoom.value = Matrix4.identity() : null),
+          ]),
+        );
+      },
+    );
   }
 
   @override
@@ -231,19 +288,27 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
+                    InteractiveViewer(
+                      key: _viewKey,
+                      transformationController: _zoom,
+                      minScale: 1,
+                      maxScale: _maxZoom,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
                     if (isVideoReady)
-                      Video(
+                      KeepColors(child: Video(
                         controller: _videoController!,
                         fit: BoxFit.contain,
-                      )
+                      ))
                     else if (_frameBytes != null)
-                    Image.memory(
+                    KeepColors(child: Image.memory(
                       _frameBytes!,
                       fit: BoxFit.contain,
                       filterQuality: FilterQuality.low,
                       gaplessPlayback: true,
                       isAntiAlias: false,
-                    )
+                    ))
                   else
                     Container(
                       color: Colors.black,
@@ -259,9 +324,16 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                         streamHeight: _frameHeight?.toDouble() ?? 720.0,
                         roadZones: _roadZones,
                         flow: _flow,
+                        specs: _specs,
+                        zoom: _zoom,
                         showFlow: widget.showFlow,
+                        showRoadArrows: widget.showRoadArrows,
+                        showRoadZones: widget.showRoadZones,
                       ),
                       size: Size.infinite,
+                    ),
+                        ],
+                      ),
                     ),
 
                   Positioned(
@@ -269,6 +341,8 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                     right: 8,
                     child: _ModeBadge(isMock: _isMock),
                   ),
+
+                  Positioned(bottom: 8, right: 8, child: _zoomBar()),
 
                   // FPS Meter
                   Positioned(
@@ -315,6 +389,14 @@ class BoundingBoxPainter extends CustomPainter {
   final List<RoadZone> roadZones;
   final FlowInfo? flow;
   final bool showFlow;
+  final bool showRoadArrows;
+  final bool showRoadZones;
+
+  /// The boxes as the Forensic Analyzer draws them (label lines, colours, plate, why-marks, stopwatch). Null: [detections] are drawn plain.
+  final List<BoxSpec>? specs;
+
+  /// The zoom of the picture the painter sits on: box lines and label text stay the same size on screen when it is zoomed.
+  final TransformationController? zoom;
 
   BoundingBoxPainter(
     this.detections, {
@@ -323,7 +405,11 @@ class BoundingBoxPainter extends CustomPainter {
     this.roadZones = const [],
     this.flow,
     this.showFlow = true,
-  });
+    this.showRoadArrows = true,
+    this.showRoadZones = true,
+    this.specs,
+    this.zoom,
+  }) : super(repaint: zoom);
 
   /// The learned traffic flow: an arrow per block (teal; amber while the demo reversal is on, like the saved photos), with a dark
   /// edge so it shows on any road. Hidden by the Live Monitor's "Flow arrows" switch.
@@ -388,22 +474,23 @@ class BoundingBoxPainter extends CustomPainter {
         ..color = colour
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.0;
-      if (hasArea) {
+      if (showRoadZones && hasArea) {
         final path = Path()..addPolygon(pts, true);
         canvas.drawPath(path, Paint()..color = colour.withValues(alpha: zone.hint ? 0.07 : 0.16)..style = PaintingStyle.fill);
         for (var i = 0; i < pts.length; i++) {
           _dashed(canvas, pts[i], pts[(i + 1) % pts.length], edge);
         }
       }
-      if (linePts.length >= 2) {
+      if (showRoadZones && linePts.length >= 2) {
         edge.strokeWidth = 3.0;
         for (var i = 0; i < linePts.length - 1; i++) {
           canvas.drawLine(linePts[i], linePts[i + 1], edge);
         }
       }
-      if (zone.flow != null && zone.arrow.length == 2) {          // the way the traffic goes on this side of the road
-        paintRoadArrow(canvas, Offset(zone.arrow[0][0] * scaleX, zone.arrow[0][1] * scaleY), Offset(zone.arrow[1][0] * scaleX, zone.arrow[1][1] * scaleY), colour, width: 5, head: 20);
+      if (showRoadArrows && (zone.flow != null || zone.violation == 'counterflow') && zone.arrow.length >= 2) {          // the way the traffic goes on this side of the road
+        paintRoadPath(canvas, [for (final p in zone.arrow) Offset(p[0] * scaleX, p[1] * scaleY)], colour, width: 5, head: 20);
       }
+      if (!showRoadZones) continue;                          // hidden: no label either
       final labelPts = hasArea ? pts : linePts;
       final text = TextPainter(
         text: TextSpan(
@@ -433,6 +520,16 @@ class BoundingBoxPainter extends CustomPainter {
     final double scaleY = size.height / streamHeight;
     _paintRoadZones(canvas, scaleX, scaleY);
     _paintFlow(canvas, scaleX, scaleY);
+
+    final shared = specs;
+    if (shared != null) {
+      canvas.save();
+      canvas.scale(scaleX, scaleY);
+      ReplayBoxesPainter.paintSpecs(canvas, shared, streamWidth, streamHeight, 1 / (scaleX * (zoom?.value.getMaxScaleOnAxis() ?? 1.0)));
+      canvas.restore();
+      if (flow?.reversed == true) _paintReversedBanner(canvas);
+      return;
+    }
 
     for (final det in detections) {
       if (det.bbox.length != 4) continue;
