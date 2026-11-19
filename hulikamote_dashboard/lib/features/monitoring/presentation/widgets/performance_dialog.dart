@@ -88,12 +88,27 @@ class _PerformanceDialogState extends State<PerformanceDialog> {
     final rates = (d['rates'] as Map?) ?? const {};
     final overlap = d['overlap'] == true;
     return [
-      _Pill('${_f(rates['pictures'])} pictures/s', Fx.accent),
+      _Pill('backend finishes ${_f(rates['produced'])} pictures/s', Fx.accent),
+      const SizedBox(width: 6),
+      _Pill('screen shows ${_f(rates['pictures'])}/s', Fx.muted(context)),
       const SizedBox(width: 6),
       _Pill('${_f(rates['judged'])} judged/s (1 in ${d['infer_every'] ?? 3})', Fx.muted(context)),
+      if ((d['playout'] as Map?)?.isNotEmpty ?? false) ...[
+        const SizedBox(width: 6),
+        _Pill(_bufferText(d['playout'] as Map), Fx.success),
+      ],
       const SizedBox(width: 6),
       _Pill(overlap ? 'work line ON' : 'work line OFF', overlap ? Fx.success : Fx.warning),
     ];
+  }
+
+  static String _bufferText(Map b) {
+    final speed = (b['speed'] as num?)?.toDouble() ?? 1.0;
+    return switch (b['state']) {
+      'filling' => 'buffer filling ${(((b['percent'] as num?) ?? 0) * 100).round()}%',
+      'done' => 'buffer done',
+      _ => 'buffer ${_f(b['ahead_s'])} s${b['live'] == true ? '' : (speed < 0.97 ? ' · slow motion ${speed.toStringAsFixed(2)}×' : ' · normal speed')}',
+    };
   }
 
   Widget _body(BuildContext context) {

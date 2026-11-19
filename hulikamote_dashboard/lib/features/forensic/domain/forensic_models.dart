@@ -125,6 +125,9 @@ class PlateCrop {
   /// Votes this crop's cleaned read collected across all crops.
   final double points;
 
+  /// The two readings of this crop: as it was seen ('raw') and enhanced by the GAN / super resolution ('enhanced'). Empty on older reports.
+  final List<PlateRead> reads;
+
   const PlateCrop({
     required this.file,
     this.enhanced,
@@ -134,9 +137,45 @@ class PlateCrop {
     this.confidence,
     this.t,
     this.points = 0,
+    this.reads = const [],
   });
 
   bool get hasRead => !_unreadPlate.contains(cleaned.toLowerCase());
+}
+
+/// One reading of one plate crop.
+class PlateRead {
+  final String source; // raw | enhanced
+  final String raw;
+  final String cleaned;
+  final double? confidence;
+
+  const PlateRead({required this.source, this.raw = '', this.cleaned = '', this.confidence});
+
+  bool get hasRead => !_unreadPlate.contains(cleaned.toLowerCase());
+  String get sourceLabel => source == 'raw' ? 'As seen' : 'Enhanced';
+}
+
+/// A plate text that was read, graded (backend engine/plate_vote.py): how many reads voted for it, the best confidence, its points
+/// (votes + confidence + 20 for the right length) and a tier in a word: strong, fair or weak.
+class PlateCandidate {
+  final String text;
+  final int votes;
+  final double confidence;
+  final double points;
+  final String tier;
+  final List<String> sources; // raw and / or enhanced
+
+  const PlateCandidate({required this.text, this.votes = 1, this.confidence = 0, this.points = 0, this.tier = 'weak', this.sources = const []});
+
+  factory PlateCandidate.fromJson(Map<String, dynamic> j) => PlateCandidate(
+    text: '${j['text'] ?? ''}',
+    votes: (j['votes'] as num?)?.toInt() ?? 1,
+    confidence: (j['confidence'] as num?)?.toDouble() ?? 0,
+    points: (j['points'] as num?)?.toDouble() ?? 0,
+    tier: '${j['tier'] ?? 'weak'}',
+    sources: [for (final s in (j['sources'] as List? ?? const [])) '$s'],
+  );
 }
 
 /// A review hint from the backend: possible duplicate car, identity jump...
@@ -217,6 +256,9 @@ class ForensicTicket {
   final Map<String, double> voteTally;
   final String? winningCropFile;
 
+  /// Every text that was read from the plate crops, graded, best first (empty on older reports: see [candidates]).
+  final List<PlateCandidate> plateCandidates;
+
   /// When it happened, if the video's time was looked for (a rule with ban hours, or a start time typed by the operator).
   final TicketTime? time;
 
@@ -243,6 +285,7 @@ class ForensicTicket {
     required this.winningCropFile,
     required this.raw,
     this.time,
+    this.plateCandidates = const [],
   });
 
   factory ForensicTicket.fromJson(Map<String, dynamic> j) {
@@ -294,6 +337,16 @@ class ForensicTicket {
             confidence: (r?['confidence'] as num?)?.toDouble(),
             t: (r?['t'] as num?)?.toDouble(),
             points: tally[cleaned] ?? 0,
+            reads: [
+              for (final x in ((r?['reads'] as List?) ?? const []))
+                if (x is Map)
+                  PlateRead(
+                    source: '${x['source'] ?? 'enhanced'}',
+                    raw: '${x['raw'] ?? ''}',
+                    cleaned: '${x['cleaned'] ?? ''}',
+                    confidence: (x['confidence'] as num?)?.toDouble(),
+                  ),
+            ],
           );
         }(),
     ];
@@ -321,6 +374,10 @@ class ForensicTicket {
       metadata: Map<String, dynamic>.from((j['metadata'] as Map?) ?? const {}),
       voteTally: tally,
       winningCropFile: j['winning_crop'] as String?,
+      plateCandidates: [
+        for (final c in ((j['plate_candidates'] as List?) ?? const []))
+          if (c is Map) PlateCandidate.fromJson(Map<String, dynamic>.from(c)),
+      ],
       raw: Map<String, dynamic>.from(j),
       time: j['time'] is Map ? TicketTime.fromJson(Map<String, dynamic>.from(j['time'] as Map)) : null,
     );
@@ -340,6 +397,7 @@ class ForensicTicket {
         'not_read' => 'Plate seen, not read',
         'unclear' => 'Plate not confirmed',
         'not_checked' => 'Plate not checked',
+        'pending' => 'Plate not read yet',
         _ => 'Plate unread',
       };
   bool get isFlagged => flags.isNotEmpty;

@@ -5,10 +5,11 @@ import 'package:hulikamote_dashboard/core/utils/app_toast.dart';
 
 import 'package:flutter/services.dart';
 import '../../domain/models/detection.dart';
+import 'zoomable_image.dart';
 import '../../../../core/constants/api_constants.dart';
 import '../../../../core/services/api_service.dart';
 import '../../../violations/domain/models/violation.dart';
-import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
+import '../screens/live_tickets_screen.dart';
 
 class AlertListWidget extends StatefulWidget {
   final Stream<dynamic>? frameStream;
@@ -123,6 +124,13 @@ class _AlertListWidgetState extends State<AlertListWidget> {
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
+                IconButton(
+                  key: const ValueKey('review-live-tickets'),
+                  tooltip: 'Review the live tickets: read plates, set photos aside, merge',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.fact_check_outlined, size: 20),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LiveTicketsScreen())),
+                ),
                 if (_items.isNotEmpty)
                   TextButton(
                     onPressed: () => setState(() {
@@ -153,7 +161,10 @@ class _AlertListWidgetState extends State<AlertListWidget> {
                         dense: true,
                         onTap: d.trackId == null
                             ? null
-                            : () => _showEvidenceDialog(context, d.trackId!, a.seenAt ?? a.time),
+                            : () => _openTicket(context, d.trackId!, a.seenAt ?? a.time),
+                        onLongPress: d.trackId == null
+                            ? null
+                            : () => _showEvidenceDialog(context, d.trackId!, a.seenAt ?? a.time),     // the quick look, as before
                         leading: const Icon(
                           Icons.warning_amber_rounded,
                           color: Colors.orange,
@@ -205,6 +216,25 @@ class _AlertListWidgetState extends State<AlertListWidget> {
     final diff = DateTime.now().difference(t).inSeconds;
     if (diff < 60) return '${diff}s ago';
     return '${diff ~/ 60}m ago';
+  }
+
+  /// A tapped alert opens its ticket in the live review (plate reading, photos, merge). The ticket is made when the vehicle leaves
+  /// the picture, so a vehicle that is still in view has none yet.
+  Future<void> _openTicket(BuildContext context, int trackId, DateTime since) async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    Violation? ticket;
+    try {
+      // Only a ticket made after the alert first showed is this vehicle's (the number alone also fits the tickets of older runs).
+      ticket = await _api.fetchViolationByTrackId(trackId, since: since.subtract(const Duration(seconds: 1)));
+    } catch (_) {
+      ticket = null;
+    }
+    if (ticket == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('The ticket is made when the vehicle leaves the picture. Try again in a moment.')));
+      return;
+    }
+    navigator.push(MaterialPageRoute(builder: (_) => LiveTicketsScreen(focusDbId: ticket!.id)));
   }
 
   void _showEvidenceDialog(BuildContext context, int trackId, DateTime since) {
@@ -328,15 +358,9 @@ class _EvidenceViewerState extends State<_EvidenceViewer> {
         children: [
           Expanded(
             child: Center(
-              child: GestureDetector(
-                onTap: _openFullScreen,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: KeepColors(child: Image.network(url, fit: BoxFit.contain)),
-                  ),
-                ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: ZoomableImage(key: ValueKey(url), url: url, onFullScreen: _openFullScreen),
               ),
             ),
           ),
@@ -415,7 +439,7 @@ class _EvidenceViewerState extends State<_EvidenceViewer> {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       Text(
-                        'Click image or press F for full view • ← → to navigate',
+                        'Wheel or + / - to zoom, drag to move • F for full view • ← → to navigate',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: Colors.grey.shade600,
                         ),
@@ -512,7 +536,7 @@ class _FullScreenEvidenceViewerState extends State<_FullScreenEvidenceViewer> {
         body: Column(
           children: [
             Expanded(
-              child: Center(child: KeepColors(child: Image.network(url, fit: BoxFit.contain))),
+              child: ZoomableImage(key: ValueKey(url), url: url),
             ),
             Container(
               color: Colors.black87,
