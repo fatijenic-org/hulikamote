@@ -2,6 +2,16 @@
 
 Everything else is built. This is the only manual work, about 10 minutes, once.
 
+## Fast way: one click (use this; A and B below are the manual version)
+1. Supabase: make a project, then make an **access token** at supabase.com/dashboard/account/tokens (full access).
+2. Dashboard -> Motorists -> Online: paste the **Project address** and the token -> **Set up cloud**.
+   The laptop reads the keys, runs `schema.sql`, turns Confirm email off, checks, makes the demo accounts and checks push. A green list = done.
+   The token is forgotten afterwards unless you tick "Remember" (it then waits in `hulikamote_backend/.env`, never in git, never on the phone).
+   Presetting it by hand: put `HK_SUPABASE_ACCESS_TOKEN=sbp_...` in `hulikamote_backend/.env`.
+3. Push: **Choose Firebase key file** (the service-account `.json`), then **Check push**.
+4. Phone: sign-in page -> **Connect**. It finds the laptop by itself (same Wi-Fi, hotspot, USB or emulator) and uses the cloud if the
+   laptop has it ready and the phone has internet, else the laptop on the Wi-Fi. Only public values reach the phone.
+
 ## How it works (so you can explain it)
 Confirm a ticket on the laptop -> the laptop copies the ticket, its photos and the notice into your Supabase project (using the
 secret key) -> the phone app, signed in as the motorist, reads only its own rows and photos -> the laptop also sends a push
