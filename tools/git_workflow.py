@@ -35,7 +35,7 @@ TRAILER = "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 LOCAL_STATE = {"hulikamote_backend/camera_config.json", "hulikamote_backend/hulikamote.db", "hulikamote_backend/test_hulikamote.db"}
 MAX_BYTES = 5_000_000
 MAX_UNTRACKED_DIR = 300
-SECRET = re.compile(r'BEGIN (RSA |EC )?PRIVATE KEY|"private_key"|service_role|sb_secret_|eyJ[A-Za-z0-9_-]{20,}\.|AIza[0-9A-Za-z_-]{20}')
+SECRET = re.compile(r"""BEGIN (RSA |EC )?PRIVATE KEY|service_role["']?\s*[:=]\s*["']eyJ|sb_secret_[A-Za-z0-9_-]{10,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.|AIza[0-9A-Za-z_-]{20}""")
 BINARY = {".png", ".jpg", ".jpeg", ".onnx", ".db", ".pt", ".t7", ".pb", ".mp4", ".zip", ".lock", ".gif", ".ico", ".pdf", ".exe"}
 TOP = {"hulikamote_backend": "backend", "hulikamote_dashboard": "dashboard", "hulikamote_app": "app", "hulikamote_camera": "camera",
        "hulikamote_visualizer": "visualizer", "training_lab": "training-lab"}
