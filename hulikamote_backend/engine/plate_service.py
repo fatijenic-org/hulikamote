@@ -69,6 +69,47 @@ class PlateService:
         self.jobs_done = 0
         self.failures = 0
         self.last_job_s: float | None = None
+        self._focus = 0                                  # plate reads the reviewer waits for, now: the live monitor is paused while > 0
+        self._focus_since = 0.0
+        self._warmed = False
+
+    # ── focus: the live monitor stands still while a plate is read ──────────────────
+
+    def focus_begin(self) -> None:
+        with self._state:
+            if self._focus == 0:
+                self._focus_since = time.time()
+            self._focus += 1
+
+    def focus_release(self) -> None:
+        """The reviewer left the review: the live monitor goes on at once (the read itself goes on in the plate process)."""
+        with self._state:
+            self._focus = 0
+
+    def focus_end(self) -> None:
+        with self._state:
+            self._focus = max(0, self._focus - 1)
+
+    def focusing(self) -> bool:
+        """True while the reviewer waits for a plate read: the live monitor pauses and the whole machine goes to the reading. A safety net:
+        never longer than HK_PLATE_FOCUS_MAX_S (default 25) in one go: a read of a warm plate process takes a few seconds, a cold start must
+        not hold the monitor still for minutes."""
+        return self._focus > 0 and time.time() - self._focus_since < _env_int("HK_PLATE_FOCUS_MAX_S", 25)
+
+    def warm(self) -> None:
+        """Start the plate process and load its models in the background (once), so the first click on a ticket is fast. It runs as a
+        background job: a reviewer's read goes before it."""
+        if self._warmed or not self.own_process():
+            return
+        self._warmed = True
+
+        def work() -> None:
+            try:
+                self.run_in_background(self._call, {"op": "warm"}, 900)
+            except Exception:
+                self._warmed = False                       # tried again with the next ticket
+
+        threading.Thread(target=work, daemon=True, name="plate-warm").start()
 
     # ── settings ──────────────────────────────────────────────────────────────
 
@@ -180,7 +221,7 @@ class PlateService:
 
     def _watch(self) -> None:
         """Between jobs: end the process after a quiet spell (its memory is freed) and when it holds the GPU while the live feed runs."""
-        idle_s = _env_int("HK_PLATE_IDLE_S", 900)
+        idle_s = _env_int("HK_PLATE_IDLE_S", 7200)
         while True:
             time.sleep(3)
             if not self._alive():
@@ -213,6 +254,15 @@ class PlateService:
 
     def _call(self, payload: dict, timeout: float | None = None) -> dict:
         background = getattr(self._background, "flag", False)
+        if background:
+            return self._call_job(payload, timeout, True)
+        self.focus_begin()                                 # the reviewer waits: the live monitor pauses until the answer is here
+        try:
+            return self._call_job(payload, timeout, False)
+        finally:
+            self.focus_end()
+
+    def _call_job(self, payload: dict, timeout: float | None, background: bool) -> dict:
         if not background:
             with self._state:
                 self._interactive += 1
@@ -237,7 +287,7 @@ class PlateService:
             started = self._busy_since
             limit = timeout or _env_int("HK_PLATE_JOB_TIMEOUT_S", 900)
             try:
-                proc.stdin.write((json.dumps({**payload, "id": request_id}) + "\n").encode("utf-8"))
+                proc.stdin.write((json.dumps({**payload, "id": request_id, "focus": not background}) + "\n").encode("utf-8"))
                 proc.stdin.flush()
                 while True:
                     try:

@@ -159,7 +159,7 @@ def test_solid_line_ignores_a_crossing_beyond_the_ends_of_the_line():
 
 def test_solid_line_zone_needs_its_line():
     assert SOLID.parse_zone({"coordinates": BIG_ZONE}) is None
-    assert SOLID.parse_zone({"coordinates": BIG_ZONE, "stop_line": STOP_LINE}) == {"polygon": BIG_ZONE, "stop_line": STOP_LINE}
+    assert SOLID.parse_zone({"coordinates": BIG_ZONE, "stop_line": STOP_LINE}) == {"polygon": BIG_ZONE, "stop_line": STOP_LINE, "min_overlap": 0.3}
 
 
 # ─── Who is riding ON a vehicle (geometry) ───────────────────────────────────

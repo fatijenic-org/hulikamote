@@ -169,7 +169,12 @@ class DecoupledPipeline:
 
         # Force reload to apply new tracker strategy immediately
         from yolo_inference import get_inference
-        get_inference(force_reload=True, tracker_type=self.tracker_type)
+        yolo = get_inference(force_reload=True, tracker_type=self.tracker_type)
+        # Small people (tile search): the wizard's switch, or always while Passenger outside is on (its people are a few pixels tall).
+        # It must be set HERE: this call makes a new detector, so a value set on the old one (forensic.py did that) is lost, and the Live
+        # Monitor never set it at all.
+        if yolo is not None:
+            yolo.small_people = bool((getattr(self, "config", None) or {}).get("use_sahi")) or "passenger_outside" in self.registry.active_violations
 
     @staticmethod
     def _parse_native_dims(config_path: str) -> tuple[int, int]:
@@ -428,7 +433,7 @@ class DecoupledPipeline:
             for det in detections:   # boxes showing why each flagged vehicle was flagged
                 ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
                 if ledger is not None:
-                    marks.draw_marks(out_frame, ledger, det.bbox)
+                    marks.draw_marks(out_frame, ledger, det.bbox, live=True)
         self._draw_dets = detections
         return self._draw_rois(out_frame)
 

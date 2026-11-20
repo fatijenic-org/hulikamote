@@ -4,7 +4,7 @@ from pathlib import Path
 from collections import deque, Counter
 import numpy as np
 
-from engine.parked_vehicles import ParkedRegistry
+from engine.parking_lock import ParkingLocks
 from engine.track_stitcher import (
     APPEARANCE_EVERY_N,
     PARKED_KEEP_S,
@@ -268,8 +268,8 @@ class ActiveLedgerManager:
         # Tracker numbers that moved to ANOTHER vehicle (see _jump): such a number no longer belongs to the ledger it started
         self.detached: set[int] = set()
         self._split_ids = 1_000_000      # numbers of the ledgers made for a vehicle that took a tracker number over
-        # Vehicles that already got an Illegal parking ticket: one parked vehicle, one ticket (engine/parked_vehicles.py)
-        self.parked = ParkedRegistry()
+        # Illegal parking: the vehicles that stand still, locked on their spot, and the ones that already got a ticket (engine/parking_lock.py)
+        self.locks = ParkingLocks()
 
     def _log_event(self, event: str, timestamp: float | None, **fields) -> None:
         record = {"event": event, "t": timestamp, **fields}

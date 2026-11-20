@@ -40,6 +40,8 @@ def usable_signs(raw) -> list[dict]:
         if not all(np.isfinite(v) for v in (x, y, w, h)) or w <= 0 or h <= 0:
             continue
         sign = {"x": x, "y": y, "w": max(w, MIN_SIDE), "h": max(h, MIN_SIDE)}
+        if isinstance(s.get("road"), str):
+            sign["road"] = s["road"]                  # the road marking the sign applies to: that road is the zone, wherever the sign stands
         if isinstance(s.get("kind"), str):
             sign["kind"] = s["kind"]                  # what the sign stands for (illegal parking: see engine/parking_reasons.py)
         for key in LOOK_KEYS:

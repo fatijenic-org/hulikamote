@@ -486,6 +486,23 @@ async def prepare_live():
     return stream.prepare_feed()
 
 
+@router.get("/live/record")
+async def get_live_record():
+    """Whether the next live run is saved (every picture and its boxes, to replay later like a forensic run) and where."""
+    from engine import live_run
+    return {**live_run.read_settings(), "default_dir": str(Path(__file__).resolve().parent.parent / "snapshots" / "live_runs_saved")}
+
+
+@router.post("/live/record")
+async def set_live_record(body: dict):
+    """Choose to save the next live runs, and the folder (made when it does not exist). {"save": bool, "dir": str}"""
+    from engine import live_run
+    try:
+        return live_run.write_settings(bool(body.get("save")), str(body.get("dir") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/live/setup")
 async def get_live_setup():
     """The violations and settings the Live Monitor uses now, in the wizard's own shape (empty when none were set up)."""

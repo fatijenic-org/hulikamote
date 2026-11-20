@@ -1,8 +1,8 @@
 """
 illegal_parking - a vehicle left standing inside a no-parking zone.
 
-Heuristic: inside the zone and slower than 25 px/s (box jitter on a parked car stays below this,
-a driving car is far above) for longer than the zone's own time limit (default 180 s).
+Heuristic: inside the zone and STILL (it stays within 15 % of its own width, see engine/parking_lock.py) for longer than the zone's own
+time limit (default 180 s). The time runs from when the vehicle came to rest and belongs to a lock on its spot.
 Needs 5+ position updates so a new track is not judged on nothing.
 Whole picture (nothing drawn, no sign): the whole picture is the zone and the vehicle must also be stopped while
 other traffic keeps driving past it along the learned road (a red-light queue is not parking). The enforcer's time
@@ -11,10 +11,16 @@ A vehicle with a blinking indicator or hazard lights has not parked yet (it sign
 for a gap): the stopwatch is held while the lights blink and starts again when they stop (see indicators.py). The hold has an end: a
 lamp that blinks for BLINK_HOLD_MAX_S without a break counts as a vehicle that is parked with its hazard lights on (or as a wrong
 reading), so no vehicle is let off for ever.
-One parked vehicle, one ticket (engine/parked_vehicles.py): a parked vehicle does not move, so the spot it stands on is its identity.
-When the tracker gives a vehicle that was already flagged a new number (something drove in front of it), the vehicle is recognised by
-its spot, size and colours and gets no second stopwatch and no second ticket. Before that, a stopped vehicle that goes out of sight is
-kept for a while and joined to its new number strictly (ledger.holds_place, engine/track_stitcher.py).
+The lock-on aid (engine/parking_lock.py), because the plain "slower than 25 pixels a second" rule had two faults:
+- It flagged vehicles that run on the road: pixels are not a speed, a car far down the road moves a few pixels a second at full speed.
+  Now a vehicle is STILL only when it stays within a share of its OWN width (is_still), and it is LOCKED to the spot where it stood:
+  the stopwatch counts only while it stays within a small circle around that spot. A vehicle that drives, crawls in a queue or drifts
+  away leaves the circle: the lock and its time are gone.
+- The tracker loses a parked vehicle when something drives in front of it and gives it a new number: a second stopwatch, a second
+  ticket. The lock belongs to the SPOT: a new number standing on a lock nobody stands on (same place, size, kind, colours) takes it
+  over and the time goes on from when the vehicle came to rest; a lock that already made its ticket gives the new number none.
+Before that, a stopped vehicle that goes out of sight is kept for a while and joined to its new number strictly (ledger.holds_place,
+engine/track_stitcher.py).
 Overlay "NO PARKING" signs (engine/loading_signs.py, same as the no-loading signs): the operator places a sign on the picture and
 resizes it; the sign's box is a no-parking area. It is drawn on the evidence photos and the result video only, never written into the
 video, and belongs to the analysis. Drawn zones and signs can be mixed; the rule's time limit applies to both.
@@ -26,6 +32,7 @@ those are judged by the rules "Blocking the intersection", "Pedestrian lane bloc
 import math
 
 from engine import loading_signs, marks, overlay_objects, parking_reasons
+from engine.parking_lock import still_run
 from engine.violations.base import Violation
 from engine.violations.geometry import STOP_SPEED, point_in_polygon
 from engine.violations.indicators import is_signalling, sample_indicators
@@ -108,40 +115,43 @@ class IllegalParking(Violation):
             return False
 
         t, cx, cy = ledger.history[-1][0], ledger.history[-1][1], ledger.history[-1][2]
+        locks = getattr(mgr, "locks", None)
+        still = still_run(ledger)                    # does it stand still, judged in its own size (not in pixels a second)?
         zone = None
-        if ledger.get_speed() < STOP_SPEED:
+        if still is not None:
             zone = next((z for z in zones if point_in_polygon(cx, cy, z["polygon"])), None)
 
-        if zone is None:
+        if zone is None:                             # driving, crawling, or not in a zone: no lock, no time
+            ledger.stationary_start_time = None
+            marks.clear_timer(ledger, self.key)
+            if locks is not None:
+                locks.release(ledger)
+            return False
+        lock = None
+        if locks is not None:
+            locks.purge(t)
+            lock = locks.hold(ledger, mgr.ledgers, still)        # lock on to the spot it stands on
+            if lock.ledger_id != ledger.track_id:                # the vehicle that was ticketed here, under another tracker number
+                ledger.stationary_start_time = None
+                marks.clear_timer(ledger, self.key)
+                return False
+        if self.signalling(ledger, t):
+            if lock is not None:
+                lock.since = t                                   # lights are blinking: not parked yet, the time starts again when they stop
             ledger.stationary_start_time = None
             marks.clear_timer(ledger, self.key)
             return False
-        parked = getattr(mgr, "parked", None)
-        if parked is not None:
-            parked.purge(t)
-            known = parked.find(ledger, mgr.ledgers)  # a vehicle that already got its ticket here, under another tracker number?
-            if known is not None:
-                parked.touch(known, ledger)
-                if known.ledger_id != ledger.track_id:
-                    ledger.stationary_start_time = None      # the same vehicle: no stopwatch, no second ticket
-                    marks.clear_timer(ledger, self.key)
-                    return False
-        if self.signalling(ledger, t):
-            ledger.stationary_start_time = None     # lights are blinking: not parked yet, the stopwatch starts again when they stop
-            marks.clear_timer(ledger, self.key)
-            return False
-        if ledger.stationary_start_time is None:
-            ledger.stationary_start_time = t
-            return False
+        start = lock.since if lock is not None else (ledger.stationary_start_time if ledger.stationary_start_time is not None else still[3])
+        ledger.stationary_start_time = start                     # since when it stands here (also what holds_place reads)
         flowing = recently_flowing(mgr, ledger, zone, self.key) if zone.get("whole_frame") else True
         limit = zone.get("time_limit", 180.0)
-        elapsed = t - ledger.stationary_start_time
+        elapsed = t - start
         if flowing:     # the stopwatch on the vehicle's box runs from the first still frame until it moves off or leaves
             marks.set_timer(ledger, self.key, f"PARKED {marks.clock(elapsed)} / {marks.clock(limit)}", elapsed >= limit, t)
         if elapsed >= limit and flowing:
             ledger.violations.add(self.key)
-            if parked is not None:
-                parked.remember(ledger)               # from now on this spot and this vehicle are a ticket already
+            if lock is not None:
+                lock.ticketed = True                  # from now on this spot and this vehicle are a ticket already
             if zone.get("reason"):                   # say why on the evidence photos: "Within 4 m of fire hydrant"
                 box = ledger.history[-1][3]
                 marks.set_marks(ledger, self.key, box, [(box, parking_reasons.mark_of(zone["reason"]), marks.RED)])

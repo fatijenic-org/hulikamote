@@ -72,3 +72,10 @@ def test_a_fast_person_with_no_vehicle_under_it_is_still_a_rider():
     for i in range(30):
         mgr.update([Det(1_000_050, [1090, 1500 - 25 * i, 40, 80], "person")], i / FPS)
     assert mgr.ledgers[1_000_050].rides
+
+
+def test_a_passenger_on_the_far_back_step_shows_only_over_the_roof_edge():
+    from engine.violations.onboard import outside_position
+    jeepney = [1204, 723, 494, 716]                                  # drives toward the camera: its back is the top of the box
+    assert outside_position(jeepney, [1319, 640, 76, 70], (0.0, 1.0)) == "roof"      # head and shoulders over the roof's back edge
+    assert outside_position(jeepney, [1319, 690, 76, 10], (0.0, 1.0)) is None        # a speck is no person

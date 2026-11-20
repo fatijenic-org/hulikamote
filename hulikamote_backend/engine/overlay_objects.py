@@ -493,10 +493,42 @@ def parsed_fields(raw: dict, polygon, kind: str) -> dict:
 def draw_zone_object(frame: np.ndarray, zone: dict, kind: str) -> None:
     """A box zone on the picture: its area (faint patch, dashed edge) and the object standing in it."""
     realistic = zone.get("realistic", True)
-    draw_area(frame, zone["polygon"], kind, realistic)
+    if not zone.get("sign_linked"):                    # a road the sign was put on is not tinted: only the sign is drawn
+        draw_area(frame, zone["polygon"], kind, realistic)
     points = zone.get("sign_points")
     if points:
         draw_object(frame, points[0], kind, zone.get("look"), realistic)
+        hours = hours_text(zone.get("ban_windows"))
+        if hours:                                      # a ban with hours (truck ban): the hours on a small plate under the sign
+            draw_caption(frame, points[0], hours)
+
+
+def hours_text(windows) -> str:
+    """[["06:00", "09:00"], ["16:00", "19:00"]] -> "06:00-09:00  16:00-19:00" ("" when there are none)."""
+    parts = []
+    for w in windows or []:
+        try:
+            parts.append(f"{str(w[0]).strip()}-{str(w[1]).strip()}")
+        except (TypeError, IndexError, KeyError):
+            continue
+    return "  ".join(parts)
+
+
+def draw_caption(frame: np.ndarray, at, text: str) -> None:
+    """A small plate with `text` just under the spot an object stands on (the ban hours of a truck ban). Changes `frame`."""
+    fh, fw = frame.shape[:2]
+    k = max(0.45, fw / 1920.0)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale, thick = 0.62 * k * 1.6, max(1, int(round(1.6 * k)))
+    (tw, th), base = cv2.getTextSize(text, font, scale, thick)
+    pad = max(3, int(5 * k))
+    cx, top = int(at[0]), int(at[1]) + max(4, int(6 * k))
+    x1, x2 = max(0, cx - tw // 2 - pad), min(fw, cx + tw // 2 + pad)
+    y1, y2 = max(0, top), min(fh, top + th + base + 2 * pad)
+    if x2 <= x1 or y2 <= y1:
+        return
+    frame[y1:y2, x1:x2] = (frame[y1:y2, x1:x2] * 0.25 + np.array([30, 30, 190], np.float32) * 0.75).astype(np.uint8)
+    cv2.putText(frame, text, (x1 + pad, y1 + pad + th), font, scale, (255, 255, 255), thick, cv2.LINE_AA)
 
 
 def preview(kind: str, scale: float = 1.0, angle: float = 0.0, tilt: float = 0.0, stand: str | None = None, realistic: bool = True,

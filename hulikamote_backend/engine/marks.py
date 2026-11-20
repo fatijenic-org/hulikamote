@@ -56,24 +56,28 @@ def to_absolute(rel: tuple, vehicle: list) -> list[int]:
     return [int(vx + rx * vw), int(vy + ry * vh), int(rw * vw), int(rh * vh)]
 
 
-def set_marks(ledger, violation: str, vehicle: list, boxes: list, note: str | None = None) -> None:
-    """Remember the boxes (frame coords [x, y, w, h], label, BGR colour) found by the latest look."""
+def set_marks(ledger, violation: str, vehicle: list, boxes: list, note: str | None = None, always: bool = False) -> None:
+    """Remember the boxes (frame coords [x, y, w, h], label, BGR colour) found by the latest look.
+    `always`: show them on the live picture and in the replay as soon as the model finds them (the side mirrors), not only once the
+    violation is flagged. They are never put on a ticket's evidence photos unless the violation is flagged."""
     t = ledger.path[-1][0] if ledger.path else 0.0
     ledger.marks[violation] = {
         "t": t,
         "items": [(to_relative(b, vehicle), label, colour) for b, label, colour in boxes],
         "note": note,
+        "always": always,
     }
 
 
-def current_marks(ledger, vehicle: list) -> list[tuple]:
-    """[(box, label, colour)] to draw now, plus notes as box=None entries."""
+def current_marks(ledger, vehicle: list, live: bool = False) -> list[tuple]:
+    """[(box, label, colour)] to draw now, plus notes as box=None entries. `live`: the live picture / replay boxes, which also show the
+    marks that were set with always=True (what the model found, flagged or not)."""
     if not getattr(ledger, "marks", None):
         return []
     now = ledger.path[-1][0] if ledger.path else 0.0
     out = []
     for violation, mark in ledger.marks.items():
-        shown = violation in ledger.violations or violation in getattr(ledger, "pending", ())
+        shown = (live and mark.get("always")) or violation in ledger.violations or violation in getattr(ledger, "pending", ())
         if not shown or now - mark["t"] > MARK_TTL_S:
             continue
         out += [(to_absolute(rel, vehicle), label, colour) for rel, label, colour in mark["items"]]
@@ -137,7 +141,7 @@ def mark_specs(ledger, vehicle: list) -> list[dict]:
     or {timer, box, color}: a stopwatch chip on the bottom edge of the vehicle's box."""
     out = [{"timer": text, "box": [int(v) for v in vehicle], "color": list(colour), "lines": []}
            for text, colour in current_timers(ledger)]
-    for box, label, colour in sorted(current_marks(ledger, vehicle), key=lambda it: it[2] == RED):
+    for box, label, colour in sorted(current_marks(ledger, vehicle, live=True), key=lambda it: it[2] == RED):
         if box is None:
             out.append({"note": label, "at": [int(vehicle[0]), int(vehicle[1] + vehicle[3])]})
         else:
@@ -145,10 +149,10 @@ def mark_specs(ledger, vehicle: list) -> list[dict]:
     return out
 
 
-def draw_marks(frame: np.ndarray, ledger, vehicle: list) -> np.ndarray:
+def draw_marks(frame: np.ndarray, ledger, vehicle: list, live: bool = False) -> np.ndarray:
     """Draw the marks (and the stopwatch chips) of one vehicle in place (and return the frame)."""
     draw_timers(frame, ledger, vehicle)
-    items = current_marks(ledger, vehicle)
+    items = current_marks(ledger, vehicle, live=live)
     if not items:
         return frame
     items.sort(key=lambda it: it[2] == RED)   # the violation (red) boxes last, so they stay on top

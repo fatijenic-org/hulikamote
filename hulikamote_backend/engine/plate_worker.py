@@ -57,6 +57,15 @@ def _handle(request: dict) -> dict:
     if op == "ping":
         return {"pid": os.getpid(), "gpu": os.environ.get("HK_OCR_GPU", "1") != "0"}
     _limit_libraries()
+    if request.get("focus"):
+        _set_threads(os.cpu_count() or 4)                  # the first job too: torch is loaded by now
+    if op == "warm":
+        # load everything once (plate model, EasyOCR, the GAN) with a tiny blank crop, so the first real read is fast
+        import numpy as np
+        from engine import plate_ocr, plate_reader
+        plate_reader.plate_finder({})
+        plate_ocr.extract_plate_reads(np.full((24, 72, 3), 127, np.uint8), "ph_standard", "easyocr", "realesrgan")
+        return {"warm": True}
     if op == "reread":
         from engine import plate_reader
         written: list = []
@@ -73,6 +82,61 @@ def _handle(request: dict) -> dict:
 
 
 _limited = False
+
+
+def _configured_threads() -> int:
+    return int(_THREADS) if _THREADS.isdigit() else 0
+
+
+def _set_threads(n: int) -> None:
+    """CPU threads of OpenCV and torch (whatever is loaded; nothing is imported here)."""
+    if n <= 0:
+        return
+    cv2 = sys.modules.get("cv2")
+    if cv2 is not None:
+        try:
+            cv2.setNumThreads(n)
+        except Exception:
+            pass
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        try:
+            torch.set_num_threads(n)
+        except Exception:
+            pass
+
+
+def _focus_mode(on: bool) -> None:
+    """A job the reviewer waits for: leave Windows' background mode, run above normal priority (CPU, disk, memory, GPU scheduling) and use
+    every CPU thread; afterwards go back to the quiet mode. Best effort."""
+    if on:
+        _set_threads(os.cpu_count() or 4)
+    else:
+        _set_threads(_configured_threads())
+    if os.name != "nt" or os.environ.get("HK_PLATE_BACKGROUND", "1") == "0":
+        return
+    try:
+        import ctypes
+        kernel = ctypes.windll.kernel32
+        kernel.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        me = kernel.GetCurrentProcess()
+        if on:
+            kernel.SetPriorityClass(me, 0x00200000)        # PROCESS_MODE_BACKGROUND_END
+            kernel.SetPriorityClass(me, 0x00008000)        # ABOVE_NORMAL_PRIORITY_CLASS
+        else:
+            kernel.SetPriorityClass(me, 0x00004000)        # BELOW_NORMAL_PRIORITY_CLASS
+            kernel.SetPriorityClass(me, 0x00100000)        # PROCESS_MODE_BACKGROUND_BEGIN
+    except Exception:
+        pass
+    try:
+        import ctypes
+        gdi = ctypes.windll.gdi32
+        gdi.D3DKMTSetProcessSchedulingPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        ctypes.windll.kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        gdi.D3DKMTSetProcessSchedulingPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 3 if on else 1)   # above normal / below normal
+    except Exception:
+        pass
 
 
 def _limit_libraries() -> None:
@@ -141,7 +205,15 @@ def main() -> None:
         try:
             request = json.loads(line)
             request_id = request.get("id")
-            say({"id": request_id, "ok": True, **_handle(request)})
+            focus = bool(request.get("focus"))
+            if focus:
+                _focus_mode(True)
+            try:
+                result = _handle(request)
+            finally:
+                if focus:
+                    _focus_mode(False)
+            say({"id": request_id, "ok": True, **result})
         except Exception as e:
             sys.stderr.write(traceback.format_exc() + "\n")
             sys.stderr.flush()
