@@ -12,6 +12,7 @@ import '../../../forensic/data/forensic_api.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
 import '../../data/video_upload.dart';
+import '../../domain/live_overlay_layers.dart';
 import '../widgets/camera_input_dialog.dart';
 import '../widgets/camera_status_chip.dart';
 import '../widgets/flow_controls.dart';
@@ -22,7 +23,7 @@ import '../widgets/phone_connect_dialog.dart';
 import '../widgets/road_detect_view.dart';
 import '../widgets/upload_status_card.dart';
 import '../widgets/video_feed_widget.dart';
-import '../widgets/alert_list_widget.dart';
+import '../widgets/live_tickets_panel.dart';
 import 'live_setup_screen.dart';
 
 /// Picks the video file to upload. Replaceable in tests.
@@ -59,6 +60,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   String _sourceName = 'Intersection_01';
   bool _preparingSetup = false;  // "Set up violations": the camera is being started / a picture is being taken
   bool _gate = false;            // Start was pressed: nothing plays yet, the violations are set up first (or skipped)
+  List<OverlayLayer> _overlayLayers = const [];   // the overlay objects of the set-up violations (rows of the Layers checklist)
+  Set<String> _hiddenOverlays = {};
   int? _violationsOn;            // how many violations the live monitor watches now (null until asked)
 
   // "Video file…": where the upload is, shown as a card above the picture (null = no upload to show)
@@ -214,8 +217,28 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   Future<void> _loadSetup() async {
     try {
       final setup = await _cameraApi.liveSetup();
-      if (mounted) setState(() => _violationsOn = (setup['active_violations'] as List?)?.length ?? 0);
+      if (mounted) {
+        setState(() {
+          _violationsOn = (setup['active_violations'] as List?)?.length ?? 0;
+          _overlayLayers = OverlayLayer.of(setup);
+        });
+      }
+      final hidden = await _cameraApi.hiddenOverlays();               // what the backend leaves off the picture now
+      if (mounted) setState(() => _hiddenOverlays = {...hidden});
     } catch (_) {}
+  }
+
+  /// Layers checklist: show or hide the overlay objects of one violation on the live picture.
+  Future<void> _showOverlay(String key, bool shown) async {
+    setState(() => shown ? _hiddenOverlays.remove(key) : _hiddenOverlays.add(key));
+    try {
+      await _cameraApi.setHiddenOverlays(_hiddenOverlays);
+    } catch (_) {
+      if (mounted) {
+        setState(() => shown ? _hiddenOverlays.add(key) : _hiddenOverlays.remove(key));   // the backend did not take it: back as it was
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not change the layer. Restart the backend, then try again.')));
+      }
+    }
   }
 
   /// "Set up violations": the Forensic Analyzer's own steps, drawn on ONE picture of the source, then applied.
@@ -226,6 +249,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     if (_preparingSetup || _uploading) return;
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _preparingSetup = true);
+    unawaited(_cameraApi.prepareFeed());                   // (again: it is quick when the models are loaded already) the setup takes a while
     try {
       await _setupEmptied;                                 // the clearing of the last visit is done before a setup is read
       if (!mounted) return;
@@ -278,7 +302,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     setState(() {
       _applyingSetup = true;
       _applyReady = false;
-      _applyChannel = null;
+      _applyChannel = _channel;                           // the connection open NOW (a running feed): only a newer one ends the view
       _applyPicture = null;
       _applyPictureSize = null;
     });
@@ -287,14 +311,33 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       if (mounted && _applyingSetup) setState(() => _applyingSetup = false);
     });
     unawaited(_loadApplyPicture());
+    // Everything the start needs goes NOW, side by side, behind the "Processing" view: the old tickets are cleared (when chosen), the rules
+    // are sent (the backend loads and warms what it still lacks, off its event loop) and the source and the video relay are checked. The
+    // feed connects the moment all of it is done: nothing waits for something it does not depend on.
+    final sourceReady = _loadSource();
     try {
-      await ForensicApi().useForLive(p.config);
+      String? clearError;
+      await Future.wait<Object?>([
+        ForensicApi().useForLive(p.config),
+        if (p.clearTickets)
+          _cameraApi.clearLiveTickets().then<Object?>((_) => null, onError: (Object e) {
+            clearError = '$e'.replaceFirst('Exception: ', '');
+            return null;
+          }),
+      ]);
       if (!mounted) return;
-      _applyChannel = _channel;
+      if (clearError != null) {                           // (the old order stopped here too: tickets that stay would mix with the new ones)
+        setState(() => _applyingSetup = false);
+        messenger.showSnackBar(SnackBar(content: Text('The old tickets could not be cleared: $clearError. Monitoring did not start.')));
+        return;
+      }
       _applyReady = true;
       messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches ${p.count} violation${p.count == 1 ? '' : 's'}.')));
       _loadSetup();
-      if (!_playing) await _connect();                    // applied before the feed ran: now it starts
+      if (!_playing) {                                    // applied before the feed ran: now it starts
+        if (await sourceReady) await _connect(checked: true);
+        if (mounted && !_playing && _applyingSetup) setState(() => _applyingSetup = false);   // it could not start: the reason shows, not a scan
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _applyingSetup = false);
@@ -423,6 +466,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   /// now). Nothing is connected until the setup is applied or skipped.
   Future<void> _startMonitoring() async {
     if (!await _loadSource()) return;           // the backend, or the video relay, is not ready: the reason is shown
+    unawaited(_cameraApi.prepareFeed());        // the models load and warm up in the backend while the operator sets up (or skips)
     if (mounted) setState(() => _gate = true);
   }
 
@@ -430,8 +474,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   void _skipSetup() => _connect();
 
   /// Opens the feed. Also what reconnecting after a source change does.
-  Future<void> _connect({double? startAt}) async {
-    if (!await _loadSource()) {
+  Future<void> _connect({double? startAt, bool checked = false}) async {
+    if (!checked && !await _loadSource()) {
       if (_isPlaying) _stopMonitoring();       // a reconnect found the backend gone
       return;
     }
@@ -743,10 +787,10 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         ]),
       ),
     ]);
+    // The live tickets: the review's own list. Tickets are queued in the backend, the plates are read one by one, and a ticket shows here
+    // when it is done. It stays alive (hidden) while the panel is folded away.
     final detections = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Live detections', style: Fx.heading(context).copyWith(fontSize: 18)),
-      const SizedBox(height: Fx.s12),
-      Expanded(child: _playing ? AlertListWidget(frameStream: _broadcastStream!) : _noDetections()),
+      Expanded(child: _playing ? const LiveTicketsPanel() : _noDetections()),
     ]);
     return Scaffold(
       backgroundColor: Fx.page(context),
@@ -782,10 +826,15 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   Widget _sourceBar() {
     // One line: in a narrower window the buttons turn into icons (the words are in their tooltips) so they stay side by side.
-    return LayoutBuilder(builder: (context, box) => _sourceRow(compact: box.maxWidth < 1180));
+    return LayoutBuilder(builder: (context, box) => _sourceRow(compact: box.maxWidth < 1180, width: box.maxWidth));
   }
 
-  Widget _sourceRow({required bool compact}) {
+  /// The buttons in a row with a fixed order and even gaps.
+  static List<Widget> _spaced(List<Widget> items, double gap) => [
+    for (var i = 0; i < items.length; i++) ...[if (i > 0) SizedBox(width: gap), items[i]],
+  ];
+
+  Widget _sourceRow({required bool compact, required double width}) {
     return Row(children: [
       StatusPill(
         label: _playing ? 'LIVE' : 'Paused',
@@ -793,28 +842,32 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         icon: _playing ? Icons.fiber_manual_record : Icons.pause,
       ),
       const SizedBox(width: Fx.s12),
+      // Left: what is being watched (name, then its status side by side). It gives way first: long text is cut with "...".
       Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_sourceName, overflow: TextOverflow.ellipsis, style: Fx.heading(context).copyWith(fontSize: 18)),
-          if (_violationsOn != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: StatusPill(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+          Text(_sourceName, maxLines: 1, overflow: TextOverflow.ellipsis, style: Fx.heading(context).copyWith(fontSize: 18)),
+          const SizedBox(height: 4),
+          Wrap(spacing: Fx.s12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            if (_violationsOn != null)
+              StatusPill(
                 key: const ValueKey('violations-on-chip'),
                 label: _violationsOn == 0 ? 'No violations set up yet' : 'Watching $_violationsOn violation${_violationsOn == 1 ? '' : 's'}',
                 color: _violationsOn == 0 ? Fx.warning : Fx.success,
                 icon: _violationsOn == 0 ? Icons.rule : Icons.fact_check_outlined,
                 dense: true,
               ),
-            ),
-          if (_camera != null && _playing) CameraStatusChip(status: _camera!),
+            if (_camera != null && _playing) CameraStatusChip(status: _camera!),
+          ]),
         ]),
       ),
-      const SizedBox(width: Fx.s12),
-      // Three groups, in a fixed order: what to change (setup), the small tools, and Stop. In a narrow window a whole group moves
-      // to the next line, never a single button.
-      Flexible(
-        child: Wrap(alignment: WrapAlignment.end, crossAxisAlignment: WrapCrossAlignment.center, spacing: Fx.s12, runSpacing: Fx.s8, children: [
+      const SizedBox(width: Fx.s16),
+      // Right: ONE row, always: setup | tools | Stop, even gaps, never stacked. If the window is too small even for icons, the row slides sideways.
+      ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: width * 0.66),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          reverse: true,
+          child: Row(mainAxisSize: MainAxisSize.min, children: _spaced([
           if (_playing)
             _toolGroup([
               _setupButton(compact: compact),
@@ -877,7 +930,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               label: Text(compact ? 'Stop' : 'Stop monitoring'),
               style: FilledButton.styleFrom(backgroundColor: Fx.danger, foregroundColor: Colors.black),
             ),
-        ]),
+          ], Fx.s12)),
+        ),
       ),
     ]);
   }
@@ -974,6 +1028,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       onShowRoadArrows: _setShowRoadArrows,
       showRoadZones: _showRoadZones,
       onShowRoadZones: _setShowRoadZones,
+      overlays: _overlayLayers,
+      hiddenOverlays: _hiddenOverlays,
+      onShowOverlay: _showOverlay,
       showArrows: _showFlowArrows,
       busy: _flowBusy,
       onShowArrows: _setShowFlowArrows,
@@ -1079,11 +1136,20 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
             constraints: BoxConstraints(minHeight: box.maxHeight),
             child: EmptyState(
               icon: Icons.videocam_off_outlined,
-              title: 'Monitoring is off',
+              title: _canResume ? 'Monitoring is off' : 'Set up the violations',
               message: _canResume
                   ? 'Source: $_sourceName\nMonitoring is stopped. Resume goes on with the same setup.'
-                  : 'Source: $_sourceName\nPress Start to watch the live feed and catch violations.',
-              action: Column(mainAxisSize: MainAxisSize.min, children: [
+                  : 'Source: $_sourceName\nPick a picture of the video, then choose what to watch for. Monitoring starts when you apply.',
+              // First visit: ONE button. The setup is the start, so there is no separate Start button here.
+              action: !_canResume
+                  ? FilledButton.icon(
+                      key: const ValueKey('live-setup-button'),
+                      onPressed: (_preparingSetup || _uploading) ? null : _openSetup,
+                      icon: _preparingSetup ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.tune),
+                      label: const Text('Set up violations'),
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
+                    )
+                  : Column(mainAxisSize: MainAxisSize.min, children: [
                 if (_canResume) ...[
                   FilledButton.icon(
                     key: const ValueKey('resume-button'),
@@ -1097,7 +1163,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
                 FilledButton.icon(
                   onPressed: _uploading ? null : _startMonitoring,       // the new video is not the source yet
                   icon: const Icon(Icons.play_arrow),
-                  label: Text(_canResume ? 'Start over (set up again)' : 'Start monitoring'),
+                  label: const Text('Start over (set up again)'),
                   style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
                 ),
                 const SizedBox(height: Fx.s12),

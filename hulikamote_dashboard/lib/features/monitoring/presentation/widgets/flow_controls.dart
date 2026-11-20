@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../forensic/presentation/widgets/fx.dart';
+import '../../domain/live_overlay_layers.dart';
 
 /// The controls over the live picture: a "Layers" checklist (road zones, road arrows, learned flow arrows: what is drawn over the video),
 /// the Counterflow demo reversal (the opposite direction counts as legal, so ordinary traffic is flagged), and "learn the flow again".
@@ -18,6 +19,9 @@ class FlowControls extends StatefulWidget {
     required this.onShowRoadArrows,
     required this.showRoadZones,
     required this.onShowRoadZones,
+    this.overlays = const [],
+    this.hiddenOverlays = const {},
+    this.onShowOverlay,
   });
 
   final Map flow;
@@ -37,6 +41,11 @@ class FlowControls extends StatefulWidget {
   final bool showRoadZones;
   final ValueChanged<bool> onShowRoadZones;
 
+  /// The overlay objects of the set-up violations (signs, painted crosswalks and lines): one row each, added with the violation.
+  final List<OverlayLayer> overlays;
+  final Set<String> hiddenOverlays;
+  final void Function(String key, bool shown)? onShowOverlay;
+
   @override
   State<FlowControls> createState() => _FlowControlsState();
 }
@@ -48,6 +57,7 @@ class _FlowControlsState extends State<FlowControls> {
 
   // What the checklist shows: kept here so it changes at once (the open menu is not rebuilt by the screen).
   late bool _zones = widget.showRoadZones, _roadArrows = widget.showRoadArrows, _flowArrows = widget.showArrows;
+  late Set<String> _hiddenOv = {...widget.hiddenOverlays};
 
   @override
   void didUpdateWidget(covariant FlowControls old) {
@@ -55,7 +65,14 @@ class _FlowControlsState extends State<FlowControls> {
     _zones = widget.showRoadZones;
     _roadArrows = widget.showRoadArrows;
     _flowArrows = widget.showArrows;
-    _menu?.markNeedsBuild();
+    _hiddenOv = {...widget.hiddenOverlays};
+    // The open menu is another part of the tree: it may not be marked while this frame is still being built (every live picture
+    // rebuilds this widget). It is refreshed right after the frame.
+    if (_menu != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _menu?.markNeedsBuild();
+      });
+    }
   }
 
   @override
@@ -126,6 +143,14 @@ class _FlowControlsState extends State<FlowControls> {
                   if (learning)
                     item(const ValueKey('layer-flow-arrows'), 'Flow arrows', 'The traffic direction the camera learned', _flowArrows,
                         (v) => _set(() => _flowArrows = v, () => widget.onShowArrows(v))),
+                  for (final layer in widget.overlays)
+                    item(
+                      ValueKey('layer-overlay-${layer.key}'),
+                      layer.label,
+                      layer.hint ?? '${layer.count} on the video',
+                      !_hiddenOv.contains(layer.key),
+                      (v) => _set(() => v ? _hiddenOv.remove(layer.key) : _hiddenOv.add(layer.key), () => widget.onShowOverlay?.call(layer.key, v)),
+                    ),
                 ]),
               ),
             ),
@@ -155,7 +180,7 @@ class _FlowControlsState extends State<FlowControls> {
               key: _button,
               avatar: const Icon(Icons.layers_outlined, size: 16),
               label: const Text('Layers'),
-              tooltip: 'Choose what is drawn over the video: road zones, road arrows, flow arrows',
+              tooltip: 'Choose what is drawn over the video: road zones, road arrows, flow arrows, signs and painted marks',
               onPressed: _open,
             ),
           ),

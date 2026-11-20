@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../../../forensic/data/forensic_api.dart';
+import '../../../forensic/data/object_previews.dart';
 import '../../../forensic/domain/violation_catalog.dart';
 import '../../../forensic/domain/zone_geometry.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
@@ -21,9 +23,12 @@ import 'saved_roads_dialog.dart';
 ///
 /// Every change is reported to [onChanged] at once, in the 1920x1080 reference space (the step has no save button).
 class RoadMarkingsPanel extends StatefulWidget {
-  const RoadMarkingsPanel({super.key, required this.cameraApi, required this.markings, required this.onChanged});
+  const RoadMarkingsPanel({super.key, required this.cameraApi, required this.markings, required this.onChanged, this.api});
 
   final CameraApi cameraApi;
+
+  /// Draws the road paint (a painted solid line) as the evidence photos will show it. Without it a painted line is a coloured stroke.
+  final ForensicApi? api;
 
   /// The markings made before, in the 1920x1080 reference space.
   final List<RoadArea> markings;
@@ -44,10 +49,18 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
   String? _presetId;                 // the saved road the setup follows (used or saved last), if any
   String? _presetName;
 
+  late final ObjectPreviews _previews = ObjectPreviews(widget.api);
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _previews.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -171,6 +184,7 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
     final size = _size;
     if (size == null) return const Center(child: CircularProgressIndicator());
     return RoadZoneEditor(
+      previews: _previews,
       frame: _frame,
       size: size,
       areas: _areas,

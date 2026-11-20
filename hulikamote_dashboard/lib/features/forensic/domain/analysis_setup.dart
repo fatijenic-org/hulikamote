@@ -122,7 +122,7 @@ class AnalysisSetup {
     if (_timeLimit.contains(key) && limit is num) rows.add(SetupRow('Time limit', '${_num(limit)} s'));
     if (key == 'restricted_lane' && count('allowed_classes') > 0) rows.add(SetupRow('Allowed vehicles', list('allowed_classes')));
     if (_bannedClasses.contains(key) && count('banned_classes') > 0) rows.add(SetupRow('Banned vehicles', list('banned_classes')));
-    if (key == 'illegal_turn' && count('banned_turns') > 0) rows.add(SetupRow('Banned turns', list('banned_turns')));
+    if (key == 'illegal_turn') rows.add(SetupRow('Banned turns', count('banned_turns') > 0 ? list('banned_turns') : 'none (whole-picture check off)'));
     if (key == 'overloading' && c['max_riders'] is num) rows.add(SetupRow('Most riders allowed', _num(c['max_riders'] as num)));
     if (key == 'counterflow' && c['invert_flow'] == true) rows.add(const SetupRow('Flow', 'Reversed'));
     if (key == 'red_light') {

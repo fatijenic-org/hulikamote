@@ -141,8 +141,34 @@ class _PerformanceDialogState extends State<PerformanceDialog> {
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(flex: 3, child: _stepTable(context, d, info)),
         const SizedBox(width: Fx.s16),
-        Expanded(flex: 2, child: _models(context, d)),
+        Expanded(flex: 2, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_models(context, d), _startup(context, d)])),
       ]),
+    ]);
+  }
+
+  /// How the last start went: each step with the seconds since Apply and the seconds the step itself took (a slow one is amber).
+  Widget _startup(BuildContext context, Map d) {
+    final steps = [for (final e in (((d['startup'] as Map?) ?? const {})['steps'] as List? ?? const [])) (e as Map)];
+    if (steps.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: Fx.s12),
+      Text('HOW THE LAST START WENT', style: Fx.label(context)),
+      const SizedBox(height: 2),
+      Text('seconds since Apply · seconds the step took', style: Fx.caption(context)),
+      const SizedBox(height: 4),
+      for (final e in steps)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1),
+          child: Row(children: [
+            Expanded(child: Text('${e['step']}', style: const TextStyle(fontSize: 12.5), overflow: TextOverflow.ellipsis)),
+            Text('${_f(e['at_s'])} s', style: const TextStyle(fontSize: 12.5)),
+            SizedBox(
+              width: 60,
+              child: Text('+${_f(e['took_s'])}', textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 12.5, color: _num(e['took_s']) > 3 ? Fx.warning : Fx.muted(context))),
+            ),
+          ]),
+        ),
     ]);
   }
 

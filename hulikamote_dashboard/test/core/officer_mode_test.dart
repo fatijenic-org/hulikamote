@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/forensic/support/test_support.dart';
 
-const officerPages = ['Overview', 'Live Monitor', 'Video Analysis', 'Forensic Analyzer', 'Inbox', 'Violations', 'Demerit Points', 'Motorists'];
+const officerPages = ['Overview', 'Live Monitor', 'Video Analysis', 'Forensic Analyzer', 'Inbox', 'Violations', 'Demerit Points', 'Motorists', 'Appeals'];
 const developerPages = [
   'Benchmark', 'Models', 'Settings', 'Utilities', 'Wiki', 'Code Reference', 'Docs', 'Progress Report', 'Visualizer', 'Datasets', 'Labeller',
 ];

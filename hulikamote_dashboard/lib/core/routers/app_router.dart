@@ -4,6 +4,7 @@ import '../../features/monitoring/presentation/screens/live_monitoring_screen.da
 import '../../features/violations/presentation/screens/violations_screen.dart';
 import '../../features/demerit/presentation/screens/demerit_screen.dart';
 import '../../features/registry/presentation/screens/registry_screen.dart';
+import '../../features/appeals/presentation/screens/appeals_screen.dart';
 import '../../features/labeller/presentation/screens/labeller_screen.dart';
 import '../../features/models_hub/presentation/screens/models_hub_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -92,6 +93,9 @@ final GoRouter appRouter = GoRouter(
         ]),
         StatefulShellBranch(routes: [
           GoRoute(path: '/labeller', builder: (context, state) => const LabellerScreen()),
+        ]),
+        StatefulShellBranch(routes: [
+          GoRoute(path: '/appeals', builder: (context, state) => const AppealsScreen()),
         ]),
       ],
     ),

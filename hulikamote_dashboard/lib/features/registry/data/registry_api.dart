@@ -123,6 +123,12 @@ class RegistryApi {
     return CloudSetupResult.fromJson(_map(r));
   }
 
+  /// The one-line setup code a phone pastes to join the cloud (project address + public anon key; no secret).
+  Future<String> phoneSetupCode() async {
+    final r = await _call(() => _client.get(Uri.parse('$baseUrl/pair/code')), 'Making the setup code');
+    return _map(r)['code'] as String;
+  }
+
   /// Gives the laptop the Firebase service-account file (its text), so push works when the phone app is closed.
   Future<PushResult> installPushKey(String keyJson) async {
     final r = await _call(() => _client.post(_notify('/push-key'), headers: _json, body: jsonEncode({'key_json': keyJson})), 'Saving the Firebase key');

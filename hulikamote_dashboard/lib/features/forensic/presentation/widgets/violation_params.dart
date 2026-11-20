@@ -42,8 +42,14 @@ class ViolationParams extends StatelessWidget {
         _slider(context, 'How long may a vehicle stop here?', 'time_limit', 3, 120, suffix: 'seconds'),
         _chips(context, 'Vehicle types that may NOT load or unload here', 'banned_classes'),
       ],
+      if (violationKey == 'illegal_turn' && draft.roadHint('illegal_turn') != null)
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.alt_route, size: 16),
+          const SizedBox(width: 8),
+          Expanded(child: Text(draft.roadHint('illegal_turn')!, key: const ValueKey('turn-road-hint'), style: Fx.caption(context))),
+        ]),
       if (violationKey == 'illegal_turn')
-        _chips(context, 'Turns that are NOT allowed (used when the flow is detected automatically)', 'banned_turns',
+        _chips(context, 'Turns that are NOT allowed. Used for the whole picture and for the roads marked in the Road step. Both off: this check does not apply.', 'banned_turns',
             options: const ['left', 'right']),
       if (violationKey == 'double_parking')
         _slider(context, 'How long may a vehicle stand in the lane?', 'time_limit', 3, 120, suffix: 'seconds'),

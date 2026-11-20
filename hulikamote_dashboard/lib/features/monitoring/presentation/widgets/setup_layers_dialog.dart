@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
+import '../../data/camera_api.dart';
 import '../../../forensic/data/forensic_api.dart';
 import '../../../forensic/data/object_previews.dart';
 import '../../../forensic/domain/crosswalk_overlay.dart';
@@ -32,14 +33,18 @@ class _Layer {
 
 /// "Show layers": the setup picture with everything that was set up on it, and a checklist of what to show: the road markings (by kind,
 /// and their direction arrows), the zones of each picked violation, and the overlay signs (lane signs, parking / loading signs, painted
-/// crosswalks, painted lines). It only shows: nothing is changed here. The signs are the Forensic pictures: the backend draws the hydrant,
+/// crosswalks, painted lines). The road and zone rows only change what this picture shows. The rows of the overlay signs also decide what
+/// the LIVE picture draws ([cameraApi]; the same switches as the Layers button of the Live Monitor). The signs are the Forensic pictures: the backend draws the hydrant,
 /// the signs on their poles and the road paint ([api]), and the lane boards are drawn as in the zone editor.
 class SetupLayersDialog extends StatefulWidget {
-  const SetupLayersDialog({super.key, required this.draft, required this.frame, this.api});
+  const SetupLayersDialog({super.key, required this.draft, required this.frame, this.api, this.cameraApi});
 
   final LiveSetupDraft draft;
   final ImageProvider frame;
   final ForensicApi? api;
+
+  /// The backend that draws the live picture: the overlay-sign rows are written to it. Null: the rows only change this picture.
+  final CameraApi? cameraApi;
 
   @override
   State<SetupLayersDialog> createState() => _SetupLayersDialogState();
@@ -49,9 +54,46 @@ class _SetupLayersDialogState extends State<SetupLayersDialog> {
   final Set<String> _hidden = {};
   late final List<_Layer> _layers = _collect();
   late final ObjectPreviews _previews = ObjectPreviews(widget.api)..addListener(_pictureArrived);
+  Set<String> _liveHidden = {};   // the violations whose overlay objects the live picture leaves out (as the backend has them)
 
   void _pictureArrived() {
     if (mounted) setState(() {});
+  }
+
+  /// An overlay row ('s:key', 'c:key', 'l:key') -> the violation key the backend switches; other rows -> null.
+  static String? _overlayKey(String id) => RegExp(r'^[scl]:(.+)$').firstMatch(id)?.group(1);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLive();
+  }
+
+  /// What the live picture hides now shows as unticked overlay rows.
+  Future<void> _loadLive() async {
+    final api = widget.cameraApi;
+    if (api == null) return;
+    try {
+      final hidden = {...await api.hiddenOverlays()};
+      if (!mounted) return;
+      setState(() {
+        _liveHidden = hidden;
+        for (final l in _layers) {
+          final key = _overlayKey(l.id);
+          if (key != null && hidden.contains(key)) _hidden.add(l.id);
+        }
+      });
+    } catch (_) {}   // an older backend has no switch: the rows only change this picture
+  }
+
+  /// The overlay rows that are unticked here are hidden on the live picture; violations without a row here keep what they had.
+  void _pushLive() {
+    final api = widget.cameraApi;
+    if (api == null) return;
+    final rows = {for (final l in _layers) ?_overlayKey(l.id)};
+    final hidden = {..._liveHidden.where((k) => !rows.contains(k)), for (final l in _layers) if (_hidden.contains(l.id)) ?_overlayKey(l.id)};
+    _liveHidden = hidden;
+    api.setHiddenOverlays(hidden).catchError((Object _) {});
   }
 
   @override
@@ -85,6 +127,8 @@ class _SetupLayersDialogState extends State<SetupLayersDialog> {
     }
     final arrows = d.markings.where((m) => m.hasDirection && m.flow != null && m.arrow.length >= 2).length;
     if (arrows > 0) out.add(_Layer('m:arrows', 'Road markings', 'Direction arrows', arrows, Colors.lightBlueAccent));
+    final paintedMarkings = d.markings.where((m) => m.kind == 'solid_line' && m.paint && m.polygon.length >= 2).length;
+    if (paintedMarkings > 0) out.add(_Layer('m:paint', 'Overlay signs', 'Painted solid lines (road markings)', paintedMarkings, Colors.yellowAccent));
     for (final key in d.selection) {
       final info = ViolationCatalog.of(key);
       final zones = d.zones(key).length;
@@ -96,6 +140,8 @@ class _SetupLayersDialogState extends State<SetupLayersDialog> {
       if (signs > 0) out.add(_Layer('s:$key', 'Overlay signs', '${info.label}: signs', signs, info.color));
       final zebras = d.crosswalkCount(key) + (key == 'pedestrian_lane' ? d.zones(key).where(_painted).length : 0);
       if (zebras > 0) out.add(_Layer('c:$key', 'Overlay signs', 'Painted crosswalks', zebras, Colors.white));
+      final turnArrows = key == 'illegal_turn' ? d.zones(key).where((z) => z is Map && (z['turn_arrow_left'] != null || z['turn_arrow_right'] != null)).length : 0;
+      if (turnArrows > 0) out.add(_Layer('t:$key', 'Overlay signs', 'Illegal turn: banned-turn arrows', turnArrows, const Color(0xFFFF8C00)));
       final painted = key == 'crossing_solid_line' ? d.zones(key).where((z) => z is Map && z['look'] is Map).length : 0;
       if (painted > 0) out.add(_Layer('l:$key', 'Overlay signs', 'Painted lines', painted, Colors.yellowAccent));
     }
@@ -104,12 +150,18 @@ class _SetupLayersDialogState extends State<SetupLayersDialog> {
 
   bool _on(String id) => !_hidden.contains(id);
 
-  void _toggle(String id, bool on) => setState(() => on ? _hidden.remove(id) : _hidden.add(id));
+  void _toggle(String id, bool on) {
+    setState(() => on ? _hidden.remove(id) : _hidden.add(id));
+    if (_overlayKey(id) != null) _pushLive();
+  }
 
-  void _all(bool on) => setState(() {
-    _hidden.clear();
-    if (!on) _hidden.addAll(_layers.map((l) => l.id));
-  });
+  void _all(bool on) {
+    setState(() {
+      _hidden.clear();
+      if (!on) _hidden.addAll(_layers.map((l) => l.id));
+    });
+    _pushLive();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -217,10 +269,21 @@ class _LayersPainter extends CustomPainter {
     canvas.drawPath(Path()..addPolygon(shape, true), Paint()..color = Colors.white54..style = PaintingStyle.stroke..strokeWidth = 1.5);
   }
 
+  /// Road paint along a line (reference space), drawn once however many layers hold it: a road marking and the zone it made are one line.
+  void _paintLine(Canvas canvas, Size size, Set<String> drawn, List<List<double>> points, Map look, bool realistic) {
+    if (points.length < 2) return;
+    final clean = {'style': look['style'], 'width': look['width'], 'wear': look['wear'], 'taper': look['taper']};
+    final key = '${[for (final p in points) '${p[0].round()},${p[1].round()}']}|$clean';
+    if (!drawn.add(key)) return;
+    final picture = previews.peekLine(points, Map<String, dynamic>.from(clean), look['realistic'] is bool ? look['realistic'] as bool : realistic);
+    if (picture != null) paintLinePicture(canvas, size, picture);
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
     final sx = size.width / ZoneGeometry.refWidth, sy = size.height / ZoneGeometry.refHeight;
     Offset at(double x, double y) => Offset(x * sx, y * sy);
+    final paintedLines = <String>{};
     List<Offset> poly(Object? raw) => [for (final p in _SetupLayersDialogState._points(raw)) at(p[0], p[1])];
 
     // 1 road markings (areas under lines under arrows)
@@ -231,7 +294,8 @@ class _LayersPainter extends CustomPainter {
         final pts = [for (final p in m.polygon) at(p.dx, p.dy)];
         final colour = RoadZoneEditor.colourOf(m);
         if (m.isLine) {
-          if (pts.length >= 2) canvas.drawPath(Path()..addPolygon(pts, false), Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 4);
+          final real = m.kind == 'solid_line' && m.paint;                       // painted: the real paint is drawn below, only a hairline marks it here
+          if (pts.length >= 2) canvas.drawPath(Path()..addPolygon(pts, false), Paint()..color = real ? colour.withValues(alpha: 0.4) : colour..style = PaintingStyle.stroke..strokeWidth = real ? 1.2 : 4);
         } else if (pts.length >= 3) {
           final path = Path()..addPolygon(pts, true);
           canvas.drawPath(path, Paint()..color = colour.withValues(alpha: 0.2));
@@ -264,13 +328,24 @@ class _LayersPainter extends CustomPainter {
           canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 2.5);
         }
         final line = poly(z['line']);
-        if (line.length >= 2) canvas.drawPath(Path()..addPolygon(line, false), Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = 4);
+        final real = z['look'] is Map;                                          // a painted line: the real paint is drawn below, only a hairline here
+        if (line.length >= 2) canvas.drawPath(Path()..addPolygon(line, false), Paint()..color = real ? colour.withValues(alpha: 0.4) : colour..style = PaintingStyle.stroke..strokeWidth = real ? 1.2 : 4);
         final lead = area.length >= 3 ? area.first : (line.isNotEmpty ? line.first : null);
         if (lead != null) _text(canvas, ViolationCatalog.of(key).label, lead + const Offset(2, -18), colour, size: 11);
       }
     }
 
     // 3 overlay signs and painted crosswalks
+    if (on.contains('m:paint')) {                                              // the painted solid lines of the road markings
+      for (final m in draft.markings.where((m) => m.kind == 'solid_line' && m.paint && m.polygon.length >= 2)) {
+        _paintLine(
+          canvas, size, paintedLines,
+          [for (final p in m.polygon) [p.dx, p.dy]],
+          {'style': m.style, 'width': m.lineWidth, 'wear': m.wear, 'taper': m.taper, 'realistic': m.realistic},
+          true,
+        );
+      }
+    }
     for (final key in draft.selection) {
       if (on.contains('s:$key')) {
         final realistic = (draft.config(key)['signs_realistic'] as bool?) ?? true;
@@ -314,14 +389,20 @@ class _LayersPainter extends CustomPainter {
           }
         }
       }
+      if (on.contains('t:$key')) {
+        for (final z in draft.zones(key)) {
+          if (z is! Map) continue;
+          for (final f in const ['turn_arrow_left', 'turn_arrow_right']) {
+            final pts = poly(z[f]);
+            if (pts.length >= 2) paintRoadPath(canvas, pts, const Color(0xFFFF8C00), width: 5, head: 20);
+          }
+        }
+      }
       if (on.contains('l:$key')) {
         final realistic = (draft.config(key)['lines_realistic'] as bool?) ?? true;
         for (final z in draft.zones(key)) {
           if (z is! Map || z['look'] is! Map) continue;
-          final points = _SetupLayersDialogState._points(z['line'] ?? z['ui_vector']);
-          if (points.length < 2) continue;
-          final picture = previews.peekLine(points, Map<String, dynamic>.from(z['look'] as Map), realistic);
-          if (picture != null) paintLinePicture(canvas, size, picture);
+          _paintLine(canvas, size, paintedLines, _SetupLayersDialogState._points(z['line'] ?? z['ui_vector']), z['look'] as Map, realistic);
         }
       }
       if (on.contains('c:$key')) {

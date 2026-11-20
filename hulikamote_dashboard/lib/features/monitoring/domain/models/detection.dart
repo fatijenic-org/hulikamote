@@ -56,6 +56,7 @@ class RoadZone {
   final bool drawn; // set up by the operator ("Set up violations"), not learned from the road
   final String? flow; // 'in' | 'out' for a road area where traffic comes toward the camera / goes away from it
   final List<List<double>> arrow; // the way that traffic goes, two points (only with a flow)
+  final List<List<List<double>>> arrows; // Illegal turn: the banned turns of this road, each a bent arrow (Layers can hide them)
 
   const RoadZone({
     required this.violation,
@@ -66,6 +67,7 @@ class RoadZone {
     this.drawn = false,
     this.flow,
     this.arrow = const [],
+    this.arrows = const [],
   });
 
   factory RoadZone.fromJson(Map<String, dynamic> json) {
@@ -82,6 +84,7 @@ class RoadZone {
       drawn: json['drawn'] as bool? ?? false,
       flow: json['flow'] as String?,
       arrow: points(json['arrow']),
+      arrows: [for (final a in (json['arrows'] as List? ?? const [])) points(a)],
     );
   }
 

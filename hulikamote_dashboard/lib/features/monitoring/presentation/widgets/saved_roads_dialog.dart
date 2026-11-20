@@ -90,8 +90,10 @@ class _SavedRoadsDialogState extends State<SavedRoadsDialog> {
     }
   }
 
-  void _close([SavedRoadsResult? result]) =>
-      Navigator.of(context).pop(result ?? SavedRoadsResult(loadedId: _loadedId, loadedName: _loadedName));
+  void _close([SavedRoadsResult? result]) {
+    if (!mounted) return;                                    // the dialog was closed while a request was running
+    Navigator.of(context).pop(result ?? SavedRoadsResult(loadedId: _loadedId, loadedName: _loadedName));
+  }
 
   Future<void> _saveNew() => _run(() async {
     final name = _name.text.trim();

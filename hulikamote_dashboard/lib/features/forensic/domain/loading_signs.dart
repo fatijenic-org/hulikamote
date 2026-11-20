@@ -19,6 +19,12 @@ class LoadingSigns {
   static const List<String> lines = ['NO LOADING', 'UNLOADING'];
 
   static const String parkingRuleKey = 'illegal_parking';
+
+  /// Illegal turn: the sign says which turn is banned ("no_left_turn" / "no_right_turn", the keys of the backend's overlay objects).
+  static const String turnRuleKey = 'illegal_turn';
+  static const String defaultTurnKind = 'no_left_turn';
+  static const Map<String, String> turnKinds = {'no_left_turn': 'No left turn', 'no_right_turn': 'No right turn'};
+  static String turnKindOf(Object? kind) => turnKinds.containsKey(kind) ? kind as String : defaultTurnKind;
   static const List<String> parkingLines = ['NO', 'PARKING'];
 
   /// The two lines of text on a sign of [rule]; for Illegal parking they depend on what the sign marks ([kind], see parking_reasons.dart).
@@ -27,6 +33,7 @@ class LoadingSigns {
   /// What a sign of [rule] bans, for the words on the screen.
   static String banFor(String rule) => switch (rule) {
     parkingRuleKey => 'no-parking',
+    turnRuleKey => 'no-turn',
     'double_parking' => 'no-double-parking',
     'blocking_intersection' => 'keep-clear',
     'truck_ban' => 'no-trucks',
@@ -54,7 +61,8 @@ class LoadingSigns {
   static const List<String> stands = ['none', 'post', 'tripod'];
 
   /// The object that stands in the box of [sign]: for Illegal parking what it marks (sign, hydrant ...), for Illegal loading the plate.
-  static String objectKind(String rule, Map<String, dynamic> sign) => rule == parkingRuleKey ? ParkingReasons.of(sign['kind'] as String?).key : (ruleKinds[rule] ?? 'no_loading');
+  static String objectKind(String rule, Map<String, dynamic> sign) =>
+      rule == parkingRuleKey ? ParkingReasons.of(sign['kind'] as String?).key : (rule == turnRuleKey ? turnKindOf(sign['kind']) : (ruleKinds[rule] ?? 'no_loading'));
 
   /// A plate can stand on a pole or a tripod; a hydrant and a painted kerb stand alone.
   static bool standable(String kind) => kind != 'hydrant' && kind != 'corner';

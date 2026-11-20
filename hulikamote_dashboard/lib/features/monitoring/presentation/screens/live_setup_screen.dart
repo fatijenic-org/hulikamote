@@ -16,10 +16,12 @@ import '../widgets/setup_layers_dialog.dart';
 
 /// What the setup hands back when it was opened with `deferApply`: the rules to send, and how many violations they switch on. The Live
 /// Monitor sends them itself, behind its "Processing" view, so the operator is back on the monitor the moment Apply is pressed.
+/// `clearTickets`: the operator chose to start from no tickets; the Live Monitor clears them behind the same view, together with the rest.
 class LiveSetupPending {
-  const LiveSetupPending(this.config, this.count);
+  const LiveSetupPending(this.config, this.count, {this.clearTickets = false});
   final Map<String, dynamic> config;
   final int count;
+  final bool clearTickets;
 }
 
 /// "Set up violations" of the Live Monitor: the Forensic Analyzer's own steps (the same violations, zones and settings), drawn on ONE
@@ -71,6 +73,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   bool _loading = true;       // the current live setup is being read
   bool _hadSetup = false;     // a live setup existed and was loaded
   bool _applying = false;
+  late bool _clearTickets = widget.chooseFrame;   // a fresh start clears the tickets of earlier monitoring; changing the rules of a running feed keeps them
   String? _error;
 
   Map<String, dynamic> _saved = const {};   // what the Live Monitor uses now
@@ -191,7 +194,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   void _showLayers() {
     final url = _draft.frameUrl;
     if (url == null) return;
-    showDialog<void>(context: context, builder: (_) => SetupLayersDialog(draft: _draft, frame: widget.media.frame(url), api: _api));
+    showDialog<void>(context: context, builder: (_) => SetupLayersDialog(draft: _draft, frame: widget.media.frame(url), api: _api, cameraApi: widget.cameraApi));
   }
 
   /// Frame step, Continue: the picked picture becomes the setup picture, then on to the violations.
@@ -217,15 +220,32 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   }
 
   Future<void> _apply() async {
-    final config = _draft.buildConfig(activePlateModel: _models.active('plate'));
-    if (widget.deferApply) {
-      Navigator.of(context).pop(LiveSetupPending(config, _draft.selection.length));
-      return;
-    }
+    if (_applying) return;                                   // a second press while the screen closes must not pop a second page
     setState(() {
       _applying = true;
       _error = null;
     });
+    // With deferApply the wizard must close AT ONCE: the old tickets are cleared behind the Live Monitor's "Processing" view (thousands of
+    // pictures take seconds), side by side with sending the rules. Without it (a plain Apply) they go first, as before.
+    if (_clearTickets && !widget.deferApply) {
+      try {
+        await widget.cameraApi.clearLiveTickets();             // the old tickets go first: nothing is applied when they cannot be cleared
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _applying = false;
+            _error = 'The old tickets could not be cleared: ${'$e'.replaceFirst('Exception: ', '')}';
+          });
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
+    final config = _draft.buildConfig(activePlateModel: _models.active('plate'));
+    if (widget.deferApply) {
+      Navigator.of(context).pop(LiveSetupPending(config, _draft.selection.length, clearTickets: _clearTickets));
+      return;
+    }
     try {
       await _api.useForLive(config);
       if (mounted) Navigator.of(context).pop(_draft.selection.length);
@@ -339,6 +359,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
         key: const ValueKey('road-panel'),
         cameraApi: widget.cameraApi,
         markings: _draft.markings,
+        api: _api,                           // the painted solid lines are drawn by the backend, like on the video
         onChanged: _draft.setMarkings,       // the violations that are picked already take what they need at once
       ),
       'Violations' => ViolationsStep(draft: _draft, models: _models),
@@ -381,6 +402,30 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
                   ),
                 const Divider(height: Fx.s24),
                 Text('Tracker: ${s.tracker == 'deepsort' ? 'DeepSORT' : 'ByteTrack'}   ·   Plate format: ${s.plateFormat}   ·   Evidence: every ${s.evidenceGap} frames', style: Fx.caption(context)),
+              ]),
+            ),
+            const SizedBox(height: Fx.s12),
+            FxCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('TICKETS FROM EARLIER MONITORING', style: Fx.label(context)),
+                const SizedBox(height: Fx.s8),
+                SegmentedButton<bool>(
+                  key: const ValueKey('live-clear-tickets'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: true, icon: Icon(Icons.delete_sweep_outlined, size: 18), label: Text('Clear them')),
+                    ButtonSegment(value: false, icon: Icon(Icons.inventory_2_outlined, size: 18), label: Text('Keep them')),
+                  ],
+                  selected: {_clearTickets},
+                  onSelectionChanged: _applying ? null : (s) => setState(() => _clearTickets = s.first),
+                ),
+                const SizedBox(height: Fx.s8),
+                Text(
+                  _clearTickets
+                      ? 'Every ticket the Live Monitor made before is deleted (the list, the photos). Forensic analyses are not touched.'
+                      : 'The tickets from before stay in the list, with the new ones.',
+                  style: Fx.caption(context),
+                ),
               ]),
             ),
             if (flow) ...[

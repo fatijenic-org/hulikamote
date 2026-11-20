@@ -4,6 +4,9 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../forensic/data/object_previews.dart';
+import '../../../forensic/domain/line_paint.dart';
+import '../../../forensic/domain/zone_geometry.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../domain/crosswalk_quad.dart';
 import '../../domain/models/road_detect.dart';
@@ -30,6 +33,7 @@ class RoadZoneEditor extends StatefulWidget {
     this.onReset,
     this.markings = false,
     this.actions = const [],
+    this.previews,
   });
 
   final Uint8List? frame;
@@ -47,11 +51,15 @@ class RoadZoneEditor extends StatefulWidget {
   final bool markings;
   final List<Widget> actions;
 
+  /// The backend's pictures of road paint: a solid line that is painted is shown as the real paint the video will show (width, wear,
+  /// perspective), not as a coloured stroke. Without it (no backend) the line is a stroke.
+  final ObjectPreviews? previews;
+
   static Color colourOf(RoadArea area) => switch (area.kind) {
     'road' => flowColour(area.flow),
     'lane' => Colors.amberAccent,
     'sidewalk' => Colors.lightGreenAccent,
-    'solid_line' => area.style == 'solid_white' ? Colors.white : Colors.yellowAccent,
+    'solid_line' => area.style == 'solid_white' || area.style == 'dashed_white' ? Colors.white : Colors.yellowAccent,
     'stop_line' => Colors.orangeAccent,
     _ => Colors.cyanAccent,
   };
@@ -113,10 +121,52 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
   double _zoomAtStart = 1; // touchpad pinch
   Offset _panAtStart = Offset.zero;
 
+  final Map<String, ObjectPreview> _lastPaint = {}; // the last picture of each line's paint, kept while a new one is on its way
+
+  @override
+  void initState() {
+    super.initState();
+    widget.previews?.addListener(_previewReady);
+  }
+
+  void _previewReady() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(RoadZoneEditor old) {
+    super.didUpdateWidget(old);
+    if (old.previews != widget.previews) {
+      old.previews?.removeListener(_previewReady);
+      widget.previews?.addListener(_previewReady);
+    }
+  }
+
   @override
   void dispose() {
+    widget.previews?.removeListener(_previewReady);
     _scroll.dispose();
     super.dispose();
+  }
+
+  /// The paint of each painted solid line as the backend draws it (null for the others, and for a line whose picture is still on its way).
+  /// While a point is dragged the last picture stays where it was.
+  List<ObjectPreview?> _paints() {
+    final previews = widget.previews;
+    final fx = ZoneGeometry.refWidth / widget.size.width, fy = ZoneGeometry.refHeight / widget.size.height;
+    final out = <ObjectPreview?>[];
+    for (final a in widget.areas) {
+      if (!(widget.markings && a.kind == 'solid_line' && a.paint && a.polygon.length >= 2)) {
+        out.add(null);
+        continue;
+      }
+      final points = [for (final p in a.polygon) [p.dx * fx, p.dy * fy]];
+      final look = {'style': a.style, 'width': a.lineWidth, 'wear': a.wear, 'taper': a.taper};
+      final fresh = _drag == null && previews != null ? previews.peekLine(points, look, a.realistic) : null;
+      if (fresh != null) _lastPaint[a.id] = fresh;
+      out.add(fresh ?? _lastPaint[a.id]);
+    }
+    return out;
   }
 
   static Offset _clampPan(Offset pan, double zoom, Size box) =>
@@ -368,7 +418,8 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
     final d = _drawing;
     if (d == null || d.points.length < d.least) return;
     final id = '${d.kind}-new-${++_added}';
-    var shape = RoadArea(id: id, kind: d.kind, polygon: List.of(d.points), style: d.style, rule: d.kind == 'solid_line', paint: d.kind == 'crosswalk' && widget.markings);
+    // a crosswalk or a solid line drawn in the road markings is painted on the video at once (switch it off for paint that is really there)
+    var shape = RoadArea(id: id, kind: d.kind, polygon: List.of(d.points), style: d.style, rule: d.kind == 'solid_line', paint: (d.kind == 'crosswalk' || d.kind == 'solid_line') && widget.markings);
     if (d.flow != null) shape = shape.copyWith(flow: d.flow, arrow: _autoArrow(shape.polygon, d.flow!));
     widget.onChanged([...widget.areas, shape]);
     setState(() {
@@ -453,10 +504,21 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
           selected: {selected.kind},
           onSelectionChanged: (s) => _replace(asKind(s.first)),
         )
+      else if (selected.kind == 'solid_line' && selected.paint)
+        Wrap(spacing: 4, runSpacing: 4, children: [
+          for (final s in LinePaint.styles)
+            ChoiceChip(
+              key: ValueKey('line-paint-style-${s.$1}'),
+              label: Text(s.$2),
+              selected: selected.style == s.$1,
+              visualDensity: VisualDensity.compact,
+              onSelected: (_) => _replace(selected.copyWith(style: s.$1)),
+            ),
+        ])
       else if (selected.kind == 'solid_line')
         DropdownButton<String>(
           key: const ValueKey('line-style'),
-          value: selected.style,
+          value: RoadArea.lineStyles.contains(selected.style) ? selected.style : 'solid_white',
           items: [for (final s in RoadArea.lineStyles) DropdownMenuItem(value: s, child: Text(RoadArea.styleLabel(s)))],
           onChanged: (s) {
             if (s != null) _replace(selected.copyWith(style: s));
@@ -464,6 +526,31 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
         )
       else
         Text('Stop line: the Red light rule uses it.', style: Fx.caption(context)),
+      if (selected.kind == 'solid_line')
+        Tooltip(
+          message: 'On: the line is painted like real road paint on the live video (vehicles drive over it), like the other overlays. '
+              'Leave it off for a line that is really on the road.',
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Switch(
+              key: const ValueKey('line-paint'),
+              value: selected.paint,
+              onChanged: (v) => _replace(selected.copyWith(paint: v, style: !v && !RoadArea.lineStyles.contains(selected.style) ? 'solid_white' : null)),
+            ),
+            Text('Paint on video', style: Fx.caption(context)),
+          ]),
+        ),
+      if (selected.kind == 'solid_line' && selected.paint) ...[
+        Tooltip(
+          message: 'On: soft edges like the camera\'s, a little grain, paint dulled to the scene light, the road showing through. Off: flat clean paint.',
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Switch(key: const ValueKey('line-realistic'), value: selected.realistic, onChanged: (v) => _replace(selected.copyWith(realistic: v))),
+            Text('Realistic', style: Fx.caption(context)),
+          ]),
+        ),
+        _slider('line-width', 'Width ${(selected.lineWidth * 100).round()}%', selected.lineWidth, LinePaint.minWidth, LinePaint.maxWidth, (v) => _replace(selected.copyWith(lineWidth: v))),
+        _slider('line-wear', 'Worn ${(selected.wear * 100).round()}%', selected.wear, 0, 1, (v) => _replace(selected.copyWith(wear: v))),
+        _slider('line-taper', 'Perspective ${(selected.taper * 100).round()}%', selected.taper, 0, 1, (v) => _replace(selected.copyWith(taper: v))),
+      ],
       if (selected.kind == 'crosswalk')
         Tooltip(
           message: 'On: the crosswalk is painted as a zebra on the live video (vehicles drive over it), like the other overlays. '
@@ -735,7 +822,7 @@ class _RoadZoneEditorState extends State<RoadZoneEditor> {
                 child: Stack(fit: StackFit.expand, children: [
                   const ColoredBox(color: Colors.black),
                   if (widget.frame != null) KeepColors(child: Image.memory(widget.frame!, fit: BoxFit.fill, filterQuality: FilterQuality.medium, gaplessPlayback: true)),
-                  CustomPaint(painter: _ShapesPainter(widget.areas, _selected, _point, _apoint, scale, _zoom, _drawing, widget.markings)),
+                  CustomPaint(painter: _ShapesPainter(widget.areas, _selected, _point, _apoint, scale, _zoom, _drawing, widget.markings, _paints())),
                 ]),
               ),
             ),
@@ -801,7 +888,7 @@ class _GrabbingPan extends PanGestureRecognizer {
 }
 
 class _ShapesPainter extends CustomPainter {
-  _ShapesPainter(this.areas, this.selected, this.point, this.apoint, this.scale, this.zoom, this.drawing, this.markings);
+  _ShapesPainter(this.areas, this.selected, this.point, this.apoint, this.scale, this.zoom, this.drawing, this.markings, this.paints);
 
   final List<RoadArea> areas;
   final String? selected;
@@ -811,6 +898,7 @@ class _ShapesPainter extends CustomPainter {
   final double zoom; // the picture is drawn zoomed: handles, lines and labels are made smaller by it, so they keep their size on screen
   final _Drawing? drawing;
   final bool markings; // the road markings of the live setup (lane type, road class, no rule / hint wording)
+  final List<ObjectPreview?> paints; // the paint of each area as the backend drew it (null: not a painted line, or still on its way)
 
   double get _k => 1 / zoom;
 
@@ -849,14 +937,27 @@ class _ShapesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final k = _k;
-    for (final area in areas) {
+    final refK = size.width / ZoneGeometry.refWidth; // the paint pictures are made for a picture 1920 wide
+    for (final p in paints) {
+      if (p == null) continue;
+      canvas.drawImageRect(
+        p.image,
+        Rect.fromLTWH(0, 0, p.image.width.toDouble(), p.image.height.toDouble()),
+        Rect.fromLTWH(p.dx * refK, p.dy * refK, p.image.width * refK, p.image.height * refK),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    }
+    for (final (index, area) in areas.indexed) {
       if (area.polygon.length < (area.isLine ? 2 : 3)) continue;
       final isSelected = area.id == selected;
       final colour = RoadZoneEditor.colourOf(area);
       final pts = [for (final p in area.polygon) p * scale];
+      final realPaint = index < paints.length && paints[index] != null; // a painted line shows as real paint: only a hairline marks it
       if (area.isLine) {
         final path = Path()..addPolygon(pts, false);
-        if (area.style == 'double_yellow') {
+        if (realPaint) {
+          canvas.drawPath(path, Paint()..color = colour.withValues(alpha: isSelected ? 0.9 : 0.35)..style = PaintingStyle.stroke..strokeWidth = (isSelected ? 1.8 : 1.0) * k);
+        } else if (area.style == 'double_yellow') {
           canvas.drawPath(path, Paint()..color = colour..style = PaintingStyle.stroke..strokeWidth = (isSelected ? 8 : 6) * k);
           canvas.drawPath(path, Paint()..color = Colors.black87..style = PaintingStyle.stroke..strokeWidth = 2 * k);
         } else {
