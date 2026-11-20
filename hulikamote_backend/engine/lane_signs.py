@@ -77,6 +77,8 @@ def usable_signs(raw) -> list[dict]:
                 sign = {"type": s["type"], "x": float(s["x"]), "y": float(s["y"]), **look_of(s)}
                 if s.get("stand") in ("none", "post", "tripod"):
                     sign["stand"] = s["stand"]                    # what the board is mounted on (engine/overlay_objects.py)
+                if isinstance(s.get("road"), str):
+                    sign["road"] = s["road"]                      # the road marking this sign applies to (it is that road's rule, wherever it stands)
                 signs.append(sign)
         except (AttributeError, KeyError, TypeError, ValueError):
             continue

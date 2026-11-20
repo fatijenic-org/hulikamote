@@ -129,6 +129,14 @@ INPUT_SIZE = 640
 # 23 with tiles, scores mostly 0.10-0.25). A person below the normal cutoff is kept only when it stands on a vehicle box;
 # the rules that use them still vote over several looks.
 PERSON_ON_VEHICLE_CONFIDENCE = 0.10
+# ... "stands on a vehicle" is read against vehicle boxes that are only fairly sure (a jeepney with riders on it often scores 0.25-0.45).
+WEAK_VEHICLE_CONFIDENCE = 0.25
+# The traffic model is a VEHICLE model: on a real 4K traffic clip (2026-11-20, jeepneys and tricycles in view) it found no person above 0.19,
+# where the stock COCO model (yolov8n, in the same folder) gives pedestrians, riders and people on jeepneys 0.6-0.85. So the COCO model is
+# also run for PEOPLE ONLY (nothing else of it is used) and its people join the traffic model's; the same cutoffs, the same NMS. Switch it
+# off with the environment variable HK_PEOPLE_HELPER=0.
+PEOPLE_HELPER_FILE = "yolov8n.onnx"
+PEOPLE_HELPER_CONFIDENCE = 0.15
 # "Small people" mode (the wizard's tile switch, use_sahi): the frame is also cut into 3 x 2 overlapping tiles and each is
 # searched for people only (vehicles come from the whole frame, so a car cut by a tile edge is never counted twice).
 TILE_COLS, TILE_ROWS = 3, 2
@@ -260,6 +268,8 @@ class YoloInference:
         # Load tracker via Strategy Pattern
         self.tracker_type = tracker_type
         self.small_people = False                       # tile search for people on vehicles (see TILE_COLS)
+        self._people_session = None                     # the COCO model that finds people (see PEOPLE_HELPER_FILE)
+        self._people_input = ""
         self._n_classes = 0
         self.tracker = self._new_tracker(getattr(reuse, "tracker", None))               # vehicles
         self.people_tracker = self._new_tracker(getattr(reuse, "people_tracker", None))  # riders and pedestrians (see PERSON_ID_BASE)
@@ -274,8 +284,50 @@ class YoloInference:
             self._classes = self._get_coco_classes()
             self._use_coco_map = True
 
+        self._person_index = self._classes.index("person") if "person" in self._classes else None
+        self._load_people_helper(reuse)
+
         print(f"[YOLO] Ready. {len(self._classes)} classes. "
               f"Provider: {self._session.get_providers()[0]}")
+
+    def _load_people_helper(self, reuse) -> None:
+        """The COCO model for people (see PEOPLE_HELPER_FILE). Not used when the traffic model IS a COCO model, or has no person class.
+        Never raises: without it the traffic model's own people are used, as before."""
+        import os
+        path = MODEL_PATH.parent / PEOPLE_HELPER_FILE
+        if self._person_index is None or self._use_coco_map or MODEL_PATH.name == PEOPLE_HELPER_FILE or os.environ.get("HK_PEOPLE_HELPER") == "0":
+            return
+        try:
+            if reuse is not None and getattr(reuse, "_people_session", None) is not None:
+                self._people_session = reuse._people_session
+            elif path.exists():
+                print(f"[YOLO] Loading the people model {path.name}")
+                self._people_session = self.session_factory(str(path))
+            if self._people_session is not None:
+                self._people_input = self._people_session.get_inputs()[0].name
+        except Exception as exc:
+            self._people_session = None
+            print(f"[YOLO] The people model could not be loaded ({exc}); the traffic model's own people are used")
+
+    def _helper_candidates(self, img: np.ndarray, x0: int = 0, y0: int = 0):
+        """The people the COCO model sees on one image (a tile moved back into the frame by x0, y0): the same triple as _candidates, with the
+        traffic model's person class id. People only."""
+        h, w = img.shape[:2]
+        blob, sx, sy, pad_x, pad_y = self.preprocess(img)
+        preds = self._people_session.run(None, {self._people_input: blob})[0][0]
+        if preds.shape[0] < preds.shape[1]:
+            preds = preds.T
+        empty = (np.zeros((0, 4), np.float32), np.zeros(0, np.float32), np.zeros(0, int))
+        if preds.shape[0] == 0 or preds.shape[1] < 5:
+            return empty
+        scores = preds[:, 4:]
+        keep = (scores.argmax(axis=1) == 0) & (scores[:, 0] >= PEOPLE_HELPER_CONFIDENCE)       # COCO class 0 = person
+        if not keep.any():
+            return empty
+        cx, cy, bw, bh = preds[keep, 0], preds[keep, 1], preds[keep, 2], preds[keep, 3]
+        boxes = np.stack([((cx - bw / 2 - pad_x) / sx).clip(0, w) + x0, ((cy - bh / 2 - pad_y) / sy).clip(0, h) + y0,
+                          ((cx + bw / 2 - pad_x) / sx).clip(0, w) + x0, ((cy + bh / 2 - pad_y) / sy).clip(0, h) + y0], axis=1)
+        return boxes, scores[keep, 0], np.full(int(keep.sum()), self._person_index, dtype=int)
 
     def _new_tracker(self, replaces=None):
         """A new tracker with nothing tracked. `replaces` = the tracker it takes the place of: DeepSORT keeps that one's loaded ReID network."""
@@ -303,6 +355,12 @@ class YoloInference:
                 except Exception:
                     pass
                 self._session.run(None, {self._input_name: np.zeros((1, 3, INPUT_SIZE, INPUT_SIZE), dtype=np.float32)})
+            if self._people_session is not None and not getattr(self._people_session, "_hk_warm", False):
+                try:
+                    self._people_session._hk_warm = True
+                except Exception:
+                    pass
+                self._people_session.run(None, {self._people_input: np.zeros((1, 3, INPUT_SIZE, INPUT_SIZE), dtype=np.float32)})
             for tracker in (self.tracker, self.people_tracker):
                 warm = getattr(tracker, "warm_up", None)
                 if warm is not None:
@@ -479,12 +537,19 @@ class YoloInference:
         detections: list[YoloDetection] = []
         t0 = time.perf_counter()
         boxes_xyxy, confidences, class_ids = self._candidates(frame)
+        parts = [(boxes_xyxy, confidences, class_ids)]
+        helper = self._people_session is not None
+        if helper:
+            parts.append(self._helper_candidates(frame))          # people the traffic model does not see
         if self.small_people:
-            parts = [(boxes_xyxy, confidences, class_ids)]
             for x0, y0, x1, y1 in self._tiles(frame.shape[1], frame.shape[0]):
+                if helper:
+                    parts.append(self._helper_candidates(frame[y0:y1, x0:x1], x0, y0))
+                    continue
                 b, c, k = self._candidates(frame[y0:y1, x0:x1], x0, y0)
                 people = np.array([self._is_person(i) for i in k], dtype=bool)
                 parts.append((b[people], c[people], k[people]))
+        if len(parts) > 1:
             boxes_xyxy = np.concatenate([p[0] for p in parts])
             confidences = np.concatenate([p[1] for p in parts])
             class_ids = np.concatenate([p[2] for p in parts])
@@ -499,7 +564,7 @@ class YoloInference:
         is_person = np.array([self._is_person(i) for i in class_ids], dtype=bool)
         weak = is_person & ~mask & (confidences >= PERSON_ON_VEHICLE_CONFIDENCE)
         if weak.any():
-            vehicles = boxes_xyxy[mask & ~is_person]
+            vehicles = boxes_xyxy[(mask | (confidences >= WEAK_VEHICLE_CONFIDENCE)) & ~is_person]
             weak &= np.array([on_a_vehicle(b, vehicles) for b in boxes_xyxy], dtype=bool)
         mask |= weak
         if not mask.any():

@@ -14,7 +14,8 @@ import '../../../forensic/presentation/widgets/results_workspace.dart';
 /// The live feed keeps no plate. Here the reviewer
 ///  - opens a ticket (a potential violation) and ticks photos with Shift or Ctrl,
 ///  - sets the ticked photos aside (they wait in Holding) or moves them into another ticket (merge),
-///  - presses "Read the plate": the plate is found in the photos that are in the ticket and read twice, as seen and enhanced (GAN);
+///  - clicks a ticket: its plate is found in the photos that are in the ticket and read twice, as seen and enhanced (GAN), right then
+///    (plates are never read on their own; "Read again" does it once more);
 ///    every crop shows both readings, the candidates are graded, the best one is in a text field to keep, change or replace,
 ///  - or marks the vehicle as having no plate (the "no plate" violation can only be set on a ticket without a plate number),
 ///  - then confirms: only the evidence photos (cut from a blurred copy of the picture) go to the phone app.
@@ -57,6 +58,7 @@ class _LiveTicketsScreenState extends State<LiveTicketsScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    unawaited(_api.releaseLiveFocus().catchError((_) {}));       // going back: the live monitor must run again at once
     _controller?.dispose();
     super.dispose();
   }
@@ -105,12 +107,15 @@ class _LiveTicketsScreenState extends State<LiveTicketsScreen> {
       taskId: _task,
       tickets: tickets,
       statuses: {for (final t in tickets) t.uid: _statusFromRows(t, saved)},
+      sort: QueueSort.arrival,
+      plateBadge: true,
+      readOnOpen: _api.readLivePlate,
     );
     final focus = widget.focusDbId, focusUid = widget.focusUid;
     var focused = false;
     for (final t in tickets) {
       if ((focus != null && t.dbIds.contains(focus)) || (focusUid != null && t.uid == focusUid)) {
-        controller.select(t.uid);
+        controller.openTicket(t.uid);                            // the ticket that was clicked: its plate is read now
         focused = true;
       }
     }

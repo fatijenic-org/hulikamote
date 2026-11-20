@@ -113,14 +113,14 @@ def test_a_road_section_still_limits_the_line_when_one_was_drawn():
 def test_the_wizard_line_with_many_points_and_no_polygon_becomes_a_zone():
     cfg = {"rois": [{"line": BEND}, {"polygon": BIG_ZONE, "line": STOP_LINE}, {"polygon": BIG_ZONE}, {"line": [[1, 1]]}]}
     zones = SOLID.from_wizard(cfg)
-    assert zones == [{"coordinates": [], "stop_line": BEND}, {"coordinates": BIG_ZONE, "stop_line": STOP_LINE}]
-    assert [SOLID.parse_zone(z) for z in zones] == [zone(BEND), zone(STOP_LINE, BIG_ZONE)]
+    assert zones == [{"coordinates": [], "stop_line": BEND, "min_overlap": 0.3}, {"coordinates": BIG_ZONE, "stop_line": STOP_LINE, "min_overlap": 0.3}]
+    assert [SOLID.parse_zone(z) for z in zones] == [{**zone(BEND), "min_overlap": 0.3}, {**zone(STOP_LINE, BIG_ZONE), "min_overlap": 0.3}]
 
 
 def test_older_drawings_with_a_polygon_and_two_points_still_load():
     old = SOLID.from_wizard({"rois": [{"polygon": BIG_ZONE, "ui_vector": STOP_LINE}]})
-    assert old == [{"coordinates": BIG_ZONE, "stop_line": STOP_LINE}]
-    assert SOLID.parse_zone({"coordinates": BIG_ZONE, "stop_line": STOP_LINE}) == zone(STOP_LINE, BIG_ZONE)
+    assert old == [{"coordinates": BIG_ZONE, "stop_line": STOP_LINE, "min_overlap": 0.3}]
+    assert SOLID.parse_zone({"coordinates": BIG_ZONE, "stop_line": STOP_LINE}) == {**zone(STOP_LINE, BIG_ZONE), "min_overlap": 0.3}
     assert SOLID.parse_zone({"coordinates": BIG_ZONE}) is None
 
 
@@ -190,7 +190,7 @@ def test_found_lines_are_handed_to_the_rule_when_nothing_was_drawn():
     cfg = config()
     assert fill_solid_lines(cfg, "clip.mp4", analyse=finder(found([YELLOW]))) is None
     rois = cfg["per_violation_configs"]["crossing_solid_line"]["rois"]
-    assert SOLID.from_wizard({"rois": rois}) == [{"coordinates": [], "stop_line": [[960.0, 150.0], [480.0, 1050.0]]}]
+    assert SOLID.from_wizard({"rois": rois}) == [{"coordinates": [], "stop_line": [[960.0, 150.0], [480.0, 1050.0]], "min_overlap": 0.3}]
 
 
 def test_a_drawn_line_always_wins_and_the_finder_is_not_even_run():

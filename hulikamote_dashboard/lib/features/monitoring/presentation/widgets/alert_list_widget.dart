@@ -222,7 +222,6 @@ class _AlertListWidgetState extends State<AlertListWidget> {
   /// the picture, so a vehicle that is still in view has none yet.
   Future<void> _openTicket(BuildContext context, int trackId, DateTime since) async {
     final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
     Violation? ticket;
     try {
       // Only a ticket made after the alert first showed is this vehicle's (the number alone also fits the tickets of older runs).
@@ -231,7 +230,6 @@ class _AlertListWidgetState extends State<AlertListWidget> {
       ticket = null;
     }
     if (ticket == null) {
-      messenger.showSnackBar(const SnackBar(content: Text('The ticket is made when the vehicle leaves the picture. Try again in a moment.')));
       return;
     }
     navigator.push(MaterialPageRoute(builder: (_) => LiveTicketsScreen(focusDbId: ticket!.id)));

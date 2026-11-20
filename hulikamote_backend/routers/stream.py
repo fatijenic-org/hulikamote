@@ -16,6 +16,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import store
 from engine.camera_source import CameraSource, mask_url, parse_source
 from engine.live_calibrator import LiveCalibrator, camera_key
+from engine import live_run
 from engine.playout import Playout
 from engine.stage_timer import TIMER
 from store import add_violation, MOCK_CLASSES, MOCK_USERS
@@ -119,6 +120,7 @@ PLAYOUT_MAX_S = float(os.environ.get("HK_PLAYOUT_MAX_S", "16"))                #
 # their own) and its boxes are put on the right pictures when they are ready.
 FILE_PLAYBACK = os.environ.get("HK_FILE_PLAYBACK", "buffered").strip().lower()
 PLAYOUT_FILE_DELAY_S = float(os.environ.get("HK_PLAYOUT_FILE_DELAY_S", "3"))   # continuous: how far the picture is behind the backend
+REPLAY_S = float(os.environ.get("HK_REPLAY_S", "120"))      # seconds of finished video the enforcer can go back over, and the backend may work ahead while the screen is paused
 _playout_info: dict = {}                                                       # the buffer's state now (the Performance popup shows it)
 
 
@@ -774,10 +776,21 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
             continuous = True
             playout = Playout(live=True, start_s=PLAYOUT_FILE_DELAY_S, max_s=PLAYOUT_MAX_S, keep_all=True)
         else:
-            start_s = PLAYOUT_LIVE_START_S if source.live else PLAYOUT_START_S
-            playout = Playout(live=source.live, start_s=start_s, max_s=PLAYOUT_MAX_S)
+            gap_s = PLAYOUT_LIVE_START_S if source.live else PLAYOUT_START_S       # (start_s stays where on the video this run began)
+            playout = Playout(live=source.live, start_s=gap_s, max_s=PLAYOUT_MAX_S, history_s=REPLAY_S, hold_max_s=REPLAY_S)
         _playout_info.clear()
     print(f"[Stream] Playback buffer: {'on' if playout is not None else 'off'}{' (video file played continuously)' if continuous else ''}")
+    # The pictures of this run go to disk as they are finished (engine/live_run.py): the screen may be far behind the backend (the enforcer
+    # paused, or looks at a ticket) and may go back and forth over what is done, and the memory does not grow with it.
+    run = None
+    preview: dict = {"b64": None}        # the newest finished picture, kept in memory for the "Processing" view only
+    run_t0: list = [None]                # video time of the first finished picture: the timeline counts from there
+    feed_started = time.monotonic()      # the video's own clock for the timeline: seconds since this run began
+    control_task = None
+    if playout is not None and not continuous:
+        run = live_run.start()
+        if run is not None:
+            playout.on_drop = lambda payload: run.drop(payload.get("file"))
 
     def boxes_of(results: list):
         """(the detections for the dashboard, the Forensic Analyzer's box specs) of the results of one picture."""
@@ -819,10 +832,20 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         display_results, box_specs = boxes_of(last_yolo_results)
 
         picture = None
+        file = None
         if PICTURE_MODE != "relay":
             # ── synced: the picture rides in the same message as the boxes ──
             picture = await (encoding if encoding is not None else loop.run_in_executor(None, _picture_b64_timed, picture_frame, pipeline, last_yolo_results))
-        return {"t": t, "w": w, "h": h, "picture": picture, "frame": picture_frame if PICTURE_MODE == "relay" else None,
+            if run is not None and picture:
+                preview["b64"] = picture
+                try:
+                    file = await loop.run_in_executor(None, run.store, picture)        # on disk: the picture leaves the memory
+                    picture = None
+                except Exception:
+                    file = None                                                         # the disk failed: the picture stays in memory, as before
+                if run.keep_all:
+                    run.note(file, t, w, h, display_results, box_specs)
+        return {"t": t, "w": w, "h": h, "picture": picture, "file": file, "frame": picture_frame if PICTURE_MODE == "relay" else None,
                 "detections": display_results, "boxes": box_specs}
 
     def make_packet(picture_frame, encoding, t: float) -> dict:
@@ -883,6 +906,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 await loop.run_in_executor(None, lambda: broadcaster.push(_with_overlays(packet["frame"], pipeline, last_yolo_results)))
         w, h = packet["w"], packet["h"]
         picture = packet["picture"]
+        if picture is None and packet.get("file") and run is not None:
+            picture = await loop.run_in_executor(None, run.load_b64, packet["file"])
         if picture is None and packet.get("encoding") is not None:
             picture = await packet["encoding"]               # (continuous playback: nearly always done long before it is shown)
         with TIMER.time("send"):
@@ -912,6 +937,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     async def emit(picture_frame, encoding, t: float) -> None:
         """A picture is done: into the playback buffer, or (no buffer) straight to the dashboard."""
         packet = await package(picture_frame, encoding, t)
+        if run_t0[0] is None:
+            run_t0[0] = t
         TIMER.mark("produced")
         START.mark("first picture finished")
         if playout is None:
@@ -923,11 +950,31 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         """The screen side of the playback buffer: shows the finished pictures at the video's own pace, a few seconds late. While the
         buffer fills (at the start, or after it ran dry) it tells the dashboard how far it is ("Processing... 60%")."""
         last_note = 0.0
+        last_hold = 0.0
+        last_pause_note = 0.0
         while True:
+            if _plate_service.focusing():
+                # a plate is being read: the screen is paused too. A quiet "status" every second keeps the dashboard from thinking the feed died.
+                playout.hold()
+                if time.monotonic() - last_hold >= 1.0:
+                    last_hold = time.monotonic()
+                    async with send_lock:
+                        await websocket.send_json({"type": "status", "camera": source.status(), "paused": True})
+                await asyncio.sleep(0.05)
+                continue
             shown = playout.tick()
             info = playout.info()
             if not source.live:
                 info["pos_s"] = round(start_s + (playout.play_t or 0.0), 2)   # where on the video the screen is (Refresh / Resume go on from here)
+            t0 = run_t0[0] or 0.0                                             # the timeline: seconds from the start of this run
+            for key in ("first_s", "play_s", "proc_s"):
+                if info.get(key) is not None:
+                    info[key] = round(info[key] - t0, 2)
+            info["video_s"] = round(time.monotonic() - feed_started, 2)       # where the video itself would be, played at its own speed
+            if playout.paused and time.monotonic() - last_pause_note >= 0.5:
+                last_pause_note = time.monotonic()
+                async with send_lock:
+                    await websocket.send_json({"type": "buffer", **info})     # paused: no pictures go out, so the timeline is told here
             _playout_info.clear()
             _playout_info.update(info)
             if info["state"] == "playing":
@@ -936,8 +983,9 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 last_note = time.monotonic()
                 note = {"type": "buffer", **info}
                 newest = playout.newest()
-                if newest is not None and newest.get("picture"):   # the newest finished picture, for the "Processing" view (it is not played)
-                    note["preview"] = {"picture": newest["picture"], "w": newest["w"], "h": newest["h"],
+                shot = (newest.get("picture") if newest is not None else None) or preview["b64"]
+                if newest is not None and shot:                    # the newest finished picture, for the "Processing" view (it is not played)
+                    note["preview"] = {"picture": shot, "w": newest["w"], "h": newest["h"],
                                        "boxes": [d["bbox"] for d in newest["detections"]]}
                 async with send_lock:
                     await websocket.send_json(note)
@@ -959,8 +1007,28 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         for picture_frame, encoding, t in group["frames"]:
             await emit(picture_frame, encoding, t)
 
+    async def control() -> None:
+        """The dashboard's timeline: pause, play, go to a time (seconds from the start of this run; never beyond what is finished)."""
+        while True:
+            try:
+                text = await websocket.receive_text()
+            except Exception:
+                return                                             # the socket is gone: the loop notices it by itself
+            try:
+                msg = json.loads(text)
+                cmd = msg.get("cmd")
+                if cmd == "pause":
+                    playout.pause()
+                elif cmd == "play":
+                    playout.resume()
+                elif cmd == "seek":
+                    playout.seek((run_t0[0] or 0.0) + float(msg.get("t", 0.0)))
+            except Exception:
+                continue
+
     if playout is not None:
         player_task = asyncio.create_task(player())
+        control_task = asyncio.create_task(control())
     if continuous:
         worker_task = asyncio.create_task(inference_worker())
 
@@ -979,6 +1047,20 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 except Exception:
                     pass
                 break
+
+            if _plate_service.focusing():
+                # A plate is being read for a ticket: the whole machine goes to it. The live monitor waits (a file goes on from the same
+                # picture afterwards, a camera shows its newest one).
+                last_beat = 0.0
+                while _plate_service.focusing() and _current_ws_id == my_ws_id and my_gen == _stream_generation:
+                    if player_task is not None and player_task.done():
+                        break
+                    if player_task is None and time.monotonic() - last_beat >= 1.0:       # (no playback buffer: nobody else sends the keep-alive)
+                        last_beat = time.monotonic()
+                        async with send_lock:
+                            await websocket.send_json({"type": "status", "camera": source.status(), "paused": True})
+                    await asyncio.sleep(0.05)
+                continue
 
             if playout is not None:
                 # A video file: when enough is ready the backend waits for the screen (a live camera never waits).
@@ -1092,6 +1174,10 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
             player_task.cancel()
         if worker_task is not None:
             worker_task.cancel()
+        if control_task is not None:
+            control_task.cancel()
+        if run is not None:
+            run.close({"source": str(mask_url(str(VIDEO_SOURCE)))})
         _playout_info.clear()
         source.stop()
         if _active_source is source:

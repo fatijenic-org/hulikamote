@@ -9,7 +9,8 @@ import 'plate_tools_models.dart';
 
 enum QueueFilter { all, toReview, flagged, confirmed, rejected }
 
-enum QueueSort { flaggedFirst, timeInVideo, mostFrames, trackId }
+/// `arrival` = the order the tickets came in (first come, first served): the list as the backend keeps it.
+enum QueueSort { flaggedFirst, timeInVideo, mostFrames, trackId, arrival }
 
 /// State and rules of the review workspace: which ticket is open, which frame, how the
 /// queue is filtered / sorted, and what the reviewer decided. No widgets in here, so the
@@ -21,7 +22,11 @@ class ReviewController extends ChangeNotifier {
     required List<ForensicTicket> tickets,
     Map<String, ReviewStatus>? statuses,
     this.autoAdvance = true,
+    QueueSort sort = QueueSort.flaggedFirst,
+    this.plateBadge = false,
+    this.readOnOpen,
   }) : _tickets = List.of(tickets) {
+    _sort = sort;
     if (statuses != null) _status.addAll(statuses);
     _selectedUid = _firstToLookAt()?.uid;
     _frame = selected?.heroIndex ?? 0;
@@ -29,6 +34,17 @@ class ReviewController extends ChangeNotifier {
 
   final ReviewGateway gateway;
   final String taskId;
+
+  /// The list marks a ticket whose plate is read (the live run).
+  final bool plateBadge;
+
+  /// The live run: reads the plate of a ticket that is not read yet and returns the updated ticket list. Called by [openTicket] only:
+  /// the plates are not read on their own, only when the reviewer clicks a ticket.
+  final Future<List<ForensicTicket>> Function(String uid)? readOnOpen;
+  final Set<String> _reading = {};
+
+  /// True while the plate of this ticket is being read because it was opened.
+  bool isReading(String uid) => _reading.contains(uid);
 
   /// After a decision, jump to the next ticket still waiting for review.
   bool autoAdvance;
@@ -139,13 +155,15 @@ class ReviewController extends ChangeNotifier {
       }
       return true;
     }).toList();
-    list.sort(_compare);
+    if (_sort != QueueSort.arrival) list.sort(_compare);       // arrival: the list stays as it came (Dart's sort is not stable)
     return list;
   }
 
   int _compare(ForensicTicket a, ForensicTicket b) {
     int byTrack() => a.trackId.compareTo(b.trackId);
     switch (_sort) {
+      case QueueSort.arrival:
+        return 0;
       case QueueSort.trackId:
         return byTrack();
       case QueueSort.mostFrames:
@@ -191,6 +209,36 @@ class ReviewController extends ChangeNotifier {
     _selectedUid = uid;
     _frame = selected!.heroIndex;
     notifyListeners();
+  }
+
+  /// A click on a ticket of the list: opens it, like [select]. In the live run a ticket whose plate is not read yet is read now.
+  void openTicket(String uid) {
+    select(uid);
+    final t = _byUid(uid);
+    if (readOnOpen != null && t != null && t.plateStatus == 'pending' && !_reading.contains(uid)) {
+      unawaited(_readOnOpen(uid));
+    }
+  }
+
+  Future<void> _readOnOpen(String uid) async {
+    _reading.add(uid);
+    _error = null;
+    notifyListeners();
+    try {
+      final updated = await readOnOpen!(uid);
+      if (_disposed) return;
+      final open = _selectedUid;
+      final photo = _frame;
+      replaceTickets(updated, preferUid: open);                   // what is open stays open, on the photo it was on
+      final now = selected;
+      if (now != null && now.uid == open && photo < now.frameCount) _frame = photo;
+    } catch (e) {
+      if (_disposed) return;
+      _error = 'Could not read the plate: ${'$e'.replaceFirst('Exception: ', '')}';
+    } finally {
+      _reading.remove(uid);
+      if (!_disposed) notifyListeners();
+    }
   }
 
   /// Moves through the visible queue by [delta] (clamped at both ends).

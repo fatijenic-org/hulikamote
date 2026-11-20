@@ -70,6 +70,7 @@ class ViolationParams extends StatelessWidget {
         _chips(context, 'Vehicle types that ARE allowed in this lane (where no sign says otherwise)', 'allowed_classes'),
       if (violationKey == 'overloading')
         _slider(context, 'Most people allowed on one motorcycle', 'max_riders', 1, 4, suffix: 'people', integer: true),
+      if (violationKey == 'crossing_solid_line') _lineOverlap(context),
       if (violationKey == 'red_light') _redLight(context),
       if (violationKey == 'counterflow') ...[
         _switch(
@@ -124,6 +125,32 @@ class ViolationParams extends StatelessWidget {
         divisions: (max - min).toInt(),
         label: '${value.toInt()}',
         onChanged: (v) => _set(key, integer ? v.round() : v),
+      ),
+    ]);
+  }
+
+  /// Crossing a solid line: how much of the vehicle must be past the line before it is flagged. It is measured on the part that touches the
+  /// road (the bottom edge of the box, from the lower left to the lower right corner; a motorcycle: the middle of it), like an IoU with the far side.
+  Widget _lineOverlap(BuildContext context) {
+    final value = (((cfg['min_overlap'] as num?) ?? 0.3).toDouble() * 100).clamp(5.0, 100.0);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text('How much of the vehicle must be over the line?', style: Fx.body(context))),
+        Text('${value.round()} %', style: Fx.heading(context)),
+      ]),
+      Slider(
+        key: const ValueKey('solid-line-overlap'),
+        value: value,
+        min: 5,
+        max: 100,
+        divisions: 19,
+        label: '${value.round()} %',
+        onChanged: (v) => _set('min_overlap', v.round() / 100),
+      ),
+      Text(
+        'Counted on the part of the vehicle that touches the road: its bottom edge, lower corner to lower corner (a motorcycle: the middle of it). '
+        'Lower flags a vehicle sooner, higher only when most of it is across.',
+        style: Fx.caption(context),
       ),
     ]);
   }

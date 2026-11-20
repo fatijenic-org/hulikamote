@@ -101,7 +101,7 @@ def test_disregarding_signs_zone_carries_the_sign_and_its_settings():
 
 def test_solid_line_zone_carries_its_line():
     cfg = {"rois": [{"polygon": POLY, "ui_vector": LINE}, {"polygon": POLY}]}
-    assert wizard("crossing_solid_line", cfg) == [{"coordinates": POLY, "stop_line": LINE}]
+    assert wizard("crossing_solid_line", cfg) == [{"coordinates": POLY, "stop_line": LINE, "min_overlap": 0.3}]
 
 
 def test_overloading_takes_the_rider_limit_as_a_top_level_setting():

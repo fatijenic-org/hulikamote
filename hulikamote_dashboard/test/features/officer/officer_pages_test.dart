@@ -71,13 +71,13 @@ void main() {
       await show(tester, OverviewScreen(api: busyBackend().overview, onOpen: (_, path) => opened.add(path)));
       await tester.tap(find.text('Confirmed violations'));
       await tester.tap(find.text('Check the points'));
-      expect(opened, ['/violations', '/demerit']);
+      expect(opened, ['/demerit', '/demerit']);
     });
 
     testWidgets('one failing source shows a dash and a plain sentence, the rest stay right', (tester) async {
       final backend = busyBackend()..sessions = null;
       await show(tester, OverviewScreen(api: backend.overview, onOpen: (_, _) {}));
-      expect(find.textContaining('Could not load the Inbox.'), findsOneWidget);
+      expect(find.textContaining('Could not load the tickets to review.'), findsOneWidget);
       expect(find.text('—'), findsOneWidget);
       expect(find.text('4 points in total'), findsOneWidget);
     });

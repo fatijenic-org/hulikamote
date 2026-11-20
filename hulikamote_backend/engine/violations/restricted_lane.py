@@ -40,10 +40,12 @@ class RestrictedLane(Violation):
         default = cfg.get("allowed_classes", ["bus"])
         signs = lane_signs.usable_signs(cfg.get("signs"))
         zones = []
-        for z in cfg.get("rois", []):
-            if not z.get("polygon"):
-                continue
-            inside = [s for s in signs if point_in_polygon(s["x"], s["y"], z["polygon"])]
+        rois = [z for z in cfg.get("rois", []) if z.get("polygon")]
+        known = {z.get("marking") for z in rois if z.get("marking")}
+        for z in rois:
+            # a sign put on a road (its `road` is the zone's marking) belongs to that road wherever it stands; the others by where they stand
+            inside = [s for s in signs
+                      if (s.get("road") == z.get("marking") if s.get("road") in known else point_in_polygon(s["x"], s["y"], z["polygon"]))]
             # a lane from the road markings carries its own type (a key of lane_signs.SIGNS): who may use it
             by_type = lane_signs.allowed_by([z["lane_type"]]) if z.get("lane_type") in lane_signs.SIGNS else None
             zone = {"coordinates": z["polygon"], "allowed_classes": lane_signs.allowed_by(s["type"] for s in inside) if inside else (by_type or default)}

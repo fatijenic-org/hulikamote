@@ -7,8 +7,10 @@ can have as many lines as it has. The road section (a polygon around the line) i
 drawn: the line alone is enough. Nothing has to be drawn at all: when the Forensic run has no drawn line it
 finds the painted solid lane lines itself (engine/auto_lines.py, the road finder) and uses them the same way.
 
-Heuristic: a vehicle is flagged once its ground point has driven across the line, in either direction, coming from the side it
-was first seen on: it must end up clearly past the line (30% of its box width, at least 10 px) and stay there, so a car wobbling on the
+Heuristic: a vehicle is flagged once enough of its FOOTPRINT is past the line, in either direction, coming from the side it was first seen
+on. The footprint is where it touches the road: the bottom centre for a motorcycle (or bicycle), the whole bottom edge from lower corner to
+lower corner for a car, tricycle, jeepney, bus or truck. "Enough" is the operator's setting `min_overlap` (a share of the footprint, 30% to
+start with; the Rules step has a slider): the share that must lie past the line, held for a few pictures in a row, so a car wobbling on the
 line is not a crossing; points beyond the line's ends are ignored. Legal basis: the no-overtaking / no-crossing rules of RA 4136 and
 local ordinances (to be confirmed before it is quoted on a ticket).
 
@@ -17,8 +19,9 @@ own: the vehicle must have been followed picture after picture, from clearly bef
 really cut the line (engine/violations/line_watch.py, engine/track_continuity.py). On a real 4K clip the old check flagged 96 vehicles in
 7 minutes, nearly all of them a tracker number that had moved to another vehicle; this one flags the 2 that really drove over the line.
 
-It judges a vehicle that drives ALONG the line and drifts over it (a lane change, an overtaking swerve). A vehicle that goes straight
-ACROSS it (turning across the road, into or out of a side street) is cross traffic: the turning rules judge that, not this one.
+It judges a vehicle that drives ALONG the line and goes over it (a lane change, an overtaking swerve, riding on the line). A vehicle that
+goes straight ACROSS it (turning across the road, into or out of a side street) is cross traffic: the turning rules judge that, not this one.
+One that stands or creeps on the line is not crossing it either.
 
 Painted overlay (engine/line_paint.py, for testing): a saved line that carries a `look` is also drawn like paint on the road (solid white or
 yellow, double yellow, dashed white; width, wear, perspective taper; vehicles drive over it). The paint is only a picture of the line the rule
@@ -32,7 +35,7 @@ from engine import line_paint
 from engine.track_stitcher import compute_signature
 from engine.violations.base import Violation
 from engine.violations.geometry import point_in_polygon
-from engine.violations.line_watch import LineWatch
+from engine.violations.line_watch import DEFAULT_MIN_OVERLAP, LineWatch
 
 
 class CrossingSolidLine(Violation):
@@ -47,19 +50,31 @@ class CrossingSolidLine(Violation):
         if not line or len(line) < 2:
             return None
         zone = {"polygon": raw.get("coordinates") or [], "stop_line": line}          # no polygon = the line alone
+        zone["min_overlap"] = self._overlap(raw.get("min_overlap"))
         if raw.get("look"):
             zone["look"] = line_paint.look_of(raw["look"])                           # painted on the picture too
             zone["realistic"] = bool(raw.get("realistic", True))
         return zone
 
+    @staticmethod
+    def _overlap(value) -> float:
+        """The share of the vehicle's footprint that must be past the line, as the operator set it (a fraction, or a percent): 0.05 to 1."""
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return DEFAULT_MIN_OVERLAP
+        v = v / 100.0 if v > 1.0 else v
+        return min(1.0, max(0.05, v))
+
     def from_wizard(self, cfg):
         # "line" = the points the operator clicked (ui_vector: the two points older drawings and the paint finder gave)
         zones = []
         realistic = bool(cfg.get("lines_realistic", True))
+        overlap = self._overlap(cfg.get("min_overlap"))
         for z in cfg.get("rois", []):
             line = z.get("line") or z.get("ui_vector")
             if line and len(line) >= 2:
-                zone = {"coordinates": z.get("polygon") or [], "stop_line": line}
+                zone = {"coordinates": z.get("polygon") or [], "stop_line": line, "min_overlap": overlap}
                 if z.get("look") is not None:                                          # "Paint it": a look, even an empty one, means paint
                     zone["look"] = line_paint.look_of(z["look"])
                     own = z["look"].get("realistic") if isinstance(z["look"], dict) else None     # the road markings say it per line
@@ -101,7 +116,8 @@ class CrossingSolidLine(Violation):
             if zone["polygon"] and not point_in_polygon(cx, cy, zone["polygon"]):
                 watch.leave(t)
                 continue
-            crossing = watch.update(sample, line, lambda: self._signature(mgr, ledger), ledger.latest_class)
+            crossing = watch.update(sample, line, lambda: self._signature(mgr, ledger), ledger.latest_class,
+                                    zone.get("min_overlap", DEFAULT_MIN_OVERLAP))
             if crossing is not None:
                 ledger.cross_points.append((crossing.t, crossing.point[0], crossing.point[1]))
                 ledger.violations.add(self.key)

@@ -24,6 +24,7 @@ import '../widgets/road_detect_view.dart';
 import '../widgets/upload_status_card.dart';
 import '../widgets/video_feed_widget.dart';
 import '../widgets/live_tickets_panel.dart';
+import '../widgets/live_timeline.dart';
 import 'live_setup_screen.dart';
 
 /// Picks the video file to upload. Replaceable in tests.
@@ -50,6 +51,8 @@ class LiveMonitoringScreen extends StatefulWidget {
 
 class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   WebSocketChannel? _channel;
+  final ValueNotifier<Map<String, dynamic>?> _bufferInfo = ValueNotifier(null);   // the numbers of the timeline bar (the backend's playback state)
+  bool _awayPaused = false;                // the picture was held because the enforcer is looking at a ticket (not paused by them)
   Stream<dynamic>? _broadcastStream;
   bool _isMocking = false;
   bool _isPlaying = false;
@@ -180,16 +183,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   /// what was learned; the status poll then shows the new state, and the picture carries the "TEST: FLOW REVERSED" label.
   Future<void> _reverseFlow(bool on) async {
     if (_flowBusy) return;
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _flowBusy = true);
     try {
-      final answer = await _cameraApi.reverseFlow(on);
-      if (answer['ok'] != true) {
-        messenger.showSnackBar(SnackBar(content: Text('${answer['reason'] ?? 'The flow could not be changed.'}')));
-      }
+      await _cameraApi.reverseFlow(on);
       await _pollCamera();
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('The flow could not be changed: ${e.toString().replaceFirst('Exception: ', '')}')));
+    } catch (_) {
+      // the status poll shows the state as it really is
     } finally {
       if (mounted) setState(() => _flowBusy = false);
     }
@@ -198,16 +197,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   /// Forget the learned flow and learn it again from the traffic (e.g. the camera was moved).
   Future<void> _relearnFlow() async {
     if (_flowBusy) return;
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _flowBusy = true);
     try {
-      final answer = await _cameraApi.relearnFlow();
-      messenger.showSnackBar(SnackBar(
-        content: Text(answer['ok'] == true ? 'Learning the traffic flow again. The arrows come back as traffic passes.' : '${answer['reason'] ?? 'Could not start again.'}'),
-      ));
+      await _cameraApi.relearnFlow();
       await _pollCamera();
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not start again: ${e.toString().replaceFirst('Exception: ', '')}')));
+    } catch (_) {
+      // the status poll shows the state as it really is
     } finally {
       if (mounted) setState(() => _flowBusy = false);
     }
@@ -236,7 +231,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     } catch (_) {
       if (mounted) {
         setState(() => shown ? _hiddenOverlays.add(key) : _hiddenOverlays.remove(key));   // the backend did not take it: back as it was
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not change the layer. Restart the backend, then try again.')));
       }
     }
   }
@@ -247,7 +241,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   ///    operator picks one; when the setup is applied, monitoring starts.
   Future<void> _openSetup() async {
     if (_preparingSetup || _uploading) return;
-    final messenger = ScaffoldMessenger.of(context);
     setState(() => _preparingSetup = true);
     unawaited(_cameraApi.prepareFeed());                   // (again: it is quick when the models are loaded already) the setup takes a while
     try {
@@ -263,16 +256,16 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         }
         if (!mounted) return;
         if (shot['ok'] != true) {
-          messenger.showSnackBar(SnackBar(content: Text('${shot['reason'] ?? 'No picture from the camera yet.'}')));
           return;
         }
         result = await Navigator.of(context).push<Object>(
           MaterialPageRoute(builder: (_) => LiveSetupScreen(cameraApi: _cameraApi, shot: shot, deferApply: true)),
         );
       } else {
-        if (!await _loadSource() || !mounted) return;     // the backend, or the video relay, is not ready: the reason is shown
+        if (!await _loadSource() || !mounted) {            // the backend, or the video relay, is not ready
+          return;
+        }
         if (!await _emptySetup() && mounted) {            // nothing runs: the last setup, road and learned flow are cleared for a clean start
-          messenger.showSnackBar(const SnackBar(content: Text('The old setup could not be cleared. Restart the backend, then try again.')));
           return;
         }
         result = await Navigator.of(context).push<Object>(
@@ -283,12 +276,11 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       if (result is LiveSetupPending) {
         unawaited(_applyPending(result));                 // the wizard is gone at once; the rules are sent behind the "Processing" view
       } else if (result is int) {
-        messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches $result violation${result == 1 ? '' : 's'}.')));
         _loadSetup();
         if (!_playing) await _connect();                  // applied before the feed ran: now it starts
       }
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Could not set up violations: ${e.toString().replaceFirst('Exception: ', '')}')));
+    } catch (_) {
+      // nothing is shown: the screen stays as it is
     } finally {
       if (mounted) setState(() => _preparingSetup = false);
     }
@@ -298,7 +290,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
   /// models: seconds) while the "Processing" view shows over the picture the setup was made on. Then the feed starts (a running feed restarts
   /// by itself) and the view goes when the first message of the new connection arrives.
   Future<void> _applyPending(LiveSetupPending p) async {
-    final messenger = ScaffoldMessenger.of(context);
     setState(() {
       _applyingSetup = true;
       _applyReady = false;
@@ -328,11 +319,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       if (!mounted) return;
       if (clearError != null) {                           // (the old order stopped here too: tickets that stay would mix with the new ones)
         setState(() => _applyingSetup = false);
-        messenger.showSnackBar(SnackBar(content: Text('The old tickets could not be cleared: $clearError. Monitoring did not start.')));
         return;
       }
       _applyReady = true;
-      messenger.showSnackBar(SnackBar(content: Text('The live monitor now watches ${p.count} violation${p.count == 1 ? '' : 's'}.')));
       _loadSetup();
       if (!_playing) {                                    // applied before the feed ran: now it starts
         if (await sourceReady) await _connect(checked: true);
@@ -341,7 +330,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _applyingSetup = false);
-        messenger.showSnackBar(SnackBar(content: Text('Could not apply the setup: ${e.toString().replaceFirst('Exception: ', '')}')));
       }
     }
   }
@@ -398,7 +386,9 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     }
     if (mounted) {
       setState(() {
-        if (problem != null) {
+        if (problem == _backendDown) {
+          // no banner for "backend not answering": it came up while the backend was still starting and only got in the way
+        } else if (problem != null) {
           _problem = problem;
         } else if (_problem != _noPictureYet && _problem != _stalledText) {
           _problem = null;                      // fixed; a "no picture" warning is only cleared by a picture arriving
@@ -540,7 +530,31 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     return '${t ~/ 60}:${(t % 60).toString().padLeft(2, '0')}';
   }
 
+  /// A command for the backend's playback: {cmd: pause | play | seek, t: seconds from the start of the run}.
+  void _sendLive(Map<String, dynamic> command) {
+    try {
+      _channel?.sink.add(jsonEncode(command));
+    } catch (_) {
+      // the feed is closing: nothing to move then
+    }
+  }
+
+  /// The enforcer goes to look at a ticket (away) or is back: the picture holds meanwhile, the backend goes on, so the delay grows and
+  /// nothing that was processed is missed. Back: it plays on from where it was, a bit faster until the gap is back.
+  void _onAway(bool away) {
+    if (away) {
+      if (_bufferInfo.value?['paused'] != true) {
+        _awayPaused = true;
+        _sendLive({'cmd': 'pause'});
+      }
+    } else if (_awayPaused) {
+      _awayPaused = false;
+      _sendLive({'cmd': 'play'});
+    }
+  }
+
   void _onBuffer(Map<String, dynamic>? b) {
+    _bufferInfo.value = b;
     if (b != null && b['pos_s'] is num) {
       _resumeAtS = (b['pos_s'] as num).toDouble();   // where the picture is on the video
       _positionSource = _sourceName;
@@ -594,13 +608,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
 
   Future<void> _uploadVideoSource() async {
     if (_uploading) return;
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final picked = await widget.pickVideo();
       if (picked == null || !mounted) return;
       await _useFile(picked.path, picked.name);
-    } catch (e) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Could not open the file: ${_uploadReason(e)}')));
+    } catch (_) {
+      // the upload card shows what went wrong, when there is one
     }
   }
 
@@ -680,7 +693,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       _uploadTicker?.cancel();
       if (!mounted) return;
       setState(() => _upload = null);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Upload cancelled. The source did not change.')));
     } catch (e) {
       _uploadTicker?.cancel();
       if (mounted) setState(() => _upload = UploadStatus(name: name, stage: UploadStage.failed, error: _uploadReason(e)));
@@ -741,6 +753,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     _uploadFade?.cancel();
     _poller.dispose();
     _channel?.sink.close();
+    _bufferInfo.dispose();
     super.dispose();
   }
 
@@ -790,7 +803,7 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     // The live tickets: the review's own list. Tickets are queued in the backend, the plates are read one by one, and a ticket shows here
     // when it is done. It stays alive (hidden) while the panel is folded away.
     final detections = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: _playing ? const LiveTicketsPanel() : _noDetections()),
+      Expanded(child: _playing ? LiveTicketsPanel(onAway: _onAway) : _noDetections()),
     ]);
     return Scaffold(
       backgroundColor: Fx.page(context),
@@ -993,7 +1006,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       }
       return;
     }
-    final messenger = ScaffoldMessenger.of(context);
     try {
       await _cameraApi.startRoadDetect();
       if (mounted) {
@@ -1002,8 +1014,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
           _roadDetectRun++;
         });
       }
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('${e is Exception ? e.toString().replaceFirst('Exception: ', '') : e}')));
+    } catch (_) {
+      // the button stays; nothing is shown
     }
   }
 
@@ -1013,9 +1025,6 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       _roadDetecting = false;
       _roadEditing = false;
     });
-    if (applied) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Road applied: the live monitor now uses the crosswalk.')));
-    }
     _pollCamera();
   }
 
@@ -1039,8 +1048,33 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
     );
   }
 
-  /// The live video, full size, or - while the road is being detected - a small window in the top-right corner over the walkthrough.
+  /// The live video with the timeline bar under it (output | backend | video; pause, go back, go forward over what is finished).
   Widget _videoArea() {
+    return Column(children: [
+      Expanded(child: _videoStack()),
+      if (!_roadDetecting)
+        ValueListenableBuilder<Map<String, dynamic>?>(
+          valueListenable: _bufferInfo,
+          builder: (context, info, _) => info == null
+              ? const SizedBox.shrink()
+              : LiveTimeline(
+                  info: info,
+                  onPause: () {
+                    _awayPaused = false;
+                    _sendLive({'cmd': 'pause'});
+                  },
+                  onPlay: () {
+                    _awayPaused = false;
+                    _sendLive({'cmd': 'play'});
+                  },
+                  onSeek: (t) => _sendLive({'cmd': 'seek', 't': t}),
+                ),
+        ),
+    ]);
+  }
+
+  /// The live video, full size, or - while the road is being detected - a small window in the top-right corner over the walkthrough.
+  Widget _videoStack() {
     return LayoutBuilder(builder: (context, box) {
       final detecting = _roadDetecting;
       final flowControls = detecting ? null : _flowControls();

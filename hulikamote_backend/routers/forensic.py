@@ -450,13 +450,16 @@ async def publish_live_ticket(lt: dict, config: dict, save_violation) -> list:
     ticket["source"] = "live"
     ids: list = []
     await _publish_ticket(LIVE_TASK, ticket, cfg, out, save_violation, ids, source="live", unread_user=LIVE_PENDING_USER)
+    from engine.plate_service import SERVICE
+    SERVICE.warm()                              # once: the plate process loads its models now, so the first click on a ticket is fast
     ensure_live_plate_worker()                  # the plate is read in the background, one ticket at a time
     return ids
 
 
 # ─── The live plate queue ──────────────────────────────────────────────────────────────────────────────────────
-# A live ticket is saved at once (nothing is lost) with plate_status "pending". ONE background worker then reads the plates of the
-# pending tickets one by one (the same read as "Read the plate": the plate is found in the evidence photos, read as seen and enhanced,
+# A live ticket is saved at once (nothing is lost) with plate_status "pending" and listed at once, in the order it came. By default the plate
+# is read ONLY when the reviewer opens (clicks) the ticket: POST /live-tickets/read-plate. With HK_LIVE_PLATE_AUTO=1 ONE background worker
+# reads the plates of the pending tickets one by one instead (the same read as "Read the plate": the plate is found in the evidence photos, read as seen and enhanced,
 # and voted). When a ticket is done its status becomes read / not_read / not_found, and only then does the Live Monitor's side list show
 # it. The worker never blocks the live feed (the read runs in a thread) and never overwrites what the reviewer did meanwhile.
 
@@ -467,9 +470,17 @@ _live_current: str | None = None                 # the ticket being read now
 _live_attempts: dict[str, int] = {}
 
 
+def _auto_read() -> bool:
+    import os
+    return os.environ.get("HK_LIVE_PLATE_AUTO", "0").strip() == "1"
+
+
 def ensure_live_plate_worker() -> None:
-    """Start the worker if it is not running (also after a restart: tickets that were still pending are then picked up), or wake it."""
+    """Start the worker if it is not running (also after a restart: tickets that were still pending are then picked up), or wake it.
+    Only when HK_LIVE_PLATE_AUTO=1: otherwise the plate is read when the reviewer opens the ticket."""
     global _live_worker, _live_wake
+    if not _auto_read():
+        return
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -545,62 +556,84 @@ async def _live_plate_loop() -> None:
             _live_current = None
 
 
-async def _read_live_ticket(snapshot: dict) -> None:
-    """Read the plate of one pending live ticket (`snapshot`: the ticket as the queue just found it) from its evidence photos and save the
-    result (see the section text above). The report is read and written in threads: it is several MB, and the event loop also carries the
-    live feed."""
+_live_reading: set = set()                       # live tickets being read right now (a second click, or the queue, leaves them alone)
+
+
+async def _read_live_ticket(snapshot: dict, background: bool = True) -> None:
+    """Read the plate of one pending live ticket (`snapshot`: the ticket as it was found) from its evidence photos and save the result (see
+    the section text above). `background` = the queue's read (tried a few times, then given up); False = the reviewer opened the ticket: it is
+    tried once and a failure is raised to the caller. The report is read and written in threads: it is several MB, and the event loop also
+    carries the live feed."""
     global _live_down_s
     from store import update_violation_plate
 
     uid = snapshot["ticket_uid"]
-    out = live_output_dir()
-    report_path = out / "report.json"
-    _live_attempts[uid] = _live_attempts.get(uid, 0) + 1
-    gave_up = _live_attempts[uid] > LIVE_MAX_ATTEMPTS
-    before = photo_names(snapshot)
-    config = _run_config(out)
-    plate_format = config.get("plate_format") or "ph_standard"
-    new, summary = None, None
-    if not gave_up:
-        from engine.plate_service import SERVICE, PlateServiceDown
-        try:
-            # a background job of the plate process: the reviewer's own "Read the plate" goes before it
-            new, summary = await asyncio.to_thread(SERVICE.run_in_background, _reread_with_models, snapshot, [], config, plate_format)
-            _live_down_s = 0.0
-        except ValueError:
-            new = None                                            # nothing to read in these photos
-            _live_down_s = 0.0
-        except PlateServiceDown:
-            _live_attempts[uid] -= 1                              # the process could not start: not this ticket's fault
-            _live_down_s = min(120.0, max(10.0, _live_down_s * 2))
-            log.exception("The plate process could not start (next try in %.0f s)", _live_down_s)
-            await asyncio.sleep(_live_down_s)
-            return
-        except Exception:
-            log.exception("Reading the plate of live ticket %s failed", uid)
-            return                                                # tried again next round, up to LIVE_MAX_ATTEMPTS
-    async with _report_lock:
-        tickets = await asyncio.to_thread(_load_tickets, report_path)
-        idx = next((i for i, t in enumerate(tickets) if t.get("ticket_uid") == uid), None)
-        if idx is None:
-            return                                                # merged away or removed meanwhile
-        current = tickets[idx]
-        if current.get("plate_status") != "pending" or photo_names(current) != before:
-            return                                                # the reviewer changed it: their work wins (pending ones come round again)
-        done = new if new is not None else dict(current)
-        if done.get("plate_text", "unidentified") not in _UNREAD:
-            done["plate_status"] = "read"
-        elif summary is not None and summary.get("found"):
-            done["plate_status"] = "not_read"                     # a plate was seen, no text could be read
-        else:
-            done["plate_status"] = "not_found"                    # no plate could be found in the photos
-        if done["plate_status"] != "read":
-            await update_violation_plate(done.get("db_ids", []), "unidentified", "no_plate_found")
-        else:
-            await _sync_plate(current, done)                      # the Inbox rows follow the plate (and its owner)
-        tickets[idx] = done
-        await _save_live_tickets(out, report_path, tickets, reflag=done.get("plate_text") != current.get("plate_text"))
-    _live_attempts.pop(uid, None)
+    if uid in _live_reading:
+        return
+    _live_reading.add(uid)
+    try:
+        out = live_output_dir()
+        report_path = out / "report.json"
+        gave_up = False
+        if background:
+            _live_attempts[uid] = _live_attempts.get(uid, 0) + 1
+            gave_up = _live_attempts[uid] > LIVE_MAX_ATTEMPTS
+        before = photo_names(snapshot)
+        config = _run_config(out)
+        plate_format = config.get("plate_format") or "ph_standard"
+        new, summary = None, None
+        if not gave_up:
+            from engine.plate_service import SERVICE, PlateServiceDown
+            try:
+                if background:
+                    # a background job of the plate process: the reviewer's own reads go before it
+                    new, summary = await asyncio.to_thread(SERVICE.run_in_background, _reread_with_models, snapshot, [], config, plate_format)
+                else:
+                    # opened by the reviewer: fast. At most 8 photos, spread over the whole ticket (all of them when there are fewer)
+                    names = [m["file"] for m in snapshot.get("evidence_meta", []) if m.get("file")]
+                    pick = [names[round(i * (len(names) - 1) / 7)] for i in range(8)] if len(names) > 8 else []
+                    new, summary = await asyncio.to_thread(_reread_with_models, snapshot, pick, config, plate_format)
+                _live_down_s = 0.0
+            except ValueError:
+                new = None                                            # nothing to read in these photos
+                _live_down_s = 0.0
+            except PlateServiceDown:
+                if not background:
+                    raise
+                _live_attempts[uid] -= 1                              # the process could not start: not this ticket's fault
+                _live_down_s = min(120.0, max(10.0, _live_down_s * 2))
+                log.exception("The plate process could not start (next try in %.0f s)", _live_down_s)
+                await asyncio.sleep(_live_down_s)
+                return
+            except Exception:
+                if not background:
+                    raise
+                log.exception("Reading the plate of live ticket %s failed", uid)
+                return                                                # tried again next round, up to LIVE_MAX_ATTEMPTS
+        async with _report_lock:
+            tickets = await asyncio.to_thread(_load_tickets, report_path)
+            idx = next((i for i, t in enumerate(tickets) if t.get("ticket_uid") == uid), None)
+            if idx is None:
+                return                                                # merged away or removed meanwhile
+            current = tickets[idx]
+            if current.get("plate_status") != "pending" or photo_names(current) != before:
+                return                                                # the reviewer changed it: their work wins
+            done = new if new is not None else dict(current)
+            if done.get("plate_text", "unidentified") not in _UNREAD:
+                done["plate_status"] = "read"
+            elif summary is not None and summary.get("found"):
+                done["plate_status"] = "not_read"                     # a plate was seen, no text could be read
+            else:
+                done["plate_status"] = "not_found"                    # no plate could be found in the photos
+            if done["plate_status"] != "read":
+                await update_violation_plate(done.get("db_ids", []), "unidentified", "no_plate_found")
+            else:
+                await _sync_plate(current, done)                      # the Inbox rows follow the plate (and its owner)
+            tickets[idx] = done
+            await _save_live_tickets(out, report_path, tickets, reflag=done.get("plate_text") != current.get("plate_text"))
+        _live_attempts.pop(uid, None)
+    finally:
+        _live_reading.discard(uid)
 
 
 def _live_photo_files(tickets: list) -> set:
@@ -675,6 +708,44 @@ async def live_plate_queue():
 
     ensure_live_plate_worker()                                    # after a restart this picks the waiting tickets up again
     return {**await _live_queue_state(), "plate_process": SERVICE.status()}
+
+
+class LiveReadRequest(BaseModel):
+    ticket_uid: str
+
+
+@router.post("/live-tickets/release-focus")
+async def release_live_focus():
+    """The reviewer left the live review: the live monitor goes on at once (it pauses while a plate is read). A read in progress goes on."""
+    from engine.plate_service import SERVICE
+
+    SERVICE.focus_release()
+    return {"ok": True}
+
+
+@router.post("/live-tickets/read-plate")
+async def read_live_ticket_plate(req: LiveReadRequest):
+    """The reviewer opened a live ticket: read its plate now when it has not been read yet (the plates are read on demand, one ticket at a
+    time, in the plate process). Returns the live tickets. A failure of the plate process comes back as an error the review shows."""
+    from engine.plate_service import PlateServiceError
+
+    report_path = live_output_dir() / "report.json"
+    async with _report_lock:
+        tickets = await asyncio.to_thread(_load_tickets, report_path)
+    snapshot = next((x for x in tickets if x.get("ticket_uid") == req.ticket_uid), None)
+    if snapshot is None:
+        return JSONResponse(status_code=404, content={"error": "Ticket not found"})
+    if snapshot.get("plate_status") == "pending":
+        try:
+            await _read_live_ticket(snapshot, background=False)
+        except PlateServiceError as exc:
+            return JSONResponse(status_code=503, content={"error": str(exc)})
+        except Exception as exc:
+            log.exception("Reading the plate of live ticket %s failed", req.ticket_uid)
+            return JSONResponse(status_code=500, content={"error": f"{type(exc).__name__}: {exc}"})
+        async with _report_lock:
+            tickets = await asyncio.to_thread(_load_tickets, report_path)
+    return {"tickets": tickets}
 
 
 async def _close_report(task_id: str, output_dir: Path, config: dict, save_violation) -> list:

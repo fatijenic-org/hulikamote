@@ -83,6 +83,9 @@ class _ZoneEditorState extends State<ZoneEditor> {
   /// Illegal turn: the sign says which turn is banned (left or right).
   bool get _isTurn => key == LoadingSigns.turnRuleKey;
 
+  /// The signs of this rule are put on a road of the Road step (the road is the zone, wherever the sign stands).
+  bool get _linksToRoad => _isLane || key == 'truck_ban' || key == 'tricycle_on_highway';
+
   /// "no-loading" or "no-parking": what the sign of this rule bans (and the same as a verb: "loading" / "parking").
   String get _ban => LoadingSigns.banFor(key);
   String get _banned => key == LoadingSigns.parkingRuleKey ? 'parking' : 'loading';
@@ -263,6 +266,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
       _notice = null;
       _selSign = _signs.length - 1; // the sign just placed is the one to size and turn
     });
+    _askRoadFor(_signs.length - 1);
   }
 
   void _moveSign(int i, Offset n) {
@@ -273,6 +277,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   void _removeSign(int i) {
     _signs.removeAt(i);
+    widget.draft.syncMarkings();                 // the road it was on is no longer a zone
     widget.draft.touch();
     setState(() {
       _notice = null;
@@ -355,6 +360,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
       _notice = null;
       _selSign = _signs.length - 1; // the box just placed is the one whose look is set
     });
+    if (_linksToRoad) _askRoadFor(_signs.length - 1);
   }
 
   void _dragLoadingSign(Offset local, Size size) {
@@ -669,7 +675,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                         ]
                                       : const [],
                                   selectedSign: _tool == ZoneTool.sign ? _selSign : null,
-                                  markings: _isLane ? widget.draft.markingShapes : const [],
+                                  markings: _linksToRoad ? widget.draft.markingShapes : const [],
                                   boxSigns: _boxSigns ? _boxObjects() : const [],
                                   loadingHandles: _boxSigns && _tool == ZoneTool.sign,
                                 ),
@@ -993,36 +999,59 @@ class _ZoneEditorState extends State<ZoneEditor> {
     return 'No zone: each vehicle follows the sign nearest to it, so two roads can have different signs.';
   }
 
-  /// "Use the road markings": the lanes of the live setup, so a sign can be set to one (bus lane for this road): it goes to the middle of
-  /// the lane and says the lane's type.
-  List<Widget> _laneChoice(BuildContext context, int i) {
-    final lanes = [for (final m in widget.draft.markingShapes) if (m.kind == 'lane') m];
-    if (lanes.isEmpty) return const [];
-    final current = _signs[i]['lane'] as String?;
-    return [
-      Text('PUT THE SELECTED SIGN ON A MARKED LANE', style: Fx.label(context)),
-      DropdownButton<String?>(
-        key: const ValueKey('sign-lane'),
-        isExpanded: true,
-        value: lanes.any((l) => l.id == current) ? current : null,
-        items: [
-          const DropdownMenuItem<String?>(value: null, child: Text('Not on a marked lane')),
-          for (final l in lanes) DropdownMenuItem<String?>(value: l.id, child: Text(l.label)),
+  /// The marked roads this rule's signs can be put on: a lane sign: lanes and roads; truck ban and tricycle ban: roads.
+  List<MarkingShape> get _roadOptions => [
+    for (final m in widget.draft.markingShapes)
+      if (m.kind == 'road' || (_isLane && m.kind == 'lane')) m,
+  ];
+
+  /// After a sign was placed: "Which road does it apply to?". The road becomes the zone of the sign's rule, even when the sign stands
+  /// beside the road. Skipped when no road is marked.
+  Future<void> _askRoadFor(int i) async {
+    final roads = _roadOptions;
+    if (roads.isEmpty || !mounted || i >= _signs.length) return;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (c) => SimpleDialog(
+        key: const ValueKey('sign-road-dialog'),
+        title: const Text('Which road does this sign apply to?'),
+        children: [
+          for (final m in roads) SimpleDialogOption(key: ValueKey('sign-road-${m.id}'), onPressed: () => Navigator.pop(c, m.id), child: Text(m.label)),
+          SimpleDialogOption(key: const ValueKey('sign-road-none'), onPressed: () => Navigator.pop(c, ''), child: const Text('No road: use the sign where it stands')),
         ],
-        onChanged: (id) {
-          if (id == null) {
-            _signs[i].remove('lane');
-          } else {
-            final lane = lanes.firstWhere((l) => l.id == id);
-            final spot = lane.anchor;
-            _signs[i]['lane'] = id;
-            _signs[i]['x'] = spot.dx;
-            _signs[i]['y'] = spot.dy;
-            if (lane.laneType != null && LaneSigns.of(lane.laneType!) != null) _signs[i]['type'] = lane.laneType;
-          }
-          widget.draft.touch();
-          setState(() {});
-        },
+      ),
+    );
+    if (picked == null || !mounted || i >= _signs.length) return;
+    _setRoad(i, picked.isEmpty ? null : picked);
+  }
+
+  void _setRoad(int i, String? id) {
+    if (id == null) {
+      _signs[i].remove('road');
+    } else {
+      _signs[i]['road'] = id;
+    }
+    widget.draft.syncMarkings();
+    widget.draft.touch();
+    setState(() {});
+  }
+
+  /// "Applies to road": the road of the Road step the selected sign is for. Changeable at any time.
+  List<Widget> _roadChoice(BuildContext context, int i) {
+    final roads = _roadOptions;
+    if (!_linksToRoad || roads.isEmpty) return const [];
+    final current = _signs[i]['road'] as String?;
+    return [
+      Text('THE SELECTED SIGN APPLIES TO', style: Fx.label(context)),
+      DropdownButton<String?>(
+        key: const ValueKey('sign-road'),
+        isExpanded: true,
+        value: roads.any((m) => m.id == current) ? current : null,
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('No road: where it stands')),
+          for (final m in roads) DropdownMenuItem<String?>(value: m.id, child: Text(m.label)),
+        ],
+        onChanged: (id) => _setRoad(i, id),
       ),
       const SizedBox(height: Fx.s8),
     ];
@@ -1115,7 +1144,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
               ),
             if (_selSign != null && _selSign! < _signs.length) ...[
               const SizedBox(height: Fx.s8),
-              ..._laneChoice(context, _selSign!),
+              ..._roadChoice(context, _selSign!),
               Text('SIZE AND ANGLE OF THE SELECTED SIGN', style: Fx.label(context)),
               _lookSlider('sign-scale', 'Size', _scaleOf(_selSign!), SignGeometry.minScale, SignGeometry.maxScale, '${(_scaleOf(_selSign!) * 100).round()}%', 'scale'),
               _lookSlider('sign-angle', 'Rotate', _angleOf(_selSign!), -SignGeometry.maxAngle, SignGeometry.maxAngle, '${_angleOf(_selSign!).round()}°', 'angle'),
@@ -1495,6 +1524,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
           ],
           if (_selSign != null && _selSign! < _signs.length) ...[
             const SizedBox(height: Fx.s8),
+            ..._roadChoice(context, _selSign!),
             _boxLook(context),
           ],
           const SizedBox(height: Fx.s8),

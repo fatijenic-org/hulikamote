@@ -15,11 +15,11 @@ class RoadMarkingMap {
     ('Crosswalk', 'pedestrian_lane'),
     ('Solid line', 'crossing_solid_line'),
     ('Stop line', 'red_light'),
-    ('Lane with a type', 'restricted_lane'),
+    ('Lane or road a lane sign is put on', 'restricted_lane'),
     ('Road or lane with a direction', 'counterflow'),
     ('Road or lane with a direction', 'illegal_turn'),
-    ('Road: national highway', 'tricycle_on_highway'),
-    ('Road', 'truck_ban'),
+    ('Road: national highway, or a road a sign is put on', 'tricycle_on_highway'),
+    ('Road a no-trucks sign is put on', 'truck_ban'),
     ('Sidewalk', 'sidewalk_driving'),
   ];
 
@@ -38,7 +38,6 @@ class RoadMarkingMap {
       switch ((violationKey, m.kind)) {
         case ('pedestrian_lane', 'crosswalk'):
         case ('sidewalk_driving', 'sidewalk'):
-        case ('truck_ban', 'road'):
           if (m.polygon.length >= 3) zones.add({'polygon': _points(m.polygon), 'marking': m.id, if (m.kind == 'crosswalk' && m.paint) 'paint': {'stripes': m.stripes, 'wear': m.wear, 'realistic': m.realistic}});
         case ('tricycle_on_highway', 'road'):
           if (m.polygon.length >= 3 && m.roadClass == 'national_highway') zones.add({'polygon': _points(m.polygon), 'marking': m.id});
@@ -67,7 +66,28 @@ class RoadMarkingMap {
           break;
       }
     }
+    // A sign put on a road (Restricted lane, Truck ban, Tricycle ban): that road is the zone, wherever the sign stands (even beside the road).
+    final linked = linkedRoads(violationKey, config);
+    for (final m in markings) {
+      if (!linked.containsKey(m.id) || m.polygon.length < 3 || zones.any((z) => z['marking'] == m.id)) continue;
+      zones.add({'polygon': _points(m.polygon), 'marking': m.id, if (violationKey == 'restricted_lane' && linked[m.id] != null) 'lane_type': linked[m.id]});
+    }
     return zones;
+  }
+
+  /// The rules whose signs can be put on a road of the Road step.
+  static const roadSignKeys = {'restricted_lane', 'truck_ban', 'tricycle_on_highway'};
+
+  /// The roads a sign was put on, for [violationKey]: marking id -> the type of the first sign on it (a lane sign says the lane's type;
+  /// null for the other rules).
+  static Map<String, String?> linkedRoads(String violationKey, Map<String, dynamic>? config) {
+    final out = <String, String?>{};
+    if (!roadSignKeys.contains(violationKey)) return out;
+    for (final s in (config?['signs'] as List? ?? const [])) {
+      if (s is! Map || s['road'] is! String) continue;
+      out.putIfAbsent(s['road'] as String, () => s['type'] is String ? s['type'] as String : null);
+    }
+    return out;
   }
 
   /// The turns that are banned at this camera, as the driver sees them (the two chips of Illegal turn). Missing: left. Empty: none.

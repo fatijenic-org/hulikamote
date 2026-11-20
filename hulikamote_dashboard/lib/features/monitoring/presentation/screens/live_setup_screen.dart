@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../forensic/data/forensic_api.dart';
@@ -73,6 +75,8 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   bool _loading = true;       // the current live setup is being read
   bool _hadSetup = false;     // a live setup existed and was loaded
   bool _applying = false;
+  bool _saveRun = false;          // "Save this run": every picture and its boxes go to a folder, to replay later like a forensic run
+  String _saveDir = '';
   late bool _clearTickets = widget.chooseFrame;   // a fresh start clears the tickets of earlier monitoring; changing the rules of a running feed keeps them
   String? _error;
 
@@ -241,6 +245,18 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
       }
       if (!mounted) return;
     }
+    try {
+      await widget.cameraApi.setLiveRecord(_saveRun, _saveDir);      // the run is saved (or not) before monitoring starts
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _applying = false;
+          _error = 'The run folder cannot be used: ${'$e'.replaceFirst('Exception: ', '')}';
+        });
+      }
+      return;
+    }
+    if (!mounted) return;
     final config = _draft.buildConfig(activePlateModel: _models.active('plate'));
     if (widget.deferApply) {
       Navigator.of(context).pop(LiveSetupPending(config, _draft.selection.length, clearTickets: _clearTickets));
@@ -428,6 +444,40 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
                 ),
               ]),
             ),
+            const SizedBox(height: Fx.s12),
+            FxCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('SAVE THIS RUN', style: Fx.label(context)),
+                SwitchListTile(
+                  key: const ValueKey('live-save-run'),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Save the run to replay it later, like a forensic run'),
+                  value: _saveRun,
+                  onChanged: _applying ? null : (v) => setState(() => _saveRun = v),
+                ),
+                if (_saveRun)
+                  Row(children: [
+                    Expanded(
+                      child: Text(_saveDir.isEmpty ? 'Choose the folder to save the run in' : _saveDir,
+                          maxLines: 2, overflow: TextOverflow.ellipsis, style: Fx.body(context)),
+                    ),
+                    const SizedBox(width: Fx.s8),
+                    OutlinedButton.icon(
+                      key: const ValueKey('live-save-folder'),
+                      onPressed: _applying ? null : _pickSaveDir,
+                      icon: const Icon(Icons.folder_open, size: 18),
+                      label: const Text('Choose folder'),
+                    ),
+                  ]),
+                const SizedBox(height: Fx.s8),
+                Text(
+                  _saveRun
+                      ? 'Every picture and its boxes are kept in that folder while the Live Monitor runs.'
+                      : 'Not saved: the run is kept only while you watch, so you can go back over it on the timeline.',
+                  style: Fx.caption(context),
+                ),
+              ]),
+            ),
             if (flow) ...[
               const SizedBox(height: Fx.s12),
               const FxBanner(
@@ -452,6 +502,11 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickSaveDir() async {
+    final dir = await FilePicker.getDirectoryPath();
+    if (dir != null && mounted) setState(() => _saveDir = dir);
   }
 
   String _zoneNote(String key) {

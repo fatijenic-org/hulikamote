@@ -13,11 +13,14 @@ import '../screens/live_tickets_screen.dart';
 /// The Live Monitor's side list: the same ticket list as the live review (search, filters, sort, select, photo + plate + violation per
 /// ticket), drawn by the Forensic Analyzer's own [QueuePanel].
 ///
-/// A ticket is listed only when it is ready: the backend keeps a queue and reads the plates one ticket after the other (see
-/// routers/forensic.py, "The live plate queue"), so nothing floods the list. While plates are still being read, a line says how many wait.
-/// Every ticket stays in the list (no limit). A tap opens the ticket in the live review.
+/// Every ticket is listed at once, in the order it came (first come, first served), with no limit. The plate is NOT read on its own: it is
+/// read when a ticket is clicked (a tap opens the ticket in the live review, which reads it), and a ticket whose plate is read carries a
+/// "plate read" badge.
 class LiveTicketsPanel extends StatefulWidget {
-  const LiveTicketsPanel({super.key, this.api, this.media = const ForensicMedia(), this.pollEvery = const Duration(seconds: 4)});
+  const LiveTicketsPanel({super.key, this.api, this.media = const ForensicMedia(), this.pollEvery = const Duration(seconds: 4), this.onAway});
+
+  /// Told true when the enforcer goes to look at a ticket (the live view can hold still meanwhile), false when they are back.
+  final ValueChanged<bool>? onAway;
 
   final ForensicApi? api;
   final ForensicMedia media;
@@ -33,7 +36,6 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
   late final ForensicApi _api = widget.api ?? ForensicApi();
   ReviewController? _controller;
   Timer? _timer;
-  int _waiting = 0; // tickets whose plate has not been read yet
   bool _loaded = false;
   bool _busy = false; // a refresh is running
   String? _problem;
@@ -58,11 +60,10 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
     return s.contains(ReviewStatus.rejected) && !s.contains(ReviewStatus.confirmed) ? ReviewStatus.rejected : ReviewStatus.confirmed;
   }
 
-  /// The tickets of the live run that are ready (their plate was read, or could not be). No report yet = no tickets.
+  /// The tickets of the live run, in the order they came. No report yet = no tickets.
   Future<List<ForensicTicket>> _fetch() async {
     try {
-      final all = await _api.report(_reportUrl);
-      return [for (final t in all) if (t.plateStatus != 'pending') t];
+      return await _api.report(_reportUrl);
     } on ForensicApiException catch (e) {
       if (e.statusCode == 404) return const [];
       rethrow;
@@ -76,12 +77,6 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
     _busy = true;
     try {
       final tickets = await _fetch();
-      var waiting = _waiting;
-      try {
-        waiting = await _api.liveQueueWaiting();
-      } catch (_) {
-        // an older backend has no queue: nothing waits then (its tickets are ready as they come)
-      }
       if (!mounted) return;
       final c = _controller;
       if (c == null || rebuild) {
@@ -93,6 +88,8 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
             taskId: 'live',
             tickets: tickets,
             statuses: {for (final t in tickets) t.uid: _statusFromRows(t, saved)},
+            sort: QueueSort.arrival,
+            plateBadge: true,
           );
           final old = _controller;
           _controller = next;
@@ -110,7 +107,6 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
         }
       }
       setState(() {
-        _waiting = waiting;
         _loaded = true;
         _problem = null;
       });
@@ -127,7 +123,12 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
   }
 
   Future<void> _openReview({String? uid}) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => LiveTicketsScreen(focusUid: uid)));
+    widget.onAway?.call(true);
+    try {
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => LiveTicketsScreen(focusUid: uid)));
+    } finally {
+      widget.onAway?.call(false);
+    }
     if (mounted) _refresh(rebuild: true); // decisions made there show here
   }
 
@@ -168,7 +169,6 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         _header(context, c),
-        if (_waiting > 0) _waitingLine(context),
         Divider(height: 1, color: Fx.border(context)),
         Expanded(child: _body(context, c)),
       ]),
@@ -189,28 +189,10 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
         ),
         IconButton(
           key: const ValueKey('review-live-tickets'),
-          tooltip: 'Open the live review: read plates again, set photos aside, merge, confirm',
+          tooltip: 'Open the live review: click a ticket to read its plate, set photos aside, merge, confirm',
           visualDensity: VisualDensity.compact,
           icon: const Icon(Icons.fact_check_outlined, size: 20),
           onPressed: () => _openReview(),
-        ),
-      ]),
-    );
-  }
-
-  /// "Reading plates: 3 waiting": the backend works through them one by one; each ticket shows up here when it is done.
-  Widget _waitingLine(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(Fx.s12, 0, Fx.s12, Fx.s8),
-      child: Row(children: [
-        const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
-        const SizedBox(width: Fx.s8),
-        Expanded(
-          child: Text(
-            'Reading plates: $_waiting ticket${_waiting == 1 ? '' : 's'} waiting. Each one shows here when it is done.',
-            key: const ValueKey('live-tickets-waiting'),
-            style: Fx.caption(context),
-          ),
         ),
       ]),
     );
@@ -222,10 +204,7 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
       return EmptyState(
         icon: Icons.fact_check_outlined,
         title: _problem == null ? 'No tickets yet' : 'Could not load the tickets',
-        message: _problem ??
-            (_waiting > 0
-                ? 'The plates are being read. The tickets show here when they are done.'
-                : 'A ticket is made when a vehicle that broke a rule leaves the picture, and its plate has been read.'),
+        message: _problem ?? 'A ticket is made when a vehicle that broke a rule leaves the picture. Click it to read its plate.',
       );
     }
     return QueuePanel(

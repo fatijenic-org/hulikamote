@@ -247,6 +247,9 @@ class AnalysisDraft extends ChangeNotifier {
   /// Empty in the Forensic wizard.
   List<MarkingShape> get markingShapes => const [];
 
+  /// A sign was linked to a road, moved to another or removed: the zones the road markings make are made again (live setup only).
+  void syncMarkings() {}
+
   bool findsLinesItself(String key) => key == 'crossing_solid_line' && ((config(key)['auto_lines'] as bool?) ?? true);
 
   /// The overlay signs placed on the picture: for "Restricted lane" [{type, x, y}], for "Illegal loading / unloading" and

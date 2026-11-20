@@ -7,9 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../features/forensic/support/test_support.dart';
 
-const officerPages = ['Overview', 'Live Monitor', 'Video Analysis', 'Forensic Analyzer', 'Inbox', 'Violations', 'Demerit Points', 'Motorists', 'Appeals'];
+const officerPages = ['Overview', 'Live Monitor', 'Demerit Points', 'Motorists', 'Appeals'];
 const developerPages = [
-  'Benchmark', 'Models', 'Settings', 'Utilities', 'Wiki', 'Code Reference', 'Docs', 'Progress Report', 'Visualizer', 'Datasets', 'Labeller',
+  'Benchmark', 'Video Analysis', 'Forensic Analyzer', 'Inbox', 'Violations', 'Models', 'Settings', 'Utilities', 'Wiki', 'Code Reference', 'Docs', 'Progress Report', 'Visualizer', 'Datasets', 'Labeller',
 ];
 
 /// The real menu in front of a router with one plain page per menu entry.
@@ -75,9 +75,9 @@ void main() {
     await pumpShell(tester);
     await OfficerMode.set(true);
     await tester.pump();
-    await tester.tap(find.text('Violations'));
+    await tester.tap(find.text('Demerit Points'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('page 5'), findsOneWidget);                 // Violations is entry 5 in the full menu
+    expect(find.text('page 6'), findsOneWidget);                 // Demerit Points is entry 6 in the full menu
     await tester.tap(find.text('Motorists'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('page 7'), findsOneWidget);
@@ -98,13 +98,14 @@ void main() {
     await pumpShell(tester);
     await OfficerMode.set(true);
     await tester.pump();
-    final top = {for (final label in ['Overview', 'Live Monitor', 'Inbox', 'Motorists']) label: tester.getTopLeft(find.text(label)).dy};
+    final top = {for (final label in ['Overview', 'Live Monitor', 'Demerit Points', 'Motorists']) label: tester.getTopLeft(find.text(label)).dy};
     expect(top['Overview']!, lessThan(top['Live Monitor']!));
-    expect(top['Live Monitor']!, lessThan(top['Inbox']!));
-    expect(top['Inbox']!, lessThan(top['Motorists']!));
-    for (final group in ['MONITOR', 'REVIEW', 'RECORDS']) {
+    expect(top['Live Monitor']!, lessThan(top['Demerit Points']!));
+    expect(top['Demerit Points']!, lessThan(top['Motorists']!));
+    for (final group in ['MONITOR', 'RECORDS']) {
       expect(find.text(group), findsOneWidget, reason: group);
     }
+    expect(find.text('REVIEW'), findsNothing);               // no Inbox, no Violations here
   });
 
   testWidgets('the Overview opens the right screen', (tester) async {

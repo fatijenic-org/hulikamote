@@ -52,11 +52,14 @@ class _AppShellState extends State<AppShell> {
   /// pulls one to the top of the menu without moving its branch.
   static const List<_NavItem> _items = [
     _NavItem(icon: Icons.videocam_outlined, label: 'Live Monitor', path: '/', officer: true, group: 'Monitor'),
-    _NavItem(icon: Icons.video_library_outlined, label: 'Video Analysis', path: '/offline-video', officer: true, group: 'Monitor'),
-    _NavItem(icon: Icons.biotech_outlined, label: 'Forensic Analyzer', path: '/forensic-analyzer', officer: true, group: 'Monitor'),
+    // Developer view only: an officer works in the Live Monitor (a camera or a video file, with its Live tickets list).
+    _NavItem(icon: Icons.video_library_outlined, label: 'Video Analysis', path: '/offline-video', group: 'Monitor'),
+    _NavItem(icon: Icons.biotech_outlined, label: 'Forensic Analyzer', path: '/forensic-analyzer', group: 'Monitor'),
     _NavItem(icon: Icons.fact_check_outlined, label: 'Benchmark', path: '/benchmark'),
-    _NavItem(icon: Icons.inbox_outlined, label: 'Inbox', path: '/inbox', officer: true, group: 'Review'),
-    _NavItem(icon: Icons.list_alt_outlined, label: 'Violations', path: '/violations', officer: true, group: 'Review'),
+    // Developer view only: an officer confirms tickets in the Live Monitor's "Live tickets" list and sees the confirmed ones under
+    // Demerit Points, so the officer menu has no Inbox and no Violations.
+    _NavItem(icon: Icons.inbox_outlined, label: 'Inbox', path: '/inbox', group: 'Review'),
+    _NavItem(icon: Icons.list_alt_outlined, label: 'Violations', path: '/violations', group: 'Review'),
     _NavItem(icon: Icons.balance_outlined, label: 'Demerit Points', path: '/demerit', officer: true, group: 'Records'),
     _NavItem(icon: Icons.contact_mail_outlined, label: 'Motorists', path: '/registry', officer: true, group: 'Records'),
     _NavItem(icon: Icons.model_training, label: 'Models', path: '/model'),

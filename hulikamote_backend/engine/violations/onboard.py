@@ -152,11 +152,13 @@ def outside_position(vehicle: list, person: list, head: tuple | None = None) -> 
     """
     vx, vy, vw, vh = vehicle
     px, py, pw, ph = person
-    if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0 or ph < 0.2 * vh:
+    if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0 or ph < ROOF_MIN_SHARE * vh:
         return None
     foot_x, foot_y = px + pw / 2, py + ph
     if vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.35 * vh and py <= vy + 0.05 * ph:
-        return "roof"
+        return "roof"                   # also the passenger on the far back step of a jeepney that drives toward the camera: only the upper body shows over the roof
+    if ph < 0.2 * vh:
+        return None
     if head is not None and ph >= REAR_TALL * vh and vx - 0.1 * vw <= foot_x <= vx + 1.1 * vw and vy + REAR_FEET * vh <= foot_y <= vy + 1.08 * vh:
         half = abs(head[0]) * vw / 2 + abs(head[1]) * vh / 2
         along = ((px + pw / 2 - (vx + vw / 2)) * head[0] + (py + ph / 2 - (vy + vh / 2)) * head[1]) / half if half > 0 else 0.0
@@ -170,6 +172,7 @@ def outside_position(vehicle: list, person: list, head: tuple | None = None) -> 
     return None
 
 
+ROOF_MIN_SHARE = 0.08      # the smallest person box (share of the vehicle's height) that can be on the roof or the far back step
 REAR_TALL = 0.55          # a person standing on the back step is at least this tall (share of the vehicle's height)
 REAR_FEET = 0.82          # ... with the feet in the bottom 18% of the vehicle's box
 
@@ -180,12 +183,12 @@ REAR_FEET = 0.82          # ... with the feet in the bottom 18% of the vehicle's
 # gets no stable track number, but each look still has a box on the vehicle at the same place.
 
 SEEN_S = 1.6              # how far back the looks are kept
-ATTACH_TOL = 0.08         # the same place: within this share of the vehicle's size, from the look before
+ATTACH_TOL = 0.05         # the same place: within this share of the vehicle's size, from the look before
 ATTACH_MIN_S = 0.4        # ... seen at that place at least this long ago
 ATTACH_MIN_LOOKS = 2      # ... on at least this many earlier looks
 ATTACH_TRAVEL = 0.2       # the vehicle moved at least this share of its size since then (a pedestrian standing by it is left behind)
-HITS_NEEDED = 4           # looks with a passenger outside ...
-HITS_WINDOW_S = 3.0       # ... within this many seconds flag the vehicle
+HITS_NEEDED = 6           # looks with a passenger outside ...  (a rider that follows a vehicle closely can fake a few looks, not six)
+HITS_WINDOW_S = 4.0       # ... within this many seconds flag the vehicle
 
 
 def place_on(vehicle: list, person: list) -> tuple[float, float]:

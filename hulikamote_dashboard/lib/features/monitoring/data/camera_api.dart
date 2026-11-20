@@ -196,6 +196,16 @@ class CameraApi {
   /// {ok, tickets, rows, files}.
   Future<Map<String, dynamic>> clearLiveTickets() async => _json(await _client.delete(_uri('/settings/live/tickets')));
 
+  /// Whether the next live runs are saved (every picture and its boxes, to replay later like a forensic run) and where: {save, dir, default_dir}.
+  Future<Map<String, dynamic>> liveRecord() async => _json(await _client.get(_uri('/settings/live/record')));
+
+  /// Choose to save the next live runs in [dir] (made when it does not exist), or not.
+  Future<Map<String, dynamic>> setLiveRecord(bool save, String dir) async => _json(await _client.post(
+    _uri('/settings/live/record'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'save': save, 'dir': dir}),
+  ));
+
   /// Empties the setup (violations, zones, road markings, setup picture): the Live Monitor starts empty each time it is opened.
   Future<void> resetLiveSetup() async => _json(await _client.post(_uri('/settings/live/reset')));
 

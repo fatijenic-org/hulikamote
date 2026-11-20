@@ -19,7 +19,7 @@ Kuliglig: TO CONFIRM (farm equipment; city ordinances differ). Penalty figures a
 
 Every case (see onboard.py) also needs: the vehicle moves, the person keeps the SAME PLACE ON the vehicle (a pedestrian beside
 it or someone loading a parked one does not count), and a person already claimed by a motorcycle (or, for roof / hanging, by any
-small vehicle) is never counted. Judged over time: 4 looks with a passenger outside within 3 seconds.
+small vehicle) is never counted. Judged over time: 6 looks with a passenger outside within 4 seconds.
 
 Why it works on people the detector is unsure of (2026-11-19): a person on a roof or a step scores 0.10-0.25 and often gets no stable
 person track number (or none at all), so the rule uses EVERY person box of a look (tracked or not) and checks the place on the vehicle
@@ -38,7 +38,7 @@ from engine.violations.onboard import (attached_here, claimed_by_motorcycles, cl
 
 BED_CLASSES = ("truck", "pickup")
 ROOF_CLASSES = ("bus", "jeepney", "truck", "pickup", "car", "tricycle")      # roof, side or back step (every class but the motorcycle)
-OUTSIDE_LABELS = {"roof": "on roof", "hanging": "hanging on", "rear": "on back step"}
+OUTSIDE_LABELS = {"roof": "on roof or back", "hanging": "hanging on", "rear": "on back step"}
 KULIGLIG_CLASSES = ("kuliglig",)
 MIN_SPEED_PX_S = 2 * STOP_SPEED       # "while the vehicle is in motion"
 

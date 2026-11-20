@@ -99,13 +99,18 @@ class _PlateReadsPanelState extends State<PlateReadsPanel> {
 
   Widget _nothingYet(BuildContext context, ForensicTicket t) {
     final pending = t.plateStatus == 'pending';
+    final reading = widget.controller.isReading(t.uid);
     return FxCard(
       child: Row(children: [
-        Icon(pending ? Icons.hourglass_empty : Icons.pin_outlined, color: Fx.muted(context)),
+        reading
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(pending ? Icons.hourglass_empty : Icons.pin_outlined, color: Fx.muted(context)),
         const SizedBox(width: Fx.s12),
         Expanded(
           child: Text(
-            pending
+            reading
+                ? 'Reading the plate of this ticket: it is found in the photos and read twice, as seen and enhanced. It shows here when it is done.'
+                : pending
                 ? 'The plate of this ticket has not been read yet. "Read the plate" finds it in the photos of the ticket and reads it twice: as seen and enhanced.'
                 : t.plateRead
                     ? 'The plate text came from the photos, not from a separate crop.'
