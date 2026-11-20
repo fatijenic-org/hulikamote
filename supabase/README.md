@@ -11,6 +11,10 @@ Everything else is built. This is the only manual work, about 10 minutes, once.
 3. Push: **Choose Firebase key file** (the service-account `.json`), then **Check push**.
 4. Phone: sign-in page -> **Connect**. It finds the laptop by itself (same Wi-Fi, hotspot, USB or emulator) and uses the cloud if the
    laptop has it ready and the phone has internet, else the laptop on the Wi-Fi. Only public values reach the phone.
+   If the venue Wi-Fi keeps devices apart (Connect finds nothing): dashboard -> **Copy phone setup code**, then in the app
+   **Connect -> Paste setup code**. It carries only the project address and the public anon key.
+5. Appeals: a motorist appeals in the app; dashboard -> **Appeals** shows it with the photos. **Accept** cancels the ticket (no demerit
+   point), **Reject** keeps it. The motorist gets a notice and a push. (Press **Set up cloud** again once so the cloud gets the new appeal columns.)
 
 ## How it works (so you can explain it)
 Confirm a ticket on the laptop -> the laptop copies the ticket, its photos and the notice into your Supabase project (using the

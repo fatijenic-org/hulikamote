@@ -60,6 +60,10 @@ create table if not exists public.appeals (
   created_at timestamptz not null default now()
 );
 
+-- The reviewer's answer: the laptop writes it, the phone only reads it.
+alter table public.appeals add column if not exists note text not null default '';
+alter table public.appeals add column if not exists decided_at timestamptz;
+
 create table if not exists public.device_tokens (   -- phones that can receive a push
   token      text primary key,
   user_id    uuid not null references auth.users on delete cascade,
@@ -148,8 +152,9 @@ create policy "own plates"       on public.plates        for select using (auth.
 create policy "own tickets"      on public.tickets       for select using (auth.uid() = user_id);
 create policy "own notices"      on public.notices       for select using (auth.uid() = user_id);
 create policy "own appeals read" on public.appeals       for select using (auth.uid() = user_id);
-create policy "own appeals add"  on public.appeals       for insert with check (
-  auth.uid() = user_id and exists (select 1 from public.tickets t where t.id = ticket_id and t.user_id = auth.uid()));
+create policy "own appeals add"  on public.appeals       for insert with check (     -- a new appeal is always "pending": the answer is the reviewer's
+  auth.uid() = user_id and status = 'pending' and note = '' and decided_at is null
+  and exists (select 1 from public.tickets t where t.id = ticket_id and t.user_id = auth.uid()));
 create policy "own tokens read"  on public.device_tokens for select using (auth.uid() = user_id);
 
 -- The phone may change only its name and contact e-mail, never its plate; tokens are changed through the functions above.
@@ -180,7 +185,9 @@ begin
     'functions', (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                   where n.nspname = 'public' and p.proname in ('plate_taken', 'register_device', 'forget_device', 'handle_new_user', 'plate_key_of')) = 5,
     'bucket', exists (select 1 from storage.buckets where id = 'evidence' and not public),
-    'plate_locked', not has_column_privilege('authenticated', 'public.profiles', 'plate_key', 'UPDATE')
+    'plate_locked', not has_column_privilege('authenticated', 'public.profiles', 'plate_key', 'UPDATE'),
+    'appeals_review', (select count(*) from information_schema.columns
+                       where table_schema = 'public' and table_name = 'appeals' and column_name in ('note', 'decided_at')) = 2
   );
 end $$;
 revoke all on function public.hulikamote_setup_check() from public, anon, authenticated;
