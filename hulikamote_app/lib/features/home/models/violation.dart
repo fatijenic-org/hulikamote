@@ -69,7 +69,10 @@ class Violation {
 
   DateTime? get time => DateTime.tryParse(timestamp)?.toLocal();
 
-  String get displayClass => cls
+  String get displayClass => labelOf(cls);
+
+  /// "no_helmet" -> "No Helmet".
+  static String labelOf(String cls) => cls
       .replaceAll('_', ' ')
       .split(' ')
       .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')

@@ -19,7 +19,7 @@ class AppealState {
 
   factory AppealState.of(String? status) => switch (status) {
         'pending' => const AppealState._('pending', 'Appeal sent', Tone.warning, Icons.hourglass_top_rounded, 'A reviewer has not decided yet.'),
-        'accepted' => const AppealState._('accepted', 'Appeal accepted', Tone.success, Icons.check_circle_outline, 'A reviewer accepted your appeal.'),
+        'accepted' => const AppealState._('accepted', 'Appeal accepted', Tone.success, Icons.check_circle_outline, 'A reviewer accepted your appeal. The ticket is cancelled and does not count as a demerit point.'),
         'rejected' => const AppealState._('rejected', 'Appeal rejected', Tone.danger, Icons.cancel_outlined, 'A reviewer did not accept your appeal.'),
         _ => const AppealState._(null, 'Can appeal', Tone.info, Icons.gavel_rounded, 'You can appeal this ticket once.'),
       };

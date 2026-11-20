@@ -86,7 +86,7 @@ class _MainScreenState extends State<MainScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          HomeScreen(api: widget.api),
+          HomeScreen(api: widget.api, refresh: _newNotices),
           NotificationsScreen(api: widget.api, newNotices: _newNotices),
           const ProfileScreen(),
         ],

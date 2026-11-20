@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/config/app_config.dart';
 import '../../../core/services/cloud_portal_api.dart';
@@ -79,6 +80,32 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
     }
   }
 
+  /// For a phone that cannot find the laptop (a venue Wi-Fi that keeps devices apart): the dashboard copies a setup code, this reads
+  /// it from the clipboard and sets the cloud up from it.
+  Future<void> _pasteCode() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+      _found = null;
+    });
+    try {
+      final clip = (await Clipboard.getData(Clipboard.kTextPlain))?.text ?? '';
+      final code = AppConfig.parseSetupCode(clip);
+      if (code == null) {
+        if (mounted) setState(() => _found = 'No setup code on the clipboard. On the laptop: dashboard > Motorists > Online > Copy phone setup code. Then press this again.');
+        return;
+      }
+      await widget.checkCloud(code.url, code.key);
+      await AppConfig.saveCloud(code.url, code.key);
+      await AppConfig.setMode('online');
+      if (mounted) Navigator.of(context).pop(true);
+    } on PortalException catch (e) {
+      if (mounted) setState(() => _found = e.message);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _save() async {
     setState(() {
       _busy = true;
@@ -129,6 +156,11 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
             const SizedBox(height: 8),
             Text(_found!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ],
+          TextButton.icon(
+            onPressed: _busy ? null : _pasteCode,
+            icon: const Icon(Icons.content_paste_go_outlined, size: 18),
+            label: const Text('Paste setup code'),
+          ),
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 12),

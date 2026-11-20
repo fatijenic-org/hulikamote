@@ -1,8 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Talk to the laptop (debug runs get this from the debug manifest; a built app needs it here) -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+: allow the app to show notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- The laptop on the same Wi-Fi speaks plain http (the cloud is https): Android 9+ refuses plain http unless this is set -->
     <application
-        android:label="hulikamote_app"
+        android:label="HULI-KAMOTE"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -30,6 +36,13 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Firebase push notifications that arrive while the app is closed use this small icon and colour -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_hulikamote" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/hulikamote_blue" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and
