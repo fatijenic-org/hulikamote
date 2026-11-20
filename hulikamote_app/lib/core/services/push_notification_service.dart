@@ -82,7 +82,7 @@ class PushNotificationService {
     _firebaseReady = firebaseReady;
 
     // 1. Local notification channel
-    const AndroidInitializationSettings initSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const AndroidInitializationSettings initSettingsAndroid = AndroidInitializationSettings('@drawable/ic_stat_hulikamote');
     await _localNotifications.initialize(
       const InitializationSettings(android: initSettingsAndroid),
       onDidReceiveNotificationResponse: (_) => inboxRequests.value++,

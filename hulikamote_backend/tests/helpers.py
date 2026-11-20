@@ -66,3 +66,15 @@ class FakeSMTP:
 
     def send_message(self, msg):
         FakeSMTP.calls.append(("send", msg["To"]))
+
+
+def lane_change(along_from, across_from, across_to, step=12, frames=100, run_in=35, ramp=30):
+    """(along, across) points of a vehicle that drives ALONG a line, steers over it (an S-curve) and goes on along it: what a lane change looks
+    like. `along` is the position along the line, `across` the position across it (the line is at 1000 for a horizontal line, so across_from=1090 and
+    across_to=910 is 90 px on one side to 90 px on the other). A vehicle that goes straight across a line is cross traffic, and one that rides
+    parallel to it never crosses: neither is a crossing."""
+    out = []
+    for i in range(frames):
+        u = min(1.0, max(0.0, (i - run_in) / ramp))
+        out.append((along_from + step * i, across_from + (across_to - across_from) * (3 * u * u - 2 * u ** 3)))
+    return out

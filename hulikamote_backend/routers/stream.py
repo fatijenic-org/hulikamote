@@ -4,6 +4,7 @@ import json
 import os
 import random
 import sys
+import threading as _threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -53,6 +54,10 @@ def saved_source(config_path: Path | None = None) -> str | int:
 
 VIDEO_SOURCE: str | int = saved_source()
 _active_source: CameraSource | None = None    # the source the live feed is reading right now
+
+# The plate reading runs in a process of its own (engine/plate_service.py). While the live feed runs it reads on the CPU and holds no GPU.
+from engine.plate_service import SERVICE as _plate_service  # noqa: E402
+_plate_service.live_probe = lambda: _active_source is not None
 
 
 def camera_status() -> dict:
@@ -155,22 +160,110 @@ def mark_pipeline_stale() -> None:
     _pipeline_stale = True
 
 
+# One pipeline build at a time. A build loads models (seconds): the preparing thread, "Apply" and a feed that starts must not each build one.
+_build_lock = _threading.RLock()
+
+# "Apply" is building the pipeline for the new rules: NOT set while it does. A feed that starts meanwhile (the old one was stopped, the dashboard
+# reconnects) waits for it here: it must not start on the old rules and keep them.
+_pipeline_ready = _threading.Event()
+_pipeline_ready.set()
+_rebuilds = 0                                     # Applies that are building now (two at once: the feed waits for both)
+_rebuild_guard = _threading.Lock()
+
+
+def begin_rebuild() -> None:
+    """Apply starts building the pipeline for new rules (call it before the running feed is stopped). Pair with end_rebuild()."""
+    global _rebuilds
+    with _rebuild_guard:
+        _rebuilds += 1
+        _pipeline_ready.clear()
+
+
+def end_rebuild() -> None:
+    global _rebuilds
+    with _rebuild_guard:
+        _rebuilds = max(0, _rebuilds - 1)
+        if _rebuilds == 0:
+            _pipeline_ready.set()
+
+
 def _get_pipeline():
+    _pipeline_ready.wait(timeout=180)             # never longer than this, whatever happened to the build
     if _pipeline is None or _pipeline_stale:
-        return reload_pipeline()
+        with _build_lock:                      # a build that is running now is waited for, not repeated
+            if _pipeline is None or _pipeline_stale:
+                return reload_pipeline()
     return _pipeline
 
 def reload_pipeline():
     global _pipeline, _pipeline_source, _pipeline_stale
-    old, old_source = _pipeline, _pipeline_source
-    _pipeline = _build_pipeline()
-    _pipeline_source = VIDEO_SOURCE
-    _pipeline_stale = False
-    # New rules for the SAME camera keep what the traffic already taught (the learned flow): learning it again takes minutes.
-    # Another camera starts from nothing.
-    if old is not None and old_source == VIDEO_SOURCE and getattr(old, "flow", None) is not None:
-        _pipeline.flow = old.flow
-    return _pipeline
+    with _build_lock:
+        old, old_source = _pipeline, _pipeline_source
+        _pipeline = _build_pipeline()
+        _pipeline_source = VIDEO_SOURCE
+        _pipeline_stale = False
+        # New rules for the SAME camera keep what the traffic already taught (the learned flow): learning it again takes minutes.
+        # Another camera starts from nothing.
+        if old is not None and old_source == VIDEO_SOURCE and getattr(old, "flow", None) is not None:
+            _pipeline.flow = old.flow
+        return _pipeline
+
+
+def warm_up_pipeline() -> None:
+    """Run every model of the current pipeline once on an empty picture (the detector and the ReID networks were warmed when they were loaded).
+    The first run of a CUDA model costs seconds; this pays it behind the setup, so the first live picture is not the slow one. Never raises."""
+    pipeline = _pipeline
+    registry = getattr(pipeline, "registry", None)
+    warm = getattr(registry, "warm_up", None)
+    if warm is None:
+        return
+    try:
+        warm()
+    except Exception as exc:
+        print(f"[Stream] Warm-up skipped: {exc}")
+
+
+# ── Preparing the models before they are needed ───────────────────────────────────
+# Pressing Start (or "Set up violations") tells the backend the Live Monitor is about to run. The detector, the trackers' ReID networks and
+# the models of the rules that are saved are loaded and warmed NOW, in a thread, while the operator goes through the setup - so "Apply" only
+# finds them loaded and the first picture is not the slow one. Nothing is built that depends on the new rules.
+_prepare_thread: "_threading.Thread | None" = None
+_prepare_lock = _threading.Lock()
+
+
+def _prepare_models() -> None:
+    from engine.registry import ModelRegistry
+    from engine.start_log import START
+
+    # (while a feed runs, its own start-up timeline is not touched)
+    mark = START.mark if _active_source is None else (lambda step: None)
+    try:
+        try:
+            cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if CONFIG_PATH.exists() else {}
+        except (OSError, ValueError):
+            cfg = {}
+        mark("preparing")
+        get_inference(tracker_type=cfg.get("tracker", "bytetrack"))        # loads + warms the detector and the trackers (when not loaded yet)
+        mark("detector ready")
+        registry = ModelRegistry(str(CONFIG_PATH))                         # the saved rules' models: loaded into the shared cache
+        registry.warm_up()
+        mark("rule models ready")
+    except Exception as exc:
+        print(f"[Stream] Preparing the models failed (they load when the feed starts instead): {exc}")
+
+
+def prepare_feed() -> dict:
+    """Start loading + warming the models in the background (once at a time). {"state": "started" | "running"}."""
+    global _prepare_thread
+    with _prepare_lock:
+        if _prepare_thread is not None and _prepare_thread.is_alive():
+            return {"state": "running"}
+        from engine.start_log import START
+        if _active_source is None:
+            START.continue_or_begin("prepare")
+        _prepare_thread = _threading.Thread(target=_prepare_models, daemon=True, name="live-prepare")
+        _prepare_thread.start()
+    return {"state": "started"}
 
 
 # ── Traffic flow on the live picture ─────────────────────────────────────────────
@@ -251,10 +344,55 @@ PICTURE_MAX_WIDTH = 960
 PICTURE_JPEG_QUALITY = 72
 
 
-def _picture_b64_timed(frame) -> str:
-    """_picture_b64 with its time kept (it runs in a worker thread, started as soon as the picture is read)."""
+# The violations whose overlay objects (signs, painted crosswalks and lines) are NOT drawn on the live picture: the Live Monitor's
+# "Layers" checklist. A set shared by every pipeline: changing it takes effect on the next picture.
+_hidden_overlays: set[str] = set()
+
+
+def set_hidden_overlays(keys) -> list[str]:
+    """Replace the hidden set (violation keys). Returns it, sorted."""
+    _hidden_overlays.clear()
+    _hidden_overlays.update(str(k) for k in keys or ())
+    return sorted(_hidden_overlays)
+
+
+def hidden_overlays() -> list[str]:
+    return sorted(_hidden_overlays)
+
+
+def _with_overlays(frame, pipeline, detections):
+    """The picture with the overlay objects of the switched-on violations painted on it (a copy), or `frame` itself when there are none.
+    Never raises: the overlays are only a help. The vehicles of the last judged picture are the ones the paint goes under."""
+    if pipeline is None:
+        return frame
+    try:
+        h, w = frame.shape[:2]
+        items = pipeline.live_overlay_zones(w, h, _hidden_overlays)
+        if not items:
+            return frame
+        out = frame.copy()
+        pipeline.draw_live_overlays(out, items, detections or ())
+        return out
+    except Exception:
+        return frame
+
+
+TURN_ARROWS_LAYER = "illegal_turn:arrows"          # the Layers switch of the banned-turn arrows
+PATHS_LAYER = "crossing_solid_line:paths"          # the Layers switch of the light line behind every vehicle (Crossing a solid line)
+
+
+def _layered(items: list) -> list:
+    """The drawn zones for the dashboard, without the banned-turn arrows when Layers has them switched off."""
+    if TURN_ARROWS_LAYER not in _hidden_overlays:
+        return items
+    return [{k: v for k, v in item.items() if k != "arrows"} for item in items]
+
+
+def _picture_b64_timed(frame, pipeline=None, detections=()) -> str:
+    """_picture_b64 with its time kept (it runs in a worker thread, started as soon as the picture is read). With a `pipeline` the overlay
+    objects of the set-up violations are painted on the picture first."""
     t0 = time.perf_counter()
-    out = _picture_b64(frame)
+    out = _picture_b64(_with_overlays(frame, pipeline, detections))
     TIMER.add("encode", time.perf_counter() - t0)
     return out
 
@@ -418,6 +556,9 @@ def _setup_overlay(pipeline, w: int, h: int) -> list:
                     item = {"violation": violation.key, "polygon": polygon, "line": line, "best_effort": False, "drawn": True}
                     if zone.get("flow_path"):                       # Counterflow: the legal way, bent where the road bends
                         item["arrow"] = pipeline._scale_polygon(zone["flow_path"], w, h)
+                    arrows = [pipeline._scale_polygon(zone[f], w, h) for f in ("turn_arrow_left", "turn_arrow_right") if zone.get(f)]
+                    if arrows:
+                        item["arrows"] = arrows                     # Illegal turn: the banned turns of a marked road (Layers can hide them)
                     items.append(item)
     except Exception:
         items = []
@@ -458,8 +599,39 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     _current_ws_id = my_ws_id
     my_gen = _stream_generation
 
-    pipeline = _get_pipeline()
-    engine = get_inference()  # needed for encode_frame / save_snapshot
+    from engine.start_log import START
+    START.continue_or_begin("connect")                         # (the Apply that just happened, or a start of its own)
+    START.mark("feed connected")
+    start_loop = asyncio.get_running_loop()
+
+    class DashboardGone(Exception):
+        pass
+
+    async def start_up(job):
+        """Run a start-up job in a thread and wait for it, telling the dashboard the feed is alive (at once, then every 2 s): its
+        "Processing" view shows from the first moment, its "no picture yet" warning and its watchdog stay quiet however long the models take.
+        An error of the job itself is raised as it always was; only a dashboard that has gone away ends the start quietly."""
+        fut = start_loop.run_in_executor(None, job)
+        while True:
+            try:
+                await websocket.send_json({"type": "buffer", "state": "filling", "percent": 0.0, "ahead_s": 0.0, "speed": 1.0, "need_s": 0.0, "live": False})
+            except (WebSocketDisconnect, RuntimeError):
+                raise DashboardGone() from None
+            done, _ = await asyncio.wait({fut}, timeout=2.0)
+            if done:
+                return fut.result()
+
+    try:
+        # The pipeline is built here only when nothing was built since the source changed, and either way OFF the event loop: a build loads
+        # models for seconds and would freeze every other request of the backend (and the messages of this feed). A build that is running
+        # now (Apply) is waited for, not repeated.
+        pipeline = await start_up(_get_pipeline)
+        engine = await start_up(get_inference)                 # needed for encode_frame / save_snapshot
+        START.mark("pipeline ready")
+        await start_up(warm_up_pipeline)                       # (instant when Apply / the preparing thread did it: a model that ran once is skipped)
+        START.mark("models warm")
+    except DashboardGone:
+        return                                                 # the dashboard left while the models were loading
 
     try:
         source = CameraSource(VIDEO_SOURCE)
@@ -467,11 +639,12 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         print(f"[Stream] Unusable video source: {exc}")
         await websocket.close()
         return
-    if not source.start():
+    if not await start_loop.run_in_executor(None, source.start):    # (a file opens now; a camera connects in the background)
         await websocket.close()
         return
     if start_s > 0 and not source.live:
         source.seek(start_s)                                   # go on where the picture was (Refresh / Resume)
+    START.mark("source open")
     _active_source = source
     source_fps = source.source_fps
     # The road learner watches the camera itself (every picture, from the reader thread), so it keeps its pace when the
@@ -507,6 +680,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         TIMER.add("decode", time.perf_counter() - t0)
         if got is None:
             return None, None, None
+        START.mark("first picture read")
         nonlocal n_read
         if source.live:
             when = got.captured_at or time.time()
@@ -533,11 +707,9 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         TIMER.add("prep", time.perf_counter() - t0)
         return got, small, when
 
-    async def save_tickets(tickets: list) -> None:
-        """Real pipeline tickets -> the "live" run (report + Inbox rows). The plate is NOT read here: the live feed keeps no plate, it is
-        read from the ticket's evidence photos when the reviewer opens the ticket (routers/forensic.py publish_live_ticket)."""
-        if not tickets:
-            return
+    publishing: set = set()             # the tasks that save tickets in the background (kept here so they are not collected half done)
+
+    async def publish_tickets(tickets: list) -> None:
         from routers import forensic as forensic_router          # imported here: the forensic router imports this module
         for ticket in tickets:
             try:
@@ -546,6 +718,16 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 import traceback
                 print(f"[Stream] A live ticket could not be saved: {exc!r}")
                 _log_stream_error(traceback.format_exc())
+
+    async def save_tickets(tickets: list) -> None:
+        """Real pipeline tickets -> the "live" run (report + Inbox rows). The plate is NOT read here: the live feed keeps no plate, it is
+        read from the ticket's evidence photos when the reviewer opens the ticket (routers/forensic.py publish_live_ticket).
+        The saving runs in the background (the tickets one after the other): the pictures never wait for the report file and the database."""
+        if not tickets:
+            return
+        task = asyncio.create_task(publish_tickets(tickets))
+        publishing.add(task)
+        task.add_done_callback(publishing.discard)
 
     async def mock_violations(frame) -> None:
         """Mock-mode violations (testing only), made on the newest results."""
@@ -622,6 +804,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
 
             try:                                                    # the Forensic Analyzer's own boxes (label, colours, plate, why-marks, stopwatch)
                 box_specs = pipeline.box_specs(results)
+                if PATHS_LAYER in _hidden_overlays:                 # Layers: "Crossing a solid line: vehicle paths" switched off
+                    box_specs = [s for s in box_specs if "trail" not in s]
             except Exception:
                 box_specs = None                                    # the dashboard then draws plain boxes from `detections`
 
@@ -637,7 +821,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         picture = None
         if PICTURE_MODE != "relay":
             # ── synced: the picture rides in the same message as the boxes ──
-            picture = await (encoding if encoding is not None else loop.run_in_executor(None, _picture_b64_timed, picture_frame))
+            picture = await (encoding if encoding is not None else loop.run_in_executor(None, _picture_b64_timed, picture_frame, pipeline, last_yolo_results))
         return {"t": t, "w": w, "h": h, "picture": picture, "frame": picture_frame if PICTURE_MODE == "relay" else None,
                 "detections": display_results, "boxes": box_specs}
 
@@ -659,6 +843,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         """Stage B of a picture, then its boxes go onto the waiting pictures from its time on (later pictures get them as they are read)."""
         nonlocal last_yolo_results
         _picture, last_yolo_results = await loop.run_in_executor(_PIPELINE_EXECUTOR, pipeline.judge_stage, job)
+        START.mark("first picture judged")
         await save_tickets(pipeline.ledger_manager.drain_tickets())   # stage B is idle now, so the ledgers are read safely here
         await mock_violations(o["frame"])
         display, specs = boxes_of(last_yolo_results)
@@ -694,7 +879,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                     h_fr, w_fr = packet["frame"].shape[:2]
                     print(f"[Stream] Starting broadcaster with {w_fr}x{h_fr}")
                     broadcaster.start(width=w_fr, height=h_fr)
-                await loop.run_in_executor(None, broadcaster.push, packet["frame"])
+                # the overlay objects (signs, painted crosswalks and lines) go on the relayed picture too, as on the synced one
+                await loop.run_in_executor(None, lambda: broadcaster.push(_with_overlays(packet["frame"], pipeline, last_yolo_results)))
         w, h = packet["w"], packet["h"]
         picture = packet["picture"]
         if picture is None and packet.get("encoding") is not None:
@@ -713,7 +899,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                     "boxes": packet["boxes"],                           # same data the replay's boxes.json holds, per frame
                     "camera": source.status(),
                     "road": road.status(),                              # learning progress / what was learned / why it could not
-                    "road_zones": _setup_overlay(pipeline, w, h) + pipeline.learned_overlay(w, h) + road.hint_overlay(w, h) + road.region_overlay(w, h),   # set-up zones + learned zones in use + line hints
+                    "road_zones": _layered(_setup_overlay(pipeline, w, h)) + pipeline.learned_overlay(w, h) + road.hint_overlay(w, h) + road.region_overlay(w, h),   # set-up zones + learned zones in use + line hints
                     "flow": _flow_message(pipeline, w, h),              # the learned traffic-flow arrows + whether the demo reversal is on (None: no rule uses the flow)
                     "buffer": buffer_info,                              # the playback buffer: state, how much is ready, the playing speed
                     "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -727,6 +913,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         """A picture is done: into the playback buffer, or (no buffer) straight to the dashboard."""
         packet = await package(picture_frame, encoding, t)
         TIMER.mark("produced")
+        START.mark("first picture finished")
         if playout is None:
             await transmit(packet, None)
         else:
@@ -743,6 +930,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 info["pos_s"] = round(start_s + (playout.play_t or 0.0), 2)   # where on the video the screen is (Refresh / Resume go on from here)
             _playout_info.clear()
             _playout_info.update(info)
+            if info["state"] == "playing":
+                START.mark("playing")
             if info["state"] == "filling" and time.monotonic() - last_note >= 0.5:
                 last_note = time.monotonic()
                 note = {"type": "buffer", **info}
@@ -764,6 +953,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         nonlocal last_yolo_results
         job = await group["fut"]                                   # stage A: ready by now, or the loop waits for it
         _picture, last_yolo_results = await loop.run_in_executor(_PIPELINE_EXECUTOR, pipeline.judge_stage, job)
+        START.mark("first picture judged")
         await save_tickets(pipeline.ledger_manager.drain_tickets())   # stage B is idle now, so the ledgers are read safely here
         await mock_violations(group["frames"][0][0])
         for picture_frame, encoding, t in group["frames"]:
@@ -830,7 +1020,7 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 road_version = road.version
                 pipeline.set_learned_zones(road.active_zones())
             # The JPEG starts now, in a worker thread, so it is ready (or nearly) when the picture is shown.
-            encoding = None if PICTURE_MODE == "relay" else loop.run_in_executor(None, _picture_b64_timed, frame)
+            encoding = None if PICTURE_MODE == "relay" else loop.run_in_executor(None, _picture_b64_timed, frame, pipeline, last_yolo_results)
 
             frame_idx += 1
             run_inference = True if INFER_EVERY_N_FRAMES == 0 else (frame_idx % (INFER_EVERY_N_FRAMES + 1) == 0)

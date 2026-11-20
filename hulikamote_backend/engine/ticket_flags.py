@@ -98,26 +98,48 @@ def _continues(a: dict, b: dict, gap_s: float, min_iou: float) -> bool:
     return _iou(last["bbox"], first["bbox"]) >= min_iou
 
 
+def _meets(last: dict | None, first: dict | None, gap_s: float, min_iou: float) -> bool:
+    """_continues, for the last photo of one ticket and the first photo of another (None = the ticket has no photo with a box)."""
+    if last is None or first is None:
+        return False
+    t_last, t_first = last.get("t"), first.get("t")
+    if t_last is None or t_first is None:
+        return False
+    if not 0 <= t_first - t_last <= gap_s:
+        return False
+    return _iou(last["bbox"], first["bbox"]) >= min_iou
+
+
 def find_duplicates(tickets: list[dict], distance: Callable[[str, str], int], sensitivity=DEFAULT_SENSITIVITY) -> dict[str, list[dict]]:
     """Map ticket_uid -> possible_duplicate flags against every other ticket."""
     _, gap_s, min_iou = _params(sensitivity)
     out: dict[str, list[dict]] = {t["ticket_uid"]: [] for t in tickets}
-    for i, a in enumerate(tickets):
-        for b in tickets[i + 1:]:
+    # What a pair needs from a ticket is worked out ONCE here: the pair loop below runs n*(n-1)/2 times, and a live run holds hundreds of tickets.
+    rows = []
+    for t in tickets:
+        metas = _metas(t)
+        plate = t.get("plate_text", "")
+        known = isinstance(plate, str) and plate not in _UNIDENTIFIED
+        rows.append((t["ticket_uid"], t.get("not_same_as", []), plate, plate.upper() if known else "", known,
+                     metas[0] if metas else None, metas[-1] if metas else None))
+    for i in range(len(rows)):
+        uid_a, not_a, plate_a, up_a, known_a, first_a, last_a = rows[i]
+        for j in range(i + 1, len(rows)):
+            uid_b, not_b, plate_b, up_b, known_b, first_b, last_b = rows[j]
             # The operator already answered "different car" for this pair.
-            if b["ticket_uid"] in a.get("not_same_as", []) or a["ticket_uid"] in b.get("not_same_as", []):
+            if uid_b in not_a or uid_a in not_b:
                 continue
             reasons = []
-            pa, pb = a.get("plate_text", ""), b.get("plate_text", "")
-            if pa not in _UNIDENTIFIED and pb not in _UNIDENTIFIED and distance(pa.upper(), pb.upper()) <= 1:
-                reasons.append(f"plates {pa} / {pb} are identical or differ by one character")
-            if _continues(a, b, gap_s, min_iou) or _continues(b, a, gap_s, min_iou):
+            # (plates that differ in length by more than one letter are never one letter apart: the distance is not even worked out)
+            if known_a and known_b and abs(len(up_a) - len(up_b)) <= 1 and distance(up_a, up_b) <= 1:
+                reasons.append(f"plates {plate_a} / {plate_b} are identical or differ by one character")
+            if _meets(last_a, first_b, gap_s, min_iou) or _meets(last_b, first_a, gap_s, min_iou):
                 reasons.append("one ticket starts on top of where the other ended")
             if not reasons:
                 continue
             detail = "; ".join(reasons)
-            out[a["ticket_uid"]].append({"type": "possible_duplicate", "other_uid": b["ticket_uid"], "detail": detail})
-            out[b["ticket_uid"]].append({"type": "possible_duplicate", "other_uid": a["ticket_uid"], "detail": detail})
+            out[uid_a].append({"type": "possible_duplicate", "other_uid": uid_b, "detail": detail})
+            out[uid_b].append({"type": "possible_duplicate", "other_uid": uid_a, "detail": detail})
     return out
 
 

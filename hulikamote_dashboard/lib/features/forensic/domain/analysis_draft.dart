@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'marking_shape.dart';
 import 'violation_catalog.dart';
 
 /// Pipeline options shared by every violation of one analysis.
@@ -242,6 +243,10 @@ class AnalysisDraft extends ChangeNotifier {
 
   /// "Crossing a solid line" needs no drawing: with no line drawn, the analysis finds the painted solid lines in the video
   /// (the switch in its editor, on unless the operator turned it off). A line that is drawn is used instead.
+  /// The road markings of a live setup (lanes, roads, crosswalks, sidewalks), so the zone editors can show them and put a sign on a lane.
+  /// Empty in the Forensic wizard.
+  List<MarkingShape> get markingShapes => const [];
+
   bool findsLinesItself(String key) => key == 'crossing_solid_line' && ((config(key)['auto_lines'] as bool?) ?? true);
 
   /// The overlay signs placed on the picture: for "Restricted lane" [{type, x, y}], for "Illegal loading / unloading" and
@@ -253,6 +258,7 @@ class AnalysisDraft extends ChangeNotifier {
   /// area, so a sign is enough and nothing needs drawing). Their signs are [{x, y, w, h}] in the same reference space.
   static const signZoneKeys = {
     'illegal_loading',
+    'illegal_turn',
     'illegal_parking',
     'double_parking',
     'blocking_intersection',
@@ -271,6 +277,9 @@ class AnalysisDraft extends ChangeNotifier {
 
   /// How many overlay crosswalks a rule has (0 for a rule that has none).
   int crosswalkCount(String key) => key == 'pedestrian_lane' ? crosswalks(key).length : 0;
+
+  /// A line about what the setup already knows for [key] (the Live Monitor reads its road markings), shown with the rule's settings. Null: nothing to say.
+  String? roadHint(String key) => null;
 
   bool zonesReady(String key) =>
       !needsZone(key) ||

@@ -192,12 +192,39 @@ class CameraApi {
 
   Future<void> deleteRoadPreset(String id) async => _json(await _client.delete(_uri('/settings/road-presets/$id')));
 
+  /// Deletes every ticket the Live Monitor made before (database rows, report, evidence photos). Forensic analyses are not touched.
+  /// {ok, tickets, rows, files}.
+  Future<Map<String, dynamic>> clearLiveTickets() async => _json(await _client.delete(_uri('/settings/live/tickets')));
+
   /// Empties the setup (violations, zones, road markings, setup picture): the Live Monitor starts empty each time it is opened.
   Future<void> resetLiveSetup() async => _json(await _client.post(_uri('/settings/live/reset')));
+
+  /// Tells the backend the Live Monitor is about to start (Start or Set up violations was pressed): it loads and warms its models in the
+  /// background while the setup is made, so Apply finds them ready. Fire and forget: it only saves time, so a failure is not an error.
+  Future<void> prepareFeed() async {
+    try {
+      await _client.post(_uri('/settings/live/prepare')).timeout(const Duration(seconds: 4));
+    } catch (_) {
+      // the models then load when the feed starts, as before
+    }
+  }
 
   /// Everything the Performance popup shows (step times, a timeline of the last seconds, CPU / RAM / GPU load, the device of each model).
   Future<Map<String, dynamic>> livePerf({double window = 2.5}) async =>
       _json(await _client.get(_uri('/settings/live/perf', {'window': '$window'})).timeout(const Duration(seconds: 4)));
+
+  /// The violations whose overlay objects (signs, painted crosswalks and lines) are hidden on the live picture.
+  Future<List<String>> hiddenOverlays() async {
+    final body = await _json(await _client.get(_uri('/settings/live/overlays')));
+    return [for (final k in (body['hidden'] as List? ?? const [])) '$k'];
+  }
+
+  /// Hides the overlay objects of these violations on the live picture (the rules still judge). Takes effect on the next picture.
+  Future<void> setHiddenOverlays(Iterable<String> keys) async => _json(await _client.put(
+    _uri('/settings/live/overlays'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'hidden': keys.toList()}),
+  ));
 
   /// The violations and settings the Live Monitor uses now, in the wizard's own shape ({} when none were set up).
   Future<Map<String, dynamic>> liveSetup() async => _json(await _client.get(_uri('/settings/live/setup')));

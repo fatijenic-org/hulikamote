@@ -37,7 +37,7 @@ class ReplayBoxes {
 
 /// One thing to draw: a vehicle box with its label lines, a mark box (why it was flagged), or a note under a vehicle.
 class BoxSpec {
-  const BoxSpec({this.box, required this.color, this.lines = const [], this.plate, this.note, this.noteAt, this.timer});
+  const BoxSpec({this.box, required this.color, this.lines = const [], this.plate, this.note, this.noteAt, this.timer, this.trail});
 
   final List<double>? box; // x, y, w, h in video pixels
   final Color color;
@@ -46,6 +46,7 @@ class BoxSpec {
   final String? note;
   final List<double>? noteAt;
   final String? timer; // a stopwatch chip on the bottom edge of [box] (e.g. "PARKED 0:07 / 0:10"); nothing else is drawn for it
+  final List<List<double>>? trail; // the light line behind a vehicle (x, y points, oldest first): the way it drove (Live Monitor, Crossing a solid line)
 
   static List<double>? _nums(Object? v) => v is List ? [for (final n in v) (n as num).toDouble()] : null;
 
@@ -59,6 +60,7 @@ class BoxSpec {
       note: j['note'] as String?,
       noteAt: _nums(j['at']),
       timer: j['timer'] as String?,
+      trail: j['trail'] is List ? [for (final p in (j['trail'] as List)) if (p is List && p.length >= 2) [(p[0] as num).toDouble(), (p[1] as num).toDouble()]] : null,
     );
   }
 }
@@ -92,6 +94,10 @@ class ReplayBoxesPainter extends CustomPainter {
   static void paintSpecs(Canvas canvas, List<BoxSpec> specs, double width, double height, double px) {
     canvas.clipRect(Rect.fromLTWH(0, 0, width, height));
     for (final b in specs) {
+      if (b.trail != null) _trail(canvas, b, px);                 // the trails go under the boxes
+    }
+    for (final b in specs) {
+      if (b.trail != null) continue;
       if (b.note != null && b.noteAt != null) {
         _note(canvas, b.note!, b.noteAt!, width, height, px);
       } else if (b.timer != null && b.box != null) {
@@ -109,6 +115,23 @@ class ReplayBoxesPainter extends CustomPainter {
         }
       }
     }
+  }
+
+  /// The light line a vehicle left behind it: fainter the older it is, with a dark edge so it shows on a white road, and a dot where the
+  /// vehicle is.
+  static void _trail(Canvas canvas, BoxSpec b, double px) {
+    final pts = b.trail!;
+    if (pts.length < 2) return;
+    final n = pts.length;
+    for (var i = 1; i < n; i++) {
+      final a = Offset(pts[i - 1][0], pts[i - 1][1]), c = Offset(pts[i][0], pts[i][1]);
+      final fade = 0.25 + 0.75 * i / n;
+      canvas.drawLine(a, c, Paint()..color = Colors.black.withValues(alpha: 0.35 * fade)..strokeWidth = 4 * px..strokeCap = StrokeCap.round);
+      canvas.drawLine(a, c, Paint()..color = b.color.withValues(alpha: 0.9 * fade)..strokeWidth = 2.2 * px..strokeCap = StrokeCap.round);
+    }
+    final end = Offset(pts.last[0], pts.last[1]);
+    canvas.drawCircle(end, 3.6 * px, Paint()..color = Colors.black.withValues(alpha: 0.45));
+    canvas.drawCircle(end, 2.6 * px, Paint()..color = b.color);
   }
 
   /// The label lines stacked above the box (the last line, the vehicle, nearest to it), kept inside the picture: a vehicle that is

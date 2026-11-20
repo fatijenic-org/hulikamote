@@ -22,13 +22,16 @@ import '../../../forensic/presentation/widgets/results_workspace.dart';
 /// The tickets are the standing run "live" of the forensic review (see routers/forensic.py publish_live_ticket), so every ticket tool of
 /// the analyzer works on them. New tickets appear while this page is open.
 class LiveTicketsScreen extends StatefulWidget {
-  const LiveTicketsScreen({super.key, this.api, this.media = const ForensicMedia(), this.focusDbId});
+  const LiveTicketsScreen({super.key, this.api, this.media = const ForensicMedia(), this.focusDbId, this.focusUid});
 
   final ForensicApi? api;
   final ForensicMedia media;
 
   /// The Inbox row of a ticket to open at once (the alert the reviewer tapped).
   final String? focusDbId;
+
+  /// The ticket (its uid) to open at once: the one tapped in the Live Monitor's side list.
+  final String? focusUid;
 
   @override
   State<LiveTicketsScreen> createState() => _LiveTicketsScreenState();
@@ -103,12 +106,15 @@ class _LiveTicketsScreenState extends State<LiveTicketsScreen> {
       tickets: tickets,
       statuses: {for (final t in tickets) t.uid: _statusFromRows(t, saved)},
     );
-    final focus = widget.focusDbId;
-    if (focus != null) {
-      for (final t in tickets) {
-        if (t.dbIds.contains(focus)) controller.select(t.uid);
+    final focus = widget.focusDbId, focusUid = widget.focusUid;
+    var focused = false;
+    for (final t in tickets) {
+      if ((focus != null && t.dbIds.contains(focus)) || (focusUid != null && t.uid == focusUid)) {
+        controller.select(t.uid);
+        focused = true;
       }
     }
+    if (!focused) controller.select(tickets.first.uid);          // no list here: a ticket is always open
     _controller?.dispose();
     _controller = controller;
   }
@@ -151,6 +157,7 @@ class _LiveTicketsScreenState extends State<LiveTicketsScreen> {
                 subtitle: 'The plate is read here, from the photos of each ticket',
                 onBack: () => Navigator.of(context).pop(),
                 onNewAnalysis: () => Navigator.of(context).pop(),
+                showQueue: false,                                    // the Live Monitor's side list is the list
               ),
       ),
     );

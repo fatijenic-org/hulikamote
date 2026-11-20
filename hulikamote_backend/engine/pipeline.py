@@ -12,6 +12,7 @@ Handles one frame at a time:
 import json
 import logging
 import time
+import types
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,246 +57,22 @@ EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "snapshots" / "evidence"
 WHOLE_FRAME_ZONE_KEYS = tuple(v.zone_key for v in ZONE_VIOLATIONS if v.whole_frame)
 
 
-# ─── EasyOCR (lazy singleton) ─────────────────────────────────────────────────
-
-_ocr_reader = None
-
-
-_paddle_reader = None
-
-def _get_ocr_reader(engine="easyocr"):
-    global _ocr_reader, _paddle_reader
-    
-    if engine == "paddleocr":
-        if _paddle_reader is None:
-            try:
-                from paddleocr import PaddleOCR
-                import logging
-                logging.getLogger("ppocr").setLevel(logging.ERROR)
-                _paddle_reader = PaddleOCR(use_angle_cls=False, lang='en')
-            except ImportError:
-                log.warning("[OCR] paddleocr not installed.")
-                return None
-        return _paddle_reader
-        
-    # Default to easyocr
-    if _ocr_reader is None:
-        try:
-            import easyocr
-            _ocr_reader = easyocr.Reader(['en'], gpu=True, verbose=False)
-        except ImportError:
-            log.warning("[OCR] easyocr not installed.")
-    return _ocr_reader
-
-
-
-_sr_model = None
-def _apply_super_resolution(image: np.ndarray) -> np.ndarray:
-    """
-    Applies LapSRN (Laplacian Pyramid Super-Resolution Network) to upscale 
-    blurry dashcam crops by 8x using deep learning instead of mathematical interpolation.
-    """
-    global _sr_model
-    import cv2
-    from pathlib import Path
-    
-    if _sr_model is None:
-        try:
-            model_path = Path(__file__).parent.parent / "models" / "LapSRN_x8.pb"
-            if model_path.exists():
-                _sr_model = cv2.dnn_superres.DnnSuperResImpl_create()
-                _sr_model.readModel(str(model_path))
-                _sr_model.setModel("lapsrn", 8)
-            else:
-                _sr_model = "failed"
-        except Exception as e:
-            print(f"[Warning] SuperResolution disabled: {e}")
-            _sr_model = "failed"
-            
-    if _sr_model and _sr_model != "failed":
-        try:
-            return _sr_model.upsample(image)
-        except Exception as e:
-            pass
-            
-    # Fallback to normal resize if model fails
-    h, w = image.shape[:2]
-    return cv2.resize(image, (w * 4, h * 4), interpolation=cv2.INTER_CUBIC)
-
-
-_realesrgan_session = None
-def _apply_realesrgan(image: np.ndarray) -> np.ndarray:
-    global _realesrgan_session
-    import onnxruntime as ort
-    from pathlib import Path
-    
-    if _realesrgan_session is None:
-        try:
-            base_dir = Path(__file__).resolve().parent.parent / "models"
-            model_path = base_dir / "realesrgan.onnx"
-            if not model_path.exists():
-                for p in base_dir.rglob("*.onnx"):
-                    if p.name == "realesrgan.onnx":
-                        model_path = p
-                        break
-
-            if model_path.exists():
-                from inference.providers import make_session
-                _realesrgan_session = make_session(str(model_path))
-            else:
-                _realesrgan_session = "failed"
-        except Exception as e:
-            _realesrgan_session = "failed"
-            print(f"[Enhancement] Failed to load realesrgan: {e}")
-            
-    if _realesrgan_session == "failed" or _realesrgan_session is None:
-        # Graceful fallback to Lanczos
-        h, w = image.shape[:2]
-        return cv2.resize(image, (w * 4, h * 4), interpolation=cv2.INTER_LANCZOS4)
-        
-    try:
-        input_name = _realesrgan_session.get_inputs()[0].name
-        
-        # Preprocess: BGR to RGB, normalize, NCHW format
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        input_tensor = rgb.astype(np.float32) / 255.0
-        input_tensor = np.transpose(input_tensor, (2, 0, 1))
-        input_tensor = np.expand_dims(input_tensor, axis=0)
-        
-        # Run GAN
-        outputs = _realesrgan_session.run(None, {input_name: input_tensor})
-        
-        # Postprocess
-        output_tensor = np.squeeze(outputs[0])
-        output_tensor = np.clip(output_tensor, 0, 1)
-        output_tensor = np.transpose(output_tensor, (1, 2, 0))
-        output_bgr = cv2.cvtColor((output_tensor * 255.0).astype(np.uint8), cv2.COLOR_RGB2BGR)
-        return output_bgr
-    except Exception as e:
-        print(f"[Enhancement] realesrgan Error during inference: {e}")
-        h, w = image.shape[:2]
-        return cv2.resize(image, (w * 4, h * 4), interpolation=cv2.INTER_LANCZOS4)
-
-def _ocr_plate_image(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "none") -> tuple[str, str, np.ndarray, np.ndarray, float]:
-    """
-    Run EasyOCR or PaddleOCR on a plate crop.
-    Returns (raw_text, corrected_text, raw_crop, enhanced_crop).
-    raw_crop is the original unmodified image.
-    enhanced_crop is after GAN/SR/Lanczos upscaling (may be identical to raw_crop if no enhancement ran).
-    """
-    reader = _get_ocr_reader(ocr_engine)
-    if reader is None:
-        return "unidentified", "unidentified", plate_crop, plate_crop, 0.0
-        
-    h, w = plate_crop.shape[:2]
-    if h == 0 or w == 0:
-        return "unidentified", "unidentified", plate_crop, plate_crop, 0.0
-
-    # Save original before enhancement so we can return both
-    raw_crop = plate_crop.copy()
-
-    # All enhancers are unconditional — always upscale for better OCR readability
-    if enhancement == "realesrgan":
-        plate_crop = _apply_realesrgan(plate_crop)
-    elif enhancement == "lapsrn":
-        plate_crop = _apply_super_resolution(plate_crop)
-    elif enhancement == "lanczos":
-        plate_crop = cv2.resize(plate_crop, (w * 4, h * 4), interpolation=cv2.INTER_LANCZOS4)
-
-    sr_crop = plate_crop  # enhanced copy (always different from raw_crop now)
-
-    # PaddleOCR performs best on color images (BGR). EasyOCR can use grayscale.
-    gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY)
-    
-    try:
-        raw = ""
-        confidence = 0.0
-        
-        if ocr_engine == "paddleocr":
-            # PaddleOCR returns a nested list structure. Pass the color BGR image!
-            try:
-                results = reader.ocr(plate_crop)
-            except TypeError:
-                results = reader.ocr(plate_crop, cls=False)
-                
-            if results and results[0]:
-                raw = "".join([res[1][0] for res in results[0]]).strip().upper().replace(" ", "")
-                # Average the confidences
-                confidences = [res[1][1] for res in results[0]]
-                if confidences:
-                    confidence = sum(confidences) / len(confidences)
-                import re
-                raw = re.sub(r'[^0-9A-Z]', '', raw)
-        else:
-            # EasyOCR detail=1 returns [(bbox, text, prob)]
-            results = reader.readtext(gray, detail=1, paragraph=False, allowlist='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-            if results:
-                raw = "".join([res[1] for res in results]).strip().upper().replace(" ", "")
-                confidences = [res[2] for res in results]
-                if confidences:
-                    confidence = sum(confidences) / len(confidences)
-                
-        if raw:
-            
-            if plate_format == "raw":
-                return raw, raw, raw_crop, sr_crop, confidence
-                
-            dict_char_to_int = {'O': '0', 'I': '1', 'J': '3', 'A': '4', 'G': '6', 'S': '5', 'B': '8', 'Z': '2', 'Q': '0', 'D': '0', 'T': '7', 'U': '0', 'Y': '7', 'P': '0', 'F': '5', 'L': '4'}
-            dict_int_to_char = {'0': 'O', '1': 'I', '3': 'J', '4': 'A', '6': 'G', '5': 'S', '8': 'B', '2': 'Z', '7': 'T', '9': 'P'}
-            
-            cleaned = ""
-            mapping = {}
-            if plate_format == "ph_standard":
-                mapping = {0: dict_int_to_char, 1: dict_int_to_char, 2: dict_int_to_char, 
-                           3: dict_char_to_int, 4: dict_char_to_int, 5: dict_char_to_int, 6: dict_char_to_int}
-            elif plate_format == "uk_standard":
-                mapping = {0: dict_int_to_char, 1: dict_int_to_char, 
-                           2: dict_char_to_int, 3: dict_char_to_int,
-                           4: dict_int_to_char, 5: dict_int_to_char, 6: dict_int_to_char}
-            
-            if mapping:
-                for i in range(len(raw)):
-                    if i in mapping:
-                        if raw[i] in mapping[i]:
-                            cleaned += mapping[i][raw[i]]
-                        else:
-                            cleaned += raw[i]
-                    else:
-                        cleaned += raw[i]
-                return raw, cleaned, raw_crop, sr_crop, confidence
-                
-            return raw, raw, raw_crop, sr_crop, confidence
-
-    except Exception as e:
-        print(f"OCR Error: {e}")
-        
-    return "unidentified", "unidentified", raw_crop, sr_crop, 0.0
-
-
-def _enlarge_for_ocr(image: np.ndarray) -> np.ndarray:
-    """A plain enlargement (no enhancement model) for a plate that is only a few pixels tall, so the OCR can read the "as seen" crop at all."""
-    h, w = image.shape[:2]
-    if h == 0 or w == 0 or h >= 48:
-        return image
-    k = max(2, int(round(64 / h)))
-    return cv2.resize(image, (w * k, h * k), interpolation=cv2.INTER_CUBIC)
+# ─── Plate reading (its own process) ───────────────────────────────────────────
+# The OCR and the GAN live in engine/plate_ocr.py and run in the plate worker PROCESS (engine/plate_service.py), never in the
+# interpreter of the live feed. The two functions below keep their old names and signatures; they hand the crop to that process.
+from engine.plate_ocr import (  # noqa: E402,F401  (re-exported: the old names stay importable from here)
+    _apply_realesrgan, _apply_super_resolution, _enlarge_for_ocr, _get_ocr_reader, _ocr_plate_image,
+)
 
 
 def _extract_plate_reads(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "lanczos") -> dict:
     """
     Read a plate crop TWICE: as it was seen (only enlarged, never enhanced) and enhanced (realesrgan = the GAN, lapsrn, lanczos).
     Returns {"raw_crop", "enhanced_crop", "reads": [{"source": "raw" | "enhanced", "raw", "cleaned", "confidence"}, ...]}.
-    With enhancement "none" there is nothing to compare: one read, "raw". engine/plate_vote.py grades the reads.
+    The reading is done by the plate worker process (see plate_service.py). engine/plate_vote.py grades the reads.
     """
-    raw_crop = plate_crop.copy()
-    seen = _ocr_plate_image(_enlarge_for_ocr(raw_crop), plate_format, ocr_engine, "none")
-    reads = [{"source": "raw", "raw": seen[0], "cleaned": seen[1], "confidence": float(seen[4])}]
-    enhanced_crop = raw_crop
-    if enhancement not in ("none", "", None):
-        enhanced = _ocr_plate_image(raw_crop, plate_format, ocr_engine, enhancement)
-        enhanced_crop = enhanced[3]
-        reads.append({"source": "enhanced", "raw": enhanced[0], "cleaned": enhanced[1], "confidence": float(enhanced[4])})
-    return {"raw_crop": raw_crop, "enhanced_crop": enhanced_crop, "reads": reads}
+    from engine.plate_service import SERVICE
+    return SERVICE.read_crop(plate_crop, plate_format, ocr_engine, enhancement)
 
 
 def _extract_plate_text(plate_crop: np.ndarray, plate_format: str = "raw", ocr_engine: str = "easyocr", enhancement: str = "lanczos"):
@@ -533,12 +310,31 @@ class DecoupledPipeline:
                 violation.draw_zone(self, frame, i, zone)
         return frame
 
+    def live_overlay_zones(self, frame_w: int, frame_h: int, hide=()) -> list:
+        """[(violation, index, zone)] of the zones that carry an overlay object (sign, painted crosswalk or line) and are not hidden."""
+        out = []
+        scaled = self._get_scaled_rois(frame_w, frame_h)
+        for violation in ZONE_VIOLATIONS:
+            if violation.key not in self.registry.active_violations or violation.key in hide:
+                continue
+            for i, zone in enumerate(scaled.get(violation.zone_key, [])):
+                if violation.has_overlay(zone):
+                    out.append((violation, i, zone))
+        return out
+
+    def draw_live_overlays(self, frame: np.ndarray, items: list, detections=()) -> None:
+        """Draws the overlay objects of `items` (live_overlay_zones) on `frame`: no outlines (the dashboard draws those). Paint goes under
+        `detections`. Safe to call from another thread: it touches nothing of the pipeline's own state."""
+        view = types.SimpleNamespace(_draw_dets=detections)
+        for violation, i, zone in items:
+            violation.draw_overlay(view, frame, i, zone)
+
     @staticmethod
     def _crossing_vehicle_changed(ledger) -> bool:
         """True for a ledger flagged ONLY for Crossing a solid line whose tracker number has gone to another vehicle since (a jump or a long
         silence in its path, engine/track_continuity.py): the vehicle that crossed is gone from it, so the box that now carries its number
         must not be called a violator and gets no evidence photo. The ticket keeps the photos taken while it still was the vehicle."""
-        if ledger.violations != {"crossing_solid_line"} or ledger.pending or not ledger.cross_points:
+        if not ledger.violations or not ledger.violations <= {"crossing_solid_line", "illegal_turn"} or ledger.pending or not ledger.cross_points:
             return False
         run = last_run(list(ledger.path))
         return bool(run) and run[0][0] > ledger.cross_points[-1][0]
@@ -578,8 +374,8 @@ class DecoupledPipeline:
         # Burn the vehicle bounding box
         annotated = yolo.draw_detections(base_frame, [det])
         marks.draw_marks(annotated, ledger, det.bbox)
-        if getattr(self, "show_paths", False) and "crossing_solid_line" in ledger.violations:
-            marks.draw_path(annotated, ledger)       # the Live Monitor shows how the vehicle drove across the line
+        if getattr(self, "show_paths", False) and ledger.violations & {"crossing_solid_line", "illegal_turn"}:
+            marks.draw_path(annotated, ledger)       # the Live Monitor shows how the vehicle drove across the line, or turned
 
         path = YoloInference.save_snapshot(annotated, EVIDENCE_DIR)
 
@@ -644,6 +440,8 @@ class DecoupledPipeline:
             ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
             if ledger is not None:
                 specs += marks.mark_specs(ledger, det.bbox)
+        if getattr(self, "show_paths", False) and "crossing_solid_line" in self.registry.active_violations:
+            specs += marks.trail_specs(self.ledger_manager, detections)     # the Live Monitor: the way of every vehicle, to check it against the line
         for spec in specs:
             if "color" in spec:
                 spec["color"] = spec["color"][::-1]     # BGR (OpenCV) -> RGB

@@ -7,7 +7,7 @@ import 'dart:ui' show Offset;
 /// side, side by side along the long one.
 List<Offset>? zebraQuad(List<Offset> shape) {
   if (shape.length < 3) return null;
-  var hull = _hull(shape);
+  var hull = convexHull(shape);
   if (hull.length < 3) return null;
   if (hull.length != 4) hull = _box(hull);
   if (_area(hull).abs() < 4) return null;
@@ -48,8 +48,8 @@ double _area(List<Offset> p) {
   return a / 2;
 }
 
-/// Convex hull (monotone chain).
-List<Offset> _hull(List<Offset> points) {
+/// Convex hull (monotone chain), also used by the road markings.
+List<Offset> convexHull(List<Offset> points) {
   final p = [...points]..sort((a, b) => a.dx != b.dx ? a.dx.compareTo(b.dx) : a.dy.compareTo(b.dy));
   double cross(Offset o, Offset a, Offset b) => (a.dx - o.dx) * (b.dy - o.dy) - (a.dy - o.dy) * (b.dx - o.dx);
   final lower = <Offset>[];

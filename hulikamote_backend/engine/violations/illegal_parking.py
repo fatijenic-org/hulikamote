@@ -8,7 +8,13 @@ Whole picture (nothing drawn, no sign): the whole picture is the zone and the ve
 other traffic keeps driving past it along the learned road (a red-light queue is not parking). The enforcer's time
 limit applies. Ticking the rule means "no parking on this road".
 A vehicle with a blinking indicator or hazard lights has not parked yet (it signals, so it is pulling in or out, or waiting
-for a gap): the stopwatch is held while the lights blink and starts again when they stop (see indicators.py).
+for a gap): the stopwatch is held while the lights blink and starts again when they stop (see indicators.py). The hold has an end: a
+lamp that blinks for BLINK_HOLD_MAX_S without a break counts as a vehicle that is parked with its hazard lights on (or as a wrong
+reading), so no vehicle is let off for ever.
+One parked vehicle, one ticket (engine/parked_vehicles.py): a parked vehicle does not move, so the spot it stands on is its identity.
+When the tracker gives a vehicle that was already flagged a new number (something drove in front of it), the vehicle is recognised by
+its spot, size and colours and gets no second stopwatch and no second ticket. Before that, a stopped vehicle that goes out of sight is
+kept for a while and joined to its new number strictly (ledger.holds_place, engine/track_stitcher.py).
 Overlay "NO PARKING" signs (engine/loading_signs.py, same as the no-loading signs): the operator places a sign on the picture and
 resizes it; the sign's box is a no-parking area. It is drawn on the evidence photos and the result video only, never written into the
 video, and belongs to the analysis. Drawn zones and signs can be mixed; the rule's time limit applies to both.
@@ -25,8 +31,10 @@ from engine.violations.geometry import STOP_SPEED, point_in_polygon
 from engine.violations.indicators import is_signalling, sample_indicators
 from engine.violations.scene import recently_flowing
 
-BLINK_LOOKBACK_S = 5.0      # how much of the recent past is read for a blinking indicator
+BLINK_LOOKBACK_S = 6.0      # how much of the recent past is read for a blinking indicator
 BLINK_MEMORY_S = 3.0        # a blink seen this recently still counts: a lamp is not read clearly in every frame
+BLINK_HOLD_MAX_S = 60.0     # a lamp that blinks this long without a break no longer holds the stopwatch
+SAMPLE_SPEED = 2.5 * STOP_SPEED     # a vehicle this slow is read for blinking: it is about to stop, and the blinking is seen from then on
 
 
 class IllegalParking(Violation):
@@ -59,6 +67,13 @@ class IllegalParking(Violation):
                           **overlay_objects.zone_fields(sign, kind, cfg)})
         return zones
 
+    def has_overlay(self, zone):
+        return bool(zone.get("sign"))
+
+    def draw_overlay(self, pipe, frame, index, zone):
+        if zone.get("sign"):
+            overlay_objects.draw_zone_object(frame, zone, parking_reasons.kind_of({"kind": zone.get("reason")}))
+
     def draw_zone(self, pipe, frame, index, zone):
         if zone.get("sign"):
             overlay_objects.draw_zone_object(frame, zone, parking_reasons.kind_of({"kind": zone.get("reason")}))
@@ -71,14 +86,18 @@ class IllegalParking(Violation):
 
     def prepare(self, pipe, frame, detections, zones, t):
         """Read the indicators of vehicles that stand still. A moving vehicle is never judged here, so it is not read."""
-        sample_indicators(pipe, frame, detections, wanted=lambda ledger: ledger.get_speed() < STOP_SPEED)
+        sample_indicators(pipe, frame, detections, wanted=lambda ledger: ledger.get_speed() < SAMPLE_SPEED)
 
     def signalling(self, ledger, t) -> bool:
-        """A blinking indicator or hazard light, seen in the last few seconds."""
-        memory = f"{self.key}:blink"
+        """A blinking indicator or hazard light, seen in the last few seconds, and not for longer than BLINK_HOLD_MAX_S in one go."""
+        seen, since = f"{self.key}:blink", f"{self.key}:blink_since"
         if is_signalling(ledger, t, BLINK_LOOKBACK_S):
-            ledger.stop_timers[memory] = t
-        return t - ledger.stop_timers.get(memory, -math.inf) <= BLINK_MEMORY_S
+            ledger.stop_timers[seen] = t
+            ledger.stop_timers.setdefault(since, t)
+        if t - ledger.stop_timers.get(seen, -math.inf) > BLINK_MEMORY_S:
+            ledger.stop_timers.pop(since, None)       # it stopped blinking: the next spell is counted from its own start
+            return False
+        return t - ledger.stop_timers.get(since, t) <= BLINK_HOLD_MAX_S
 
     def evaluate(self, mgr, track_id, zones):
         """Each zone: {"polygon": [...], "time_limit": seconds}."""
@@ -97,6 +116,16 @@ class IllegalParking(Violation):
             ledger.stationary_start_time = None
             marks.clear_timer(ledger, self.key)
             return False
+        parked = getattr(mgr, "parked", None)
+        if parked is not None:
+            parked.purge(t)
+            known = parked.find(ledger, mgr.ledgers)  # a vehicle that already got its ticket here, under another tracker number?
+            if known is not None:
+                parked.touch(known, ledger)
+                if known.ledger_id != ledger.track_id:
+                    ledger.stationary_start_time = None      # the same vehicle: no stopwatch, no second ticket
+                    marks.clear_timer(ledger, self.key)
+                    return False
         if self.signalling(ledger, t):
             ledger.stationary_start_time = None     # lights are blinking: not parked yet, the stopwatch starts again when they stop
             marks.clear_timer(ledger, self.key)
@@ -111,6 +140,8 @@ class IllegalParking(Violation):
             marks.set_timer(ledger, self.key, f"PARKED {marks.clock(elapsed)} / {marks.clock(limit)}", elapsed >= limit, t)
         if elapsed >= limit and flowing:
             ledger.violations.add(self.key)
+            if parked is not None:
+                parked.remember(ledger)               # from now on this spot and this vehicle are a ticket already
             if zone.get("reason"):                   # say why on the evidence photos: "Within 4 m of fire hydrant"
                 box = ledger.history[-1][3]
                 marks.set_marks(ledger, self.key, box, [(box, parking_reasons.mark_of(zone["reason"]), marks.RED)])

@@ -554,6 +554,9 @@ class BoundingBoxPainter extends CustomPainter {
           canvas.drawLine(linePts[i], linePts[i + 1], edge);
         }
       }
+      for (final turn in zone.arrows) {                           // Illegal turn: the banned turns of this road (Layers can hide them)
+        if (turn.length >= 2) paintRoadPath(canvas, [for (final p in turn) Offset(p[0] * scaleX, p[1] * scaleY)], const Color(0xFFFF8C00), width: 5, head: 20);
+      }
       if (showRoadArrows && (zone.flow != null || zone.violation == 'counterflow') && zone.arrow.length >= 2) {          // the way the traffic goes on this side of the road
         paintRoadPath(canvas, [for (final p in zone.arrow) Offset(p[0] * scaleX, p[1] * scaleY)], colour, width: 5, head: 20);
       }

@@ -45,7 +45,7 @@ class DeepSortStrategy(BaseTracker):
     # ====================================================================================
     # [LOCKED BY USER]: DO NOT MODIFY THESE TRACKER PARAMETERS WITHOUT EXPLICIT PERMISSION
     # ====================================================================================
-    def __init__(self, lost_track_buffer: int = 90, max_dist: float = 0.4):
+    def __init__(self, lost_track_buffer: int = 90, max_dist: float = 0.4, reuse: "DeepSortStrategy | None" = None):
         import os
         import torch
         from engine.deep_sort.deep_sort import DeepSort
@@ -62,8 +62,18 @@ class DeepSortStrategy(BaseTracker):
             max_age=lost_track_buffer,  # 60→90: longer occlusion buffer before a track is killed
             n_init=3,                   # 1→3: require 3 consecutive confirmed frames before locking an ID
             nn_budget=100,
-            use_cuda=use_cuda
+            use_cuda=use_cuda,
+            # the tracker this one replaces: its loaded ReID network is used again (nothing is tracked by the network itself)
+            extractor=reuse.tracker.extractor if isinstance(reuse, DeepSortStrategy) else None,
         )
+
+    def warm_up(self) -> None:
+        """Run the ReID network once on an empty crop (CUDA's first-run costs are paid now, not on the first live picture)."""
+        extractor = self.tracker.extractor
+        if getattr(extractor, "_hk_warm", False):
+            return
+        extractor._hk_warm = True
+        extractor([np.zeros((128, 64, 3), np.uint8)])
 
     def update_with_detections(self, sv_dets: Any, frame: np.ndarray) -> Any:
         import supervision as sv

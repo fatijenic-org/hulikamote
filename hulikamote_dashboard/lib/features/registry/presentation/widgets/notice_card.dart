@@ -178,6 +178,16 @@ class _NoticeCardState extends State<NoticeCard> {
     }
   }
 
+  Future<void> _copyPhoneCode() async {
+    try {
+      final code = await widget.api.phoneSetupCode();
+      await Clipboard.setData(ClipboardData(text: code));
+      if (mounted) widget.onMessage('Copied. In the phone app: Connect > Paste setup code.');
+    } on RegistryApiException catch (e) {
+      if (mounted) widget.onMessage(e.message);
+    }
+  }
+
   Future<void> _pickKeyFile() async {
     final picked = await FilePicker.pickFile(dialogTitle: 'Firebase service-account file (.json)', type: FileType.custom, allowedExtensions: ['json']);
     final path = picked?.path;
@@ -395,6 +405,12 @@ class _NoticeCardState extends State<NoticeCard> {
           onPressed: _busy ? null : _pickKeyFile,
           label: const Text('Choose Firebase key file'),
         ),
+        if (s.cloudReady)
+          OutlinedButton.icon(
+            icon: const Icon(Icons.qr_code_2_outlined, size: 18),
+            onPressed: _busy ? null : _copyPhoneCode,
+            label: const Text('Copy phone setup code'),
+          ),
       ]),
       if (_pushDetail != null) ...[
         const SizedBox(height: Fx.s8),

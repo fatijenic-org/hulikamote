@@ -79,19 +79,16 @@ void main() {
     });
     await open(tester, camera, api);
 
-    expect(find.text('Set up violations on the live camera'), findsOneWidget);
-    expect(find.text('1 of ${ViolationCatalog.selectable.length} selected'), findsOneWidget);   // what was set up before
-    expect(find.text('Your current live setup is loaded. Change it as you need.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('step-info')), findsOneWidget);                               // the help of a step is a hover note, not a title block
+    expect(find.text('1 of ${ViolationCatalog.selectable.length} selected'), findsOneWidget);   // what was set up before (the monitor runs: it is edited)
 
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Set up the rules'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Fine-tune the pipeline'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Review'));
     await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Review and apply'), findsOneWidget);
+    expect(find.byKey(const ValueKey('live-setup-apply')), findsOneWidget);                         // the review step
 
     await tester.tap(find.byKey(const ValueKey('live-setup-apply')));
     await tester.pump(const Duration(seconds: 1));

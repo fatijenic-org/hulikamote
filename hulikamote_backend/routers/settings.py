@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
@@ -64,7 +65,7 @@ async def save_camera_config(config: dict):
             config[key] = existing[key]
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
-    stream.reload_pipeline()
+    await asyncio.to_thread(stream.reload_pipeline)               # loads models: not on the event loop (it would freeze the whole backend)
     return {"message": "Config saved successfully"}
 
 import cv2
@@ -457,7 +458,9 @@ async def live_perf(window: float = 2.5):
     """Everything the Live Monitor's Performance popup shows, in one call: the step times (as /live/timing), the steps of the last `window`
     seconds with their start times (a timeline), CPU / RAM / GPU load now and for the last 90 s, and the device each model runs on."""
     import yolo_inference
+    from engine.plate_service import SERVICE as PLATE_SERVICE
     from engine.stage_timer import LANES, STEP_INFO, TIMER
+    from engine.start_log import START
     from engine.system_stats import STATS
     window = min(max(window, 0.5), 10.0)
     models = []
@@ -472,7 +475,15 @@ async def live_perf(window: float = 2.5):
             pass
     return {**TIMER.snapshot(), "overlap": stream.PIPELINE_OVERLAP, "infer_every": stream.INFER_EVERY_N_FRAMES + 1, "window_s": window,
             "spans": TIMER.spans(window), "step_info": STEP_INFO, "lanes": [{"id": i, "label": label} for i, label in LANES],
-            "system": STATS.snapshot(), "models": models, "playout": stream.playout_status()}
+            "system": STATS.snapshot(), "models": models, "playout": stream.playout_status(),
+            "plate_process": PLATE_SERVICE.status(), "startup": START.snapshot()}
+
+
+@router.post("/live/prepare")
+async def prepare_live():
+    """The Live Monitor is about to start (Start, or Set up violations, was pressed): load and warm the models NOW, in the background,
+    while the operator goes through the setup. Apply then finds them loaded and the first picture is not the slow one. Safe to call often."""
+    return stream.prepare_feed()
 
 
 @router.get("/live/setup")
@@ -480,6 +491,28 @@ async def get_live_setup():
     """The violations and settings the Live Monitor uses now, in the wizard's own shape (empty when none were set up)."""
     config = _read_config()
     return {key: config[key] for key in LIVE_SETUP_KEYS if key in config}
+
+
+@router.get("/live/overlays")
+async def get_live_overlays():
+    """The violations whose overlay objects (signs, painted crosswalks and lines) are hidden on the live picture."""
+    return {"hidden": stream.hidden_overlays()}
+
+
+@router.put("/live/overlays")
+async def put_live_overlays(payload: dict = Body(...)):
+    """{"hidden": ["restricted_lane", ...]}: those violations draw no overlay objects on the live picture (the rules still judge them)."""
+    hidden = payload.get("hidden")
+    if not isinstance(hidden, list):
+        raise HTTPException(status_code=400, detail="Send the violations to hide as a list")
+    return {"hidden": stream.set_hidden_overlays(hidden)}
+
+
+@router.delete("/live/tickets")
+async def clear_live_tickets_endpoint():
+    """Clear every ticket the Live Monitor made before (database rows, report, evidence photos). Forensic analyses are not touched."""
+    from routers import forensic as forensic_router
+    return {"ok": True, **await forensic_router.clear_live_tickets()}
 
 
 @router.post("/live/reset")
@@ -492,6 +525,7 @@ async def reset_live_setup():
         config.pop(key, None)
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
     scan.cancel()
+    stream.set_hidden_overlays(())               # a new setup shows all its overlays
     stream.clear_reference()
     stream.mark_pipeline_stale()                 # the next feed is built without the old rules
     stream.start_clean()                         # no saved or learned road, no learned traffic flow

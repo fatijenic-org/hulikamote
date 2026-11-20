@@ -85,9 +85,19 @@ class RestrictedLane(Violation):
                     return True
         return False
 
+    def has_overlay(self, zone):
+        return bool(zone.get("signs") or zone.get("sign_points"))
+
+    def draw_overlay(self, pipe, frame, index, zone):
+        self._draw_signs(frame, zone)
+
     def draw_zone(self, pipe, frame, index, zone):
         """The zone outline when one was drawn, and every sign standing on the road."""
         super().draw_zone(pipe, frame, index, zone)                              # the implicit whole-picture zone draws nothing
+        self._draw_signs(frame, zone)
+
+    @staticmethod
+    def _draw_signs(frame, zone):
         realistic = zone.get("sign_realistic", True)
         for sign in zone.get("signs", []):
             lane_signs.draw_sign(frame, sign["at"], sign["type"], **sign.get("look", {}), realistic=realistic)

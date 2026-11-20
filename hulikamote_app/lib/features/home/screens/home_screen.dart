@@ -10,7 +10,9 @@ import '../../../core/ui/app_theme.dart';
 import '../../../core/ui/format.dart';
 import '../../../core/ui/tokens.dart';
 import '../../../core/ui/widgets.dart';
+import '../models/demerit.dart';
 import '../models/violation.dart';
+import '../widgets/demerit_card.dart';
 import '../widgets/ticket_card.dart';
 import 'violation_detail_screen.dart';
 
@@ -19,10 +21,14 @@ enum _Filter { all, open, appealed }
 /// "Records": the motorist's confirmed tickets, how many can still be appealed, and where each appeal stands.
 /// Shows what was saved last time when the system cannot be reached.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.api});
+  const HomeScreen({super.key, this.api, this.refresh});
 
   /// Injected by tests; the app talks to the system.
   final PortalApi? api;
+
+  /// Tells this page to read everything again (the main page signals it when a new notice arrives: a new ticket, or an appeal that
+  /// was decided).
+  final Listenable? refresh;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -44,7 +50,18 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
   @override
   void initState() {
     super.initState();
+    widget.refresh?.addListener(_onRefreshSignal);
     _start();
+  }
+
+  void _onRefreshSignal() {
+    if (_account != null) _load();
+  }
+
+  @override
+  void dispose() {
+    widget.refresh?.removeListener(_onRefreshSignal);
+    super.dispose();
   }
 
   Future<void> _start() async {
@@ -146,6 +163,10 @@ class _HomeScreenState extends State<HomeScreen> with AutomaticKeepAliveClientMi
                       style: context.text.bodyLarge?.copyWith(color: context.muted),
                     ),
                     const SizedBox(height: Sp.x5),
+                    if (tickets != null) ...[
+                      DemeritCard(demerit: Demerit.of(tickets, _appeals)),
+                      const SizedBox(height: Sp.x3),
+                    ],
                     Row(children: [
                       Expanded(child: _Stat(value: tickets?.length, label: 'Tickets')),
                       const SizedBox(width: Sp.x3),

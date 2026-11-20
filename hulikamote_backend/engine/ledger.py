@@ -4,13 +4,17 @@ from pathlib import Path
 from collections import deque, Counter
 import numpy as np
 
+from engine.parked_vehicles import ParkedRegistry
 from engine.track_stitcher import (
     APPEARANCE_EVERY_N,
+    PARKED_KEEP_S,
     blend_signature,
     compute_signature,
     match_births,
 )
+from engine import track_guard
 from engine.violations import ALL as ALL_VIOLATIONS
+from engine.violations.geometry import STOP_SPEED
 from engine.violations.no_plate import plate_evidence, plate_status
 
 
@@ -21,6 +25,20 @@ def inside_any(box, boxes, share: float = 0.4) -> bool:
     for bx, by, bw, bh in boxes:
         ix, iy = min(x + w, bx + bw) - max(x, bx), min(y + h, by + bh) - max(y, by)
         if ix > 0 and iy > 0 and ix * iy / area >= share:
+            return True
+    return False
+
+
+CARRIERS = ("bus", "jeepney", "truck", "pickup")
+
+
+def carried_by(person, vehicles, ) -> bool:
+    """True when a person (x, y, w, h) stands or sits ON one of the `vehicles`: feet on its box, on its roof line (a rider's box often
+    sits above a jeepney box) or a little off its edge (a step). Such a person moves fast because the vehicle does: it is not a rider."""
+    px, py, pw, ph = person
+    fx, fy = px + pw / 2, py + ph
+    for vx, vy, vw, vh in vehicles:
+        if vx - 0.1 * vw <= fx <= vx + 1.1 * vw and vy - 0.35 * vh <= fy <= vy + 1.1 * vh and ph <= vh:
             return True
     return False
 
@@ -55,14 +73,18 @@ class TrackLedger:
         self.turn_heading: dict = {}      # key -> heading just after entering
         self.line_side: dict = {}         # key -> +1/-1 side of the line it came from, or "crossed"
         self.line_watch: dict = {}        # (rule, zone index) -> LineWatch: what Crossing a solid line has learned about this vehicle
-        self.cross_points: list = []      # (t, x, y) where the vehicle was seen to cut a solid line (drawn on the live evidence photo)
+        self.cross_points: list = []      # (t, x, y) where the vehicle was seen to cut a solid line or to turn the banned way (drawn on the live evidence photo)
+        self.turn_watch: dict = {}        # (rule, zone index) -> TurnWatch: what Illegal turn has learned about this vehicle
         self.made_stop: set = set()       # keys of stop-sign zones where it came to a full stop
         self.votes: dict = {}             # violation -> deque of recent True/False looks (see vote)
         self.marks: dict = {}             # violation -> boxes showing why (see engine/marks.py)
         self.timers: dict = {}            # violation -> stopwatch drawn on the vehicle's box (see engine/marks.py set_timer)
         self.rides: bool = False          # a "person" that moves like a vehicle: judged as a motorcycle from now on
+        self.onboard: dict = {}           # Passengers outside: where people sat on this vehicle in the last looks, and when they counted (violations/onboard.py)
         self._fast_since: float | None = None
         self.blink: deque = deque(maxlen=200)   # (t, left amber, right amber) indicator samples
+        self.blink_grid: deque = deque(maxlen=120)  # (t, amber share of each cell of a grid over blink_ref): 6 s even at 20 pictures a second
+        self.blink_ref: list | None = None        # the fixed part of the picture the grids are cut from (x, y, w, h)
         self.turns_judged: set = set()    # signal-light zones where this vehicle's turn was already judged
         self.plate_checks: int = 0                        # plate looks that counted (see violations/no_plate.py)
         self.plate_hits: int = 0                          # ...and how many of them found a plate
@@ -89,6 +111,15 @@ class TrackLedger:
         self.merged_ids: set[int] = set()
 
     @property
+    def holds_place(self) -> bool:
+        """A vehicle that has stopped in a no-parking zone (its stopwatch runs, or it was flagged): while it is out of sight it is kept
+        for longer and a new tracker number on the same spot is joined to it strictly (see engine/track_stitcher.py)."""
+        if self.stationary_start_time is not None:
+            return True
+        # flagged, and its stopwatch was reset by a blinking lamp: still parked as long as it stands (a vehicle that drove off is not kept)
+        return "illegal_parking" in self.violations and bool(self.history) and self.get_speed() < STOP_SPEED
+
+    @property
     def vclass(self) -> str:
         """Return the most common vehicle class over the track's lifetime (Temporal Consensus)."""
         if self.rides:
@@ -107,6 +138,14 @@ class TrackLedger:
             return "unknown"
             
         return top_class
+
+    def motorcycle_share(self) -> tuple[float, int]:
+        """(the share of this track's looks that said "motorcycle", how many looks were counted). Looks that said "person" or "unknown"
+        are not counted (a rider seen as a person is no proof against a motorcycle). A person that rides counts as a motorcycle."""
+        looks = [c for c in self._classes_history if c not in ("person", "unknown")]
+        if self.rides or not looks:
+            return 1.0, len(looks)
+        return looks.count("motorcycle") / len(looks), len(looks)
 
     @property
     def latest_class(self) -> str:
@@ -169,7 +208,10 @@ class TrackLedger:
         """A "person" track that keeps moving faster than a person can is a rider (the detector saw the rider, not the bike):
         from then on it is a motorcycle. Speed is counted in body heights per second so it does not depend on the camera.
         `covered`: the box sits inside a vehicle's box (a passenger, or a rider already inside a bike box): never changed."""
-        if self.rides or covered or len(self.history) < 4:
+        if covered:
+            self._fast_since = None       # riding on a bus, jeepney or truck (or inside a bike's box): the fast spell starts again
+            return
+        if self.rides or len(self.history) < 4:
             return
         last = self.history[-1]
         window = [h for h in self.history if last[0] - h[0] <= 1.0]
@@ -223,6 +265,11 @@ class ActiveLedgerManager:
         self.aliases: dict[int, int] = {}
         # Lifecycle log (birth / stitched / death) for diagnosing ID switches
         self.track_events: deque = deque(maxlen=2000)
+        # Tracker numbers that moved to ANOTHER vehicle (see _jump): such a number no longer belongs to the ledger it started
+        self.detached: set[int] = set()
+        self._split_ids = 1_000_000      # numbers of the ledgers made for a vehicle that took a tracker number over
+        # Vehicles that already got an Illegal parking ticket: one parked vehicle, one ticket (engine/parked_vehicles.py)
+        self.parked = ParkedRegistry()
 
     def _log_event(self, event: str, timestamp: float | None, **fields) -> None:
         record = {"event": event, "t": timestamp, **fields}
@@ -243,25 +290,34 @@ class ActiveLedgerManager:
         present: set[int] = set()    # canonical IDs seen this frame
         pending: list[tuple] = []    # (det, raw_id) with no ledger of their own
 
-        # Pass 1: tracks that already own a ledger (the original IDs claim first)
+        # Pass 1: tracks that already own a ledger (the original IDs claim first) - when the box really is that vehicle
         for det in detections:
             raw = getattr(det, "track_id", -1)
             if raw == -1:
                 continue
-            if raw in self.ledgers:
-                assigned.append((det, raw))
-                present.add(raw)
-            else:
-                pending.append((det, raw))
+            if raw in self.ledgers and raw not in self.detached:
+                why = self._jump(self.ledgers[raw], det, now, frame)
+                if why is None:
+                    assigned.append((det, raw))
+                    present.add(raw)
+                    continue
+                # The tracker gave this number to ANOTHER vehicle (behind, ahead, in the next lane ...): it starts a ledger of its own
+                self.detached.add(raw)
+                self.aliases.pop(raw, None)
+                self._log_event("jump", now, raw=raw, ledger=raw, why=why, bbox=list(det.bbox))
+            pending.append((det, raw))
 
         # Pass 2: previously stitched aliases, then genuinely new tracks
         births: list[tuple] = []
         for det, raw in pending:
             canon = self.aliases.get(raw)
             if canon is not None and canon in self.ledgers and canon not in present:
-                assigned.append((det, canon))
-                present.add(canon)
-                continue
+                why = self._jump(self.ledgers[canon], det, now, frame)
+                if why is None:
+                    assigned.append((det, canon))
+                    present.add(canon)
+                    continue
+                self._log_event("jump", now, raw=raw, ledger=canon, why=why, bbox=list(det.bbox))
             if canon is not None:
                 # Target ledger is gone, or the original track came back this frame
                 self.aliases.pop(raw, None)
@@ -292,14 +348,19 @@ class ActiveLedgerManager:
                     self._log_event("stitched", now, raw=raw, into=cid,
                                     gap_frames=self.ledgers[cid].missed_frames, bbox=list(det.bbox))
                 else:
-                    ledger = TrackLedger(raw)
+                    # its own number, unless that number still belongs to the ledger it just jumped away from: then a fresh one
+                    cid = raw if raw not in self.ledgers else self._fresh_id()
+                    ledger = TrackLedger(cid)
                     ledger.appearance = sigs[raw]
-                    self.ledgers[raw] = ledger
-                    assigned.append((det, raw))
-                    present.add(raw)
-                    self._log_event("birth", now, id=raw, bbox=list(det.bbox), cls=getattr(det, "cls", None))
+                    self.ledgers[cid] = ledger
+                    if cid != raw:
+                        self.aliases[raw] = cid
+                    assigned.append((det, cid))
+                    present.add(cid)
+                    self._log_event("birth", now, id=cid, raw=raw, bbox=list(det.bbox), cls=getattr(det, "cls", None))
 
         others = [d.bbox for d in detections if getattr(d, "cls", "person") != "person"]   # boxes a person could sit inside
+        carriers = [d.bbox for d in detections if getattr(d, "cls", "") in CARRIERS]       # a bus, jeepney, truck or pickup carries people on its roof, step or bed
         for det, cid in assigned:
             det.track_id = cid
             ledger = self.ledgers[cid]
@@ -310,7 +371,7 @@ class ActiveLedgerManager:
                 ledger._classes_history.append(cls_val)
             ledger.update_position(det.bbox, timestamp)
             if cls_val == "person":
-                ledger.check_rider(inside_any(det.bbox, others))
+                ledger.check_rider(inside_any(det.bbox, others) or carried_by(det.bbox, carriers))
                 if ledger.rides:
                     det.cls = "motorcycle"
                     ledger._classes_history.append("motorcycle")
@@ -321,7 +382,7 @@ class ActiveLedgerManager:
         for tid in list(self.ledgers.keys()):
             if tid not in present:
                 self.ledgers[tid].missed_frames += 1
-                if self.ledgers[tid].missed_frames > 60:
+                if self.ledgers[tid].missed_frames > 60 and not self._kept(self.ledgers[tid], now):
                     last = self.ledgers[tid].snapshot_bbox
                     self._log_event("death", now, id=tid, last_bbox=last,
                                     violations=sorted(self.ledgers[tid].violations),
@@ -329,6 +390,31 @@ class ActiveLedgerManager:
                     self._finalize_ticket(tid)
                     del self.ledgers[tid]
                     self.aliases = {r: c for r, c in self.aliases.items() if c != tid}
+
+    @staticmethod
+    def _kept(ledger: "TrackLedger", now: float) -> bool:
+        """A stopped vehicle in a no-parking zone that went out of sight a short while ago: its ledger stays open, so when it shows
+        again under a new tracker number it is joined to the same ledger (one stopwatch, one ticket)."""
+        return ledger.holds_place and bool(ledger.history) and now - ledger.history[-1][0] <= PARKED_KEEP_S
+
+    def _fresh_id(self) -> int:
+        """A ledger number no tracker uses (trackers count up from 1)."""
+        while self._split_ids in self.ledgers:
+            self._split_ids += 1
+        self._split_ids += 1
+        return self._split_ids - 1
+
+    @staticmethod
+    def _jump(ledger: "TrackLedger", det, now: float, frame) -> str | None:
+        """Why this box is NOT the vehicle the ledger follows (None = it is): too long out of sight, another size, behind / far ahead of /
+        beside where the vehicle was heading, a two-wheeler turned four-wheeler, other colours. See engine/track_guard.py."""
+        if not ledger.history:
+            return None
+        gap = track_guard.PARKED_GAP_S if getattr(ledger, "holds_place", False) else track_guard.MAX_GAP_S
+        why = track_guard.check(ledger.history, det.bbox, now, max_gap=gap) or track_guard.class_clash(ledger.latest_class, getattr(det, "cls", None))
+        if why is None and frame is not None and ledger.appearance is not None and track_guard.wants_colour_check(ledger.history, det.bbox, now):
+            why = track_guard.colour_clash(ledger.appearance, compute_signature(frame, det.bbox))
+        return why
 
     def drain_tickets(self) -> list[dict]:
         """

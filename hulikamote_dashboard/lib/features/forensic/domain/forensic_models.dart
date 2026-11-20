@@ -398,6 +398,7 @@ class ForensicTicket {
         'unclear' => 'Plate not confirmed',
         'not_checked' => 'Plate not checked',
         'pending' => 'Plate not read yet',
+        'not_found' => 'No plate found in the photos',
         _ => 'Plate unread',
       };
   bool get isFlagged => flags.isNotEmpty;

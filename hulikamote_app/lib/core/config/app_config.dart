@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// How the phone reaches the system, and where.
@@ -95,6 +97,24 @@ class AppConfig {
     final port = parts.length == 2 ? int.tryParse(parts[1]) : defaultPort;
     if (port == null || port < 1 || port > 65535) return '';
     return '$host:$port';
+  }
+
+  /// The code the dashboard copies ("Copy phone setup code"): `hk1:` and the project address with its public anon key, packed in one
+  /// line so nothing long is typed. Null when [input] is not such a code.
+  static ({String url, String key})? parseSetupCode(String input) {
+    final text = input.trim();
+    if (!text.startsWith('hk1:')) return null;
+    try {
+      var packed = text.substring(4).replaceAll(RegExp(r'\s'), '');
+      packed = packed.padRight((packed.length + 3) ~/ 4 * 4, '=');
+      final data = jsonDecode(utf8.decode(base64Url.decode(packed)));
+      if (data is! Map) return null;
+      final url = normalizeCloudUrl('${data['u'] ?? ''}');
+      final key = '${data['k'] ?? ''}'.replaceAll(RegExp(r'\s'), '');
+      return url.isEmpty || key.isEmpty ? null : (url: url, key: key);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// "abc.supabase.co" or "https://abc.supabase.co/rest/v1" -> "https://abc.supabase.co". Empty when unusable.

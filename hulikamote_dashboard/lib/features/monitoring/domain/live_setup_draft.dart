@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'dart:ui' show Offset;
+
 import '../../forensic/domain/analysis_draft.dart';
+import '../../forensic/domain/marking_shape.dart';
 import 'models/road_detect.dart';
 import 'road_markings.dart';
 
@@ -26,9 +29,61 @@ class LiveSetupDraft extends AnalysisDraft {
   /// violation the ones it needs, as zones.
   List<RoadArea> markings = const [];
 
+  @override
+  List<MarkingShape> get markingShapes {
+    final count = <String, int>{};
+    return [
+      for (final m in markings)
+        if (!m.isLine && m.polygon.length >= 3 && m.kind != 'solid_line')
+          () {
+            final n = count.update(m.kind, (v) => v + 1, ifAbsent: () => 1);
+            final type = m.kind == 'lane' && m.laneType != null ? RoadArea.laneTypes[m.laneType] : null;
+            return MarkingShape(
+              id: m.id,
+              kind: m.kind,
+              label: ['${RoadArea.labelOf(m.kind)} $n', ?type].join(' · '),
+              polygon: [for (final p in m.polygon) Offset(p.dx, p.dy)],
+              laneType: m.kind == 'lane' ? m.laneType : null,
+            );
+          }(),
+    ];
+  }
+
   /// violation key -> what was pulled into its zones the last time. A zone that came from a marking is changed by a new sync only while
   /// it still is what was pulled: once the operator edits or deletes it in the rules step, it is theirs.
   final Map<String, String> _pulled = {};
+
+  String _bannedSeen = '';
+
+  /// A change of the banned turns (the two chips of Illegal turn) changes the zones the marked roads made for it.
+  @override
+  void touch() {
+    if (selection.contains('illegal_turn')) {
+      final now = jsonEncode(config('illegal_turn')['banned_turns']);
+      if (now != _bannedSeen) {
+        _bannedSeen = now;
+        syncMarkings();
+      }
+    }
+    super.touch();
+  }
+
+  /// Illegal turn: what was read from the marked roads, in words (which roads, which turns), so the operator sees what will be judged.
+  @override
+  String? roadHint(String key) {
+    if (key != 'illegal_turn') return null;
+    final banned = RoadMarkingMap.bannedTurns(config(key));
+    if (banned.isEmpty) return 'No turn is banned: the whole-picture check and the marked roads are off. Signs and drawn zones still work.';
+    final roads = [for (final m in markings) if (m.hasDirection && m.flow != null && m.arrow.length >= 2) m];
+    if (roads.isEmpty) {
+      return 'No road with a direction is marked in the Road step, so the whole picture is watched. Mark a road and its arrow to judge each road on its own.';
+    }
+    final names = [
+      for (final (i, m) in roads.indexed) '${m.flow == 'in' ? 'incoming' : 'outgoing'} ${m.kind == 'lane' ? 'lane' : 'road'} ${i + 1}',
+    ];
+    return 'Read from your road setup: ${names.join(', ')}. Banned: ${banned.join(' and ')} turn. A turn is judged on the road the vehicle '
+        'drove along, as the driver sees left and right. The banned turns are drawn as orange arrows.';
+  }
 
   void setMarkings(List<RoadArea> list) {
     markings = List.unmodifiable(list);
@@ -55,7 +110,7 @@ class LiveSetupDraft extends AnalysisDraft {
       if (!untouched) continue;                                  // the operator changed them: they stay as they are
       final list = zones(key);
       list.removeWhere(_fromMarking);
-      list.addAll(RoadMarkingMap.roisFor(key, markings));
+      list.addAll(RoadMarkingMap.roisFor(key, markings, config: config(key)));
       _pulled[key] = _signature(key);
     }
   }

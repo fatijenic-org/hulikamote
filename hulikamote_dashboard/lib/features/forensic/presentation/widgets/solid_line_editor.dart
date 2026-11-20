@@ -222,7 +222,8 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
       }
       final raw = (zone['line'] ?? zone['ui_vector'] ?? const []) as List;
       final points = [for (final p in raw) [(p[0] as num).toDouble(), (p[1] as num).toDouble()]];
-      final fresh = _drag == null && points.length >= 2 ? _previews.peekLine(points, Map<String, dynamic>.from(look), realistic) : null;
+      final own = look['realistic'];                                         // a line made in the road markings can say it for itself
+      final fresh = _drag == null && points.length >= 2 ? _previews.peekLine(points, Map<String, dynamic>.from(look), own is bool ? own : realistic) : null;
       if (fresh != null) _lastPaint[i] = fresh;
       out.add(fresh ?? _lastPaint[i]);
     }
@@ -290,9 +291,12 @@ class _SolidLineEditorState extends State<SolidLineEditor> {
             Expanded(child: Text('Realistic look', style: Fx.body(context))),
             Switch(
               key: const ValueKey('solid-realistic'),
-              value: (_cfg['lines_realistic'] as bool?) ?? true,
+              value: look['realistic'] is bool ? look['realistic'] as bool : ((_cfg['lines_realistic'] as bool?) ?? true),
               onChanged: (v) {
                 _cfg['lines_realistic'] = v;
+                for (final z in _saved) {
+                  if (z['look'] is Map) (z['look'] as Map).remove('realistic');      // every line follows the one switch again
+                }
                 widget.draft.touch();
                 setState(() {});
               },
@@ -690,7 +694,7 @@ class _LinesPainter extends CustomPainter {
     tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
   }
 
-  void _draw(Canvas canvas, List<Offset> points, Size size, Color color, {String? label, bool numbered = false}) {
+  void _draw(Canvas canvas, List<Offset> points, Size size, Color color, {String? label, bool numbered = false, bool painted = false}) {
     if (points.isEmpty) return;
     final px = [for (final p in points) _px(p, size)];
     if (px.length >= 2) {
@@ -698,12 +702,12 @@ class _LinesPainter extends CustomPainter {
       for (final p in px.skip(1)) {
         path.lineTo(p.dx, p.dy);
       }
-      canvas.drawPath(
+      canvas.drawPath(                                   // a painted line is shown as real paint: only a hairline marks where it is
         path,
         Paint()
-          ..color = color
+          ..color = painted ? color.withValues(alpha: 0.45) : color
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
+          ..strokeWidth = painted ? 1.2 : 4
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
@@ -735,7 +739,7 @@ class _LinesPainter extends CustomPainter {
       );
     }
     for (var i = 0; i < saved.length; i++) {
-      _draw(canvas, saved[i], size, Fx.success, label: 'Line ${i + 1}');
+      _draw(canvas, saved[i], size, Fx.success, label: 'Line ${i + 1}', painted: i < paints.length && paints[i] != null);
     }
     _draw(canvas, current, size, Fx.accent, numbered: true);
   }

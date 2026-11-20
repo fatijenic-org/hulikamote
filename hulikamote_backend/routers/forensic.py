@@ -122,6 +122,36 @@ _main_loop = None               # the app's event loop (the upload endpoint sets
 _report_lock = asyncio.Lock()   # a report.json is edited by the analysis AND by the operator: one at a time
 
 
+def _load_tickets(path: Path, strict: bool = False) -> list:
+    """The tickets of a report.json ([] when there is none). BLOCKING - a live report is several MB: call it with asyncio.to_thread, so the
+    event loop (which also carries the live feed) never waits for it. A report that cannot be read is [] (strict: the error is raised)."""
+    try:
+        return json.loads(path.read_text()) if path.exists() else []
+    except ValueError:
+        if strict:
+            raise
+        return []
+
+
+def _write_report(path: Path, tickets: list) -> None:
+    """Write a report.json in one piece: the dashboard downloads it while tickets are added, so it must never be half written.
+    BLOCKING: call it with asyncio.to_thread."""
+    import os
+    import time
+
+    text = json.dumps(tickets, indent=2)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    for attempt in range(6):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:                  # Windows: a reader has the file open right now
+            time.sleep(0.05 * (attempt + 1))
+    path.write_text(text)
+    tmp.unlink(missing_ok=True)
+
+
 def _serialized(fn):
     """Endpoint decorator: report edits run one at a time (a running analysis may add tickets to the same report)."""
     @functools.wraps(fn)
@@ -342,7 +372,7 @@ async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path,
 
     async with _report_lock:
         report_path = output_dir / "report.json"
-        tickets = json.loads(report_path.read_text()) if report_path.exists() else []
+        tickets = await asyncio.to_thread(_load_tickets, report_path, True)
 
         twin = None
         if plate_text not in _UNREAD:
@@ -369,8 +399,8 @@ async def _publish_ticket(task_id: str, t: dict, config: dict, output_dir: Path,
             ids_sink.extend(t["db_ids"])
             tickets.append(t)
 
-        annotate_tickets(tickets, _levenshtein, config.get("flag_sensitivity", 4))
-        report_path.write_text(json.dumps(tickets, indent=2))
+        await asyncio.to_thread(annotate_tickets, tickets, _levenshtein, config.get("flag_sensitivity", 4))
+        await asyncio.to_thread(_write_report, report_path, tickets)
         task = forensic_tasks.get(task_id)
         if task is not None:
             task["tickets"] = tickets
@@ -420,7 +450,231 @@ async def publish_live_ticket(lt: dict, config: dict, save_violation) -> list:
     ticket["source"] = "live"
     ids: list = []
     await _publish_ticket(LIVE_TASK, ticket, cfg, out, save_violation, ids, source="live", unread_user=LIVE_PENDING_USER)
+    ensure_live_plate_worker()                  # the plate is read in the background, one ticket at a time
     return ids
+
+
+# ─── The live plate queue ──────────────────────────────────────────────────────────────────────────────────────
+# A live ticket is saved at once (nothing is lost) with plate_status "pending". ONE background worker then reads the plates of the
+# pending tickets one by one (the same read as "Read the plate": the plate is found in the evidence photos, read as seen and enhanced,
+# and voted). When a ticket is done its status becomes read / not_read / not_found, and only then does the Live Monitor's side list show
+# it. The worker never blocks the live feed (the read runs in a thread) and never overwrites what the reviewer did meanwhile.
+
+LIVE_MAX_ATTEMPTS = 3
+_live_worker: "asyncio.Task | None" = None
+_live_wake: "asyncio.Event | None" = None
+_live_current: str | None = None                 # the ticket being read now
+_live_attempts: dict[str, int] = {}
+
+
+def ensure_live_plate_worker() -> None:
+    """Start the worker if it is not running (also after a restart: tickets that were still pending are then picked up), or wake it."""
+    global _live_worker, _live_wake
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return                                   # no event loop (a script): nothing to start
+    if _live_wake is None:
+        _live_wake = asyncio.Event()
+    if _live_worker is None or _live_worker.done():
+        _live_worker = loop.create_task(_live_plate_loop())
+    _live_wake.set()
+
+
+def _pending_live(tickets: list) -> list[dict]:
+    return [t for t in tickets if t.get("plate_status") == "pending" and t.get("ticket_uid")]
+
+
+_live_state_cache: tuple | None = None           # ((mtime_ns, size) of report.json, tickets waiting): the dashboard asks every few seconds
+_live_down_s = 0.0                               # wait when the plate process cannot start; it grows, so a broken start is not tried in a tight loop
+
+
+async def _live_queue_state() -> dict:
+    """{"waiting": n, "reading": uid or None}: the tickets whose plate is still to be read (the one being read counts).
+    The report (several MB) is parsed only when the file has changed, and never on the event loop that carries the live feed."""
+    global _live_state_cache
+    report_path = live_output_dir() / "report.json"
+    try:
+        stat = report_path.stat()
+    except OSError:
+        return {"waiting": 0, "reading": _live_current}
+    key = (stat.st_mtime_ns, stat.st_size)
+    if _live_state_cache is None or _live_state_cache[0] != key:
+        async with _report_lock:
+            tickets = await asyncio.to_thread(_load_tickets, report_path)
+        _live_state_cache = (key, len(_pending_live(tickets)))
+    return {"waiting": _live_state_cache[1], "reading": _live_current}
+
+
+async def _save_live_tickets(out_dir: Path, report_path: Path, tickets: list, reflag: bool) -> None:
+    """_save_edited for the live queue, off the event loop. The duplicate flags are worked out again only when a plate changed: they depend
+    on the plates and on the boxes and times of the photos, and a read that finds no plate changes none of those."""
+    from engine.ticket_flags import annotate_tickets
+
+    def work() -> None:
+        if reflag:
+            annotate_tickets(tickets, _levenshtein, _run_config(out_dir).get("flag_sensitivity", 4))
+        _write_report(report_path, tickets)
+
+    await asyncio.to_thread(work)
+    if LIVE_TASK in forensic_tasks:
+        forensic_tasks[LIVE_TASK]["tickets"] = tickets
+
+
+async def _live_plate_loop() -> None:
+    global _live_current
+    while True:
+        try:
+            _live_wake.clear()                   # cleared BEFORE looking, so a ticket that arrives meanwhile still wakes the next wait
+            async with _report_lock:
+                pending = _pending_live(await asyncio.to_thread(_load_tickets, live_output_dir() / "report.json"))
+            if not pending:
+                try:
+                    await asyncio.wait_for(_live_wake.wait(), timeout=15)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+            _live_current = pending[0]["ticket_uid"]
+            await _read_live_ticket(pending[0])
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.exception("The live plate queue hit an error")
+            await asyncio.sleep(2)
+        finally:
+            _live_current = None
+
+
+async def _read_live_ticket(snapshot: dict) -> None:
+    """Read the plate of one pending live ticket (`snapshot`: the ticket as the queue just found it) from its evidence photos and save the
+    result (see the section text above). The report is read and written in threads: it is several MB, and the event loop also carries the
+    live feed."""
+    global _live_down_s
+    from store import update_violation_plate
+
+    uid = snapshot["ticket_uid"]
+    out = live_output_dir()
+    report_path = out / "report.json"
+    _live_attempts[uid] = _live_attempts.get(uid, 0) + 1
+    gave_up = _live_attempts[uid] > LIVE_MAX_ATTEMPTS
+    before = photo_names(snapshot)
+    config = _run_config(out)
+    plate_format = config.get("plate_format") or "ph_standard"
+    new, summary = None, None
+    if not gave_up:
+        from engine.plate_service import SERVICE, PlateServiceDown
+        try:
+            # a background job of the plate process: the reviewer's own "Read the plate" goes before it
+            new, summary = await asyncio.to_thread(SERVICE.run_in_background, _reread_with_models, snapshot, [], config, plate_format)
+            _live_down_s = 0.0
+        except ValueError:
+            new = None                                            # nothing to read in these photos
+            _live_down_s = 0.0
+        except PlateServiceDown:
+            _live_attempts[uid] -= 1                              # the process could not start: not this ticket's fault
+            _live_down_s = min(120.0, max(10.0, _live_down_s * 2))
+            log.exception("The plate process could not start (next try in %.0f s)", _live_down_s)
+            await asyncio.sleep(_live_down_s)
+            return
+        except Exception:
+            log.exception("Reading the plate of live ticket %s failed", uid)
+            return                                                # tried again next round, up to LIVE_MAX_ATTEMPTS
+    async with _report_lock:
+        tickets = await asyncio.to_thread(_load_tickets, report_path)
+        idx = next((i for i, t in enumerate(tickets) if t.get("ticket_uid") == uid), None)
+        if idx is None:
+            return                                                # merged away or removed meanwhile
+        current = tickets[idx]
+        if current.get("plate_status") != "pending" or photo_names(current) != before:
+            return                                                # the reviewer changed it: their work wins (pending ones come round again)
+        done = new if new is not None else dict(current)
+        if done.get("plate_text", "unidentified") not in _UNREAD:
+            done["plate_status"] = "read"
+        elif summary is not None and summary.get("found"):
+            done["plate_status"] = "not_read"                     # a plate was seen, no text could be read
+        else:
+            done["plate_status"] = "not_found"                    # no plate could be found in the photos
+        if done["plate_status"] != "read":
+            await update_violation_plate(done.get("db_ids", []), "unidentified", "no_plate_found")
+        else:
+            await _sync_plate(current, done)                      # the Inbox rows follow the plate (and its owner)
+        tickets[idx] = done
+        await _save_live_tickets(out, report_path, tickets, reflag=done.get("plate_text") != current.get("plate_text"))
+    _live_attempts.pop(uid, None)
+
+
+def _live_photo_files(tickets: list) -> set:
+    """Every picture file the live tickets own: the evidence photos, the vehicle and clean crops, the close-ups, the plate crops. They all sit
+    in the evidence folder (by name, or by a path under it); a file under another run's folder is never touched."""
+    from engine.pipeline import EVIDENCE_DIR
+
+    root = EVIDENCE_DIR.resolve()
+    forensic_dir = (EVIDENCE_DIR / "forensic").resolve()
+    found: set = set()
+
+    def walk(value) -> None:
+        if isinstance(value, dict):
+            for item in value.values():
+                walk(item)
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                walk(item)
+        elif isinstance(value, str) and value.lower().endswith((".jpg", ".jpeg", ".png")):
+            try:
+                path = (EVIDENCE_DIR / Path(value).name if Path(value).is_absolute() else EVIDENCE_DIR / value).resolve()
+            except OSError:
+                return
+            if root in path.parents and forensic_dir not in path.parents:
+                found.add(path)
+
+    walk(tickets)
+    return found
+
+
+async def clear_live_tickets() -> dict:
+    """Start the Live Monitor's tickets from nothing: every ticket the live feed made before (the standing "live" run: its report, its
+    Inbox rows, its evidence photos) is deleted. Tickets of forensic analyses are never touched. {"tickets", "rows", "files"}."""
+    from store import delete_violations_by_source
+
+    out = live_output_dir()
+    async with _report_lock:
+        report_path = out / "report.json"
+        try:
+            tickets = json.loads(report_path.read_text()) if report_path.exists() else []
+        except ValueError:
+            tickets = []
+        def remove_files(paths) -> int:
+            removed = 0
+            for path in paths:
+                try:
+                    path.unlink(missing_ok=True)
+                    removed += 1
+                except OSError as exc:
+                    log.warning("Could not remove %s: %s", path, exc)
+            return removed
+
+        # thousands of pictures: removed in a thread, so the backend (and the live feed's messages) are not frozen meanwhile
+        files = await asyncio.to_thread(remove_files, _live_photo_files(tickets))
+        rows = await delete_violations_by_source("live")
+        shutil.rmtree(out, ignore_errors=True)               # report.json and forensic_config.json (written again with the next ticket)
+        forensic_tasks.pop(LIVE_TASK, None)
+        _live_attempts.clear()
+    return {"tickets": len(tickets), "rows": rows, "files": files}
+
+
+@router.delete("/live-tickets")
+async def delete_live_tickets():
+    """Clear every ticket of the Live Monitor (not the forensic analyses)."""
+    return await clear_live_tickets()
+
+
+@router.get("/live-queue")
+async def live_plate_queue():
+    """The Live Monitor's side list: how many live tickets wait for their plate, and which one is being read now."""
+    from engine.plate_service import SERVICE
+
+    ensure_live_plate_worker()                                    # after a restart this picks the waiting tickets up again
+    return {**await _live_queue_state(), "plate_process": SERVICE.status()}
 
 
 async def _close_report(task_id: str, output_dir: Path, config: dict, save_violation) -> list:
@@ -922,8 +1176,10 @@ async def use_wizard_for_live(config: dict):
     violations the wizard offers works live without an analysis run. The camera itself is not touched: pick it in
     Camera input. The saved camera addresses and the chosen camera are kept.
     """
+    from engine.start_log import START
     from routers import stream
 
+    START.begin("apply")                                       # (the timeline of this start: GET /settings/live/perf -> "startup")
     config = prepare_pipeline_config(dict(config))
     selected = config.get("active_violations", [])
     if not selected:
@@ -941,10 +1197,27 @@ async def use_wizard_for_live(config: dict):
         config["clock_start"] = config["video_start"]
     with open(stream.CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
+    START.mark("rules saved")
 
-    get_inference(force_reload=True, tracker_type=config.get("tracker", "bytetrack"))
-    stream.reload_pipeline()
-    stream._stream_generation += 1                             # a running live view restarts with the new rules
+    def build() -> None:
+        # Loading models takes seconds. It runs in a thread, so the backend keeps answering (the dashboard's other requests are served,
+        # its "Processing" view stays alive). What was loaded before (detector, ReID networks, the models of the rules that did not change)
+        # is used again, not loaded a second time: see get_inference / ModelRegistry.
+        try:
+            get_inference(force_reload=True, tracker_type=config.get("tracker", "bytetrack"))
+            START.mark("detector ready")
+            stream.reload_pipeline()
+            START.mark("pipeline built")
+            stream.warm_up_pipeline()                          # the first run of each model, now and not on the first live picture
+            START.mark("models warm")
+        finally:
+            stream.end_rebuild()                               # the feed that waits for the new rules may start (also when the build failed)
+
+    # A running live view stops NOW (it closes its connection and the dashboard reconnects): its last pictures must not be judged on the
+    # fresh trackers that the build below puts in place, and the feed that connects meanwhile must wait for the NEW pipeline, not take the old.
+    stream.begin_rebuild()
+    stream._stream_generation += 1
+    await asyncio.to_thread(build)
     return {"message": "The Live Monitor now uses these zones and settings", "violations": selected}
 
 
@@ -1607,9 +1880,6 @@ class PlateBoxRequest(BaseModel):
     box: list[float]           # [x0, y0, x1, y1] as fractions (0..1) of that picture
 
 
-_plate_sessions: dict = {}
-
-
 def _open_report(task_id: str, ticket_uid: str):
     """(out_dir, report_path, tickets, index) of one ticket of an analysis, or a JSONResponse error."""
     from engine.pipeline import EVIDENCE_DIR
@@ -1659,62 +1929,13 @@ async def _sync_plate(old: dict, new: dict) -> None:
         await _drop_no_plate_verdict(new)                     # it has a plate number now: the "no plate" verdict is void
 
 
-def _plate_finder(config: dict):
-    """A function: vehicle picture -> plate boxes [{"box": [x, y, w, h], "confidence": f}], best first, with the
-    plate model the analysis used (or, in direct-OCR mode, the bumper area to read)."""
-    if config.get("plate_method") == "direct_ocr":
-        def bumper(image):
-            h, w = image.shape[:2]
-            top = int(h * 0.6)
-            return [{"box": [0, top, w, h - top], "confidence": 1.0}]
-        return bumper
-
-    import onnxruntime as ort
-    from engine import specialists
-
-    models = Path(__file__).resolve().parent.parent / "models"
-    name = Path(config.get("plate_model") or "plate_specialist.onnx").name
-    path = models / name
-    if not path.exists():
-        path = next(iter(models.rglob(name)), models / "plate_specialist.onnx")
-    if path not in _plate_sessions:
-        _plate_sessions[path] = ort.InferenceSession(str(path), providers=["CPUExecutionProvider"])
-    session = _plate_sessions[path]
-
-    def find(image):
-        return [d for d in specialists.detect(session, image, specialists.SEARCH_CONF) if d["class_id"] == specialists.IDX_LICENSE_PLATE]
-    return find
-
-
 def _reread_with_models(ticket: dict, frames: list[str], config: dict, plate_format: str, written: list | None = None):
-    """Runs plate_reread.reread with the real plate model, OCR and image files (slow: call it in a thread). Every crop is read as
-    seen and enhanced. `written` (optional) collects the files made, for a clean-up."""
-    from engine import plate_reread, plate_vote
-    from engine.pipeline import EVIDENCE_DIR, _extract_plate_reads
-    from yolo_inference import YoloInference
-
-    ocr_engine = config.get("ocr_engine", "easyocr")
-    enhancement = config.get("enhancement", "lanczos")
-
-    def read_both(crop):
-        got = _extract_plate_reads(crop, plate_format, ocr_engine, enhancement)
-        top = plate_vote.best_read(got["reads"], plate_format)
-        return top["raw"], top["cleaned"], got["raw_crop"], got["enhanced_crop"], top["confidence"], got["reads"]
-
-    def save(image):
-        name = Path(YoloInference.save_snapshot(image, EVIDENCE_DIR)).name
-        if written is not None:
-            written.append(EVIDENCE_DIR / name)
-        return name
-
-    return plate_reread.reread(
-        ticket, frames,
-        find_plates=_plate_finder(config),
-        read_plate=read_both,
-        load_image=lambda name: cv2.imread(str(EVIDENCE_DIR / Path(name).name)),
-        save_image=save,
-        plate_format=plate_format,
-    )
+    """Reads the plate of a ticket from its evidence photos with the real plate model, OCR and GAN (slow: call it in a thread). Every
+    crop is read as seen and enhanced. `written` (optional) collects the files made, for a clean-up.
+    The work is done by the plate PROCESS (engine/plate_service.py), not by this one: the live feed never shares its interpreter, CPU
+    threads or GPU with it. Raises ValueError when there is nothing to read, PlateServiceError when the plate process failed."""
+    from engine.plate_service import SERVICE
+    return SERVICE.reread(ticket, frames, config, plate_format, written)
 
 
 @router.post("/tickets/remove-frames")

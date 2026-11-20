@@ -44,6 +44,8 @@ class RoadArea {
     this.stripes = 8,
     this.wear = 0.2,
     this.realistic = true,
+    this.lineWidth = 1.0,
+    this.taper = 0.6,
   });
 
   static const kinds = ['crosswalk', 'road', 'sidewalk']; // what an area can be after "Detect road"
@@ -87,6 +89,7 @@ class RoadArea {
   static String styleLabel(String style) => switch (style) {
     'solid_yellow' => 'Yellow',
     'double_yellow' => 'Double yellow',
+    'dashed_white' => 'White dashed',
     _ => 'White',
   };
 
@@ -104,6 +107,8 @@ class RoadArea {
   final int stripes; // the zebra's bars (3 to 16)
   final double wear; // how worn the paint is (0 = new, 1 = very worn)
   final bool realistic; // soft edge, grain, dulled to the scene's light; off = flat clean paint
+  final double lineWidth; // a painted solid line: 0.4 to 3, 1.0 = normal road paint (the backend's engine/line_paint.py)
+  final double taper; // a painted solid line: 0 to 1, how much thinner the paint is farther up the picture (road perspective)
 
   bool get isLine => lineKinds.contains(kind);
 
@@ -132,6 +137,8 @@ class RoadArea {
       stripes: ((json['stripes'] as num?)?.toInt() ?? 8).clamp(minStripes, maxStripes),
       wear: ((json['wear'] as num?)?.toDouble() ?? 0.2).clamp(0.0, 1.0),
       realistic: json['realistic'] as bool? ?? true,
+      lineWidth: ((json['line_width'] as num?)?.toDouble() ?? 1.0).clamp(0.4, 3.0),
+      taper: ((json['taper'] as num?)?.toDouble() ?? 0.6).clamp(0.0, 1.0),
     );
   }
 
@@ -143,6 +150,7 @@ class RoadArea {
     if (hasDirection && flow != null) 'flow': flow,
     if (hasDirection && flow != null && arrow.length >= 2) 'arrow': [for (final p in arrow) [p.dx, p.dy]],
     if (kind == 'solid_line') ...{'style': style, 'rule': rule},
+    if (kind == 'solid_line' && paint) ...{'paint': true, 'line_width': lineWidth, 'taper': taper, 'wear': wear, 'realistic': realistic},
     if (kind == 'lane' && laneType != null) 'lane_type': laneType,
     if (kind == 'road' && roadClass != null) 'road_class': roadClass,
     if (kind == 'crosswalk' && paint) ...{'paint': true, 'stripes': stripes, 'wear': wear, 'realistic': realistic},
@@ -165,6 +173,8 @@ class RoadArea {
     int? stripes,
     double? wear,
     bool? realistic,
+    double? lineWidth,
+    double? taper,
     bool clearFlow = false,
     bool clearLaneType = false,
     bool clearRoadClass = false,
@@ -183,6 +193,8 @@ class RoadArea {
     stripes: stripes ?? this.stripes,
     wear: wear ?? this.wear,
     realistic: realistic ?? this.realistic,
+    lineWidth: lineWidth ?? this.lineWidth,
+    taper: taper ?? this.taper,
   );
 
   /// The same shape with every point multiplied by [fx] and [fy] (from the picture's pixels to the 1920x1080 reference space and back).
@@ -201,6 +213,8 @@ class RoadArea {
     stripes: stripes,
     wear: wear,
     realistic: realistic,
+    lineWidth: lineWidth,
+    taper: taper,
   );
 
   /// The same shape under another name.
@@ -219,6 +233,8 @@ class RoadArea {
     stripes: stripes,
     wear: wear,
     realistic: realistic,
+    lineWidth: lineWidth,
+    taper: taper,
   );
 
   /// The middle of the shape's points, left to right (to say "incoming on the left").

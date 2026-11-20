@@ -138,25 +138,97 @@ def in_trailing_body(vehicle: list, head: tuple, person: list) -> bool:
     return along <= TRAILING_S                                      # +1 = leading edge, -1 = trailing edge
 
 
-def outside_position(vehicle: list, person: list) -> str | None:
+def outside_position(vehicle: list, person: list, head: tuple | None = None) -> str | None:
     """
-    'roof' | 'hanging' | None for a person on a bus / jeepney / truck.
-      roof     feet in the top 30% of the vehicle, head sticking out above its roof line (by 15% of the person)
+    'roof' | 'hanging' | 'rear' | None for a person on a bus / jeepney / truck / car.
+      roof     feet in the top 35% of the vehicle (or just above it), head at or above its roof line
+      rear     standing tall with the feet at the bottom edge, in the TRAILING part along the travel `head` (unit vector):
+               on the back step of a jeepney seen from behind or from the side. Needs `head`. A passenger seated inside shows
+               only the upper body, with the box ending well above the bottom edge, so it does not count.
       hanging  straddling the left or right edge (a quarter to three quarters of the person over the body),
                with the feet in the lower 60%: on a step, a ladder or the tailgate
     A person (almost) wholly inside the vehicle's box is an occupant - the driver behind the windshield, a seated
-    passenger - and never counts.
+    passenger - and never counts (except the 'rear' case above).
     """
     vx, vy, vw, vh = vehicle
     px, py, pw, ph = person
     if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0 or ph < 0.2 * vh:
         return None
+    foot_x, foot_y = px + pw / 2, py + ph
+    if vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.35 * vh and py <= vy + 0.05 * ph:
+        return "roof"
+    if head is not None and ph >= REAR_TALL * vh and vx - 0.1 * vw <= foot_x <= vx + 1.1 * vw and vy + REAR_FEET * vh <= foot_y <= vy + 1.08 * vh:
+        half = abs(head[0]) * vw / 2 + abs(head[1]) * vh / 2
+        along = ((px + pw / 2 - (vx + vw / 2)) * head[0] + (py + ph / 2 - (vy + vh / 2)) * head[1]) / half if half > 0 else 0.0
+        if along <= -0.1:
+            return "rear"
     if _share_inside(vehicle, person) >= INSIDE_SHARE:
         return None
-    foot_x, foot_y = px + pw / 2, py + ph
-    if vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.3 * vh and py <= vy - 0.15 * ph:
-        return "roof"
     inside = max(0.0, min(px + pw, vx + vw) - max(px, vx)) / pw
     if 0.25 <= inside <= 0.75 and (px < vx or px + pw > vx + vw) and vy + 0.4 * vh <= foot_y <= vy + 1.05 * vh:
         return "hanging"
     return None
+
+
+REAR_TALL = 0.55          # a person standing on the back step is at least this tall (share of the vehicle's height)
+REAR_FEET = 0.82          # ... with the feet in the bottom 18% of the vehicle's box
+
+
+# ─── who sits where, without person track numbers ────────────────────────────
+# A person on a moving vehicle keeps the same place ON it. That is checked from where people were seen over the last second and a half,
+# not from a person's own track: a person the detector is unsure of (most people on a roof or a step) is seen on some looks only and
+# gets no stable track number, but each look still has a box on the vehicle at the same place.
+
+SEEN_S = 1.6              # how far back the looks are kept
+ATTACH_TOL = 0.08         # the same place: within this share of the vehicle's size, from the look before
+ATTACH_MIN_S = 0.4        # ... seen at that place at least this long ago
+ATTACH_MIN_LOOKS = 2      # ... on at least this many earlier looks
+ATTACH_TRAVEL = 0.2       # the vehicle moved at least this share of its size since then (a pedestrian standing by it is left behind)
+HITS_NEEDED = 4           # looks with a passenger outside ...
+HITS_WINDOW_S = 3.0       # ... within this many seconds flag the vehicle
+
+
+def place_on(vehicle: list, person: list) -> tuple[float, float]:
+    """Where the person's feet are on the vehicle, as shares of the vehicle's size from the middle of its box (the same place on
+    the vehicle gives the same numbers whatever the distance to the camera)."""
+    vx, vy, vw, vh = vehicle
+    px, py, pw, ph = person
+    size = max(vw, vh, 1)
+    return ((px + pw / 2 - (vx + vw / 2)) / size, (py + ph - (vy + vh / 2)) / size)
+
+
+def attached_here(memory: dict, t: float, vehicle: list, place: tuple[float, float]) -> bool:
+    """True when somebody was already seen at this place on the vehicle (see ATTACH_*) while the vehicle drove on."""
+    vx, vy, vw, vh = vehicle
+    size = max(vw, vh, 1)
+    cx, cy = vx + vw / 2, vy + vh / 2
+    matched = []
+    for seen_t, scx, scy, places in memory.get("seen", ()):
+        age = t - seen_t
+        if 0 < age <= SEEN_S and any(math.hypot(place[0] - u, place[1] - v) <= ATTACH_TOL for u, v in places):
+            matched.append((age, scx, scy))
+    if len(matched) < ATTACH_MIN_LOOKS:
+        return False
+    age, scx, scy = max(matched)
+    return age >= ATTACH_MIN_S and math.hypot(cx - scx, cy - scy) / size >= ATTACH_TRAVEL
+
+
+def remember_places(memory: dict, t: float, vehicle: list, places: list) -> None:
+    """Keep this look (when, where the vehicle was, where people sat on it) for the next ones."""
+    from collections import deque
+    seen = memory.setdefault("seen", deque())
+    vx, vy, vw, vh = vehicle
+    seen.append((t, vx + vw / 2, vy + vh / 2, list(places)))
+    while seen and t - seen[0][0] > SEEN_S:
+        seen.popleft()
+
+
+def count_hit(memory: dict, t: float, hit: bool) -> bool:
+    """Note whether this look had a passenger outside; True when HITS_NEEDED looks in the last HITS_WINDOW_S seconds did."""
+    from collections import deque
+    hits = memory.setdefault("hits", deque())
+    if hit:
+        hits.append(t)
+    while hits and t - hits[0] > HITS_WINDOW_S:
+        hits.popleft()
+    return len(hits) >= HITS_NEEDED

@@ -39,6 +39,7 @@ class ResultsWorkspace extends StatefulWidget {
     this.onSendToLive,
     this.harvest,
     this.loadSetup,
+    this.showQueue = true,
   });
 
   final ReviewController controller;
@@ -58,6 +59,10 @@ class ResultsWorkspace extends StatefulWidget {
   /// Reads the settings this analysis ran with (file name, violations, models ...). Null = the header stays as it was.
   final Future<AnalysisSetup?> Function()? loadSetup;
 
+  /// False: no list of tickets (another screen already lists them, e.g. the Live Monitor's side list): the right column is always the open
+  /// ticket's details, and there is no way back to a list.
+  final bool showQueue;
+
   @override
   State<ResultsWorkspace> createState() => _ResultsWorkspaceState();
 }
@@ -75,6 +80,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
   bool _harvesting = false; // the Harvest tab of this analysis instead of the review
   bool _holdingOpen = false; // Holding (photos set aside from tickets) instead of the review
   bool _showDetails = false; // right column: false = the list of tickets, true = the open ticket's details
+  bool get _detailsOpen => !widget.showQueue || _showDetails;
   String? _lastUid;
   String? _lastVideo;
   AnalysisSetup? _setup; // what this analysis ran with: shown in the header and in the setup panel
@@ -270,7 +276,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
         c.clearChecked();
         return KeyEventResult.handled;
       }
-      if (_showDetails) {
+      if (widget.showQueue && _showDetails) {
         setState(() => _showDetails = false); // back to the list of tickets
         return KeyEventResult.handled;
       }
@@ -358,7 +364,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
           return Scaffold(
             key: _scaffold,
             backgroundColor: Colors.transparent,
-            drawer: mode == _Mode.narrow
+            drawer: mode == _Mode.narrow && widget.showQueue
                 ? Drawer(width: 360, child: queue)
                 : null,
             endDrawer: mode == _Mode.narrow
@@ -457,7 +463,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) {
-        final showing = _showDetails && c.selected != null;
+        final showing = _detailsOpen && c.selected != null;
         return _surface(
           Stack(
             fit: StackFit.expand,
@@ -489,15 +495,17 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
         children: [
           // The back button gives way first when the column is tight: the previous / next buttons must always fit.
           Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                key: const Key('back-to-list'),
-                onPressed: () => setState(() => _showDetails = false),
-                icon: const Icon(Icons.arrow_back, size: 18),
-                label: Text('All tickets (${c.total})', maxLines: 1, overflow: TextOverflow.ellipsis),
-              ),
-            ),
+            child: widget.showQueue
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const Key('back-to-list'),
+                      onPressed: () => setState(() => _showDetails = false),
+                      icon: const Icon(Icons.arrow_back, size: 18),
+                      label: Text('All tickets (${c.total})', maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
           if (i >= 0) Text('${i + 1} of ${list.length}', style: Fx.caption(context)),
           IconButton(
@@ -565,7 +573,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
           ),
           child: Row(
             children: [
-              if (mode == _Mode.narrow)
+              if (mode == _Mode.narrow && widget.showQueue)
                 IconButton(
                   tooltip: 'Open the ticket queue',
                   icon: const Icon(Icons.view_list_outlined),
@@ -812,7 +820,7 @@ class _ResultsWorkspaceState extends State<ResultsWorkspace> {
                 ),
               ),
               // The verdict buttons live in the details; while the right column shows the list, they stay under the evidence.
-              if ((mode == _Mode.narrow || !_showDetails) && t != null) ...[
+              if ((mode == _Mode.narrow || !_detailsOpen) && t != null) ...[
                 const SizedBox(height: Fx.s12),
                 _verdictStrip(context, t, mode),
               ],

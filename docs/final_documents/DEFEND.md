@@ -338,7 +338,7 @@ and honest limitations and scope set by the researchers along with the consultat
 
 **Q: How do demerit points work? What are the values?**
 - **We decided:** One confirmed (approved) ticket = one point per plate, counted when read. No weights or thresholds.
-- **Defense:** The proposal defines the counter only as "accumulated violations per plate number". We did not invent legal point values. Rejecting a ticket undoes the point.
+- **Defense:** The proposal defines the counter only as "accumulated violations per plate number". We did not invent legal point values. Rejecting a ticket, or accepting its appeal, undoes the point. The phone shows the same count.
 - **Say honestly:** The points carry no legal weight. Real LTO demerit rules were not applied.
 
 **Q: How do email and notices work?**
@@ -347,8 +347,8 @@ and honest limitations and scope set by the researchers along with the consultat
 - **Say honestly:** The online Supabase route was tested only against faked responses, **not** a real project. **[CHECK: real Supabase test, push to a closed app, phone APK build.]** Motorist accounts use the plate as the login in the prototype.
 
 **Q: Appeals?**
-- **Defense:** The Violator Portal (phone app) lets a registered motorist see approved tickets and file an appeal.
-- **Say honestly:** **[CHECK: officer-side appeal review screen. It did not exist when last seen.]**
+- **Defense:** The Violator Portal (phone app) lets a registered motorist see approved tickets and file an appeal. The dashboard has an **Appeals** page (built 2026-11-20): the reviewer sees the motorist's words beside the ticket's photos and accepts or rejects, with an optional note. The motorist gets a notice and a push. An accepted appeal cancels the ticket, so its demerit point is removed.
+- **Say honestly:** Appeals filed through the cloud are read by the laptop (it polls). The decision and the push were tested only against faked responses, **not** a real Supabase project. **[CHECK: file an appeal on a real phone and decide it.]** An appeal has no deadline and no second review in the prototype.
 
 **Q: How do you protect privacy (RA 10173)?**
 - **We decided:** A **mandatory blur** step. Saved evidence blurs people's heads and other vehicles' plates and keeps only the violator's plate. If blur fails, nothing is saved ("fail closed"). It costs about 69 ms per 1080p frame.

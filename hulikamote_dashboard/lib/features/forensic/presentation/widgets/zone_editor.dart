@@ -8,6 +8,7 @@ import '../../data/forensic_api.dart';
 import '../../domain/analysis_draft.dart';
 import '../../domain/lane_signs.dart';
 import '../../domain/loading_signs.dart';
+import '../../domain/marking_shape.dart';
 import '../../domain/parking_reasons.dart';
 import '../../data/object_previews.dart';
 import '../../domain/violation_catalog.dart';
@@ -79,12 +80,15 @@ class _ZoneEditorState extends State<ZoneEditor> {
   /// The no-parking signs also say WHY parking is banned there (RA 4136 Section 46).
   bool get _isParking => key == LoadingSigns.parkingRuleKey;
 
+  /// Illegal turn: the sign says which turn is banned (left or right).
+  bool get _isTurn => key == LoadingSigns.turnRuleKey;
+
   /// "no-loading" or "no-parking": what the sign of this rule bans (and the same as a verb: "loading" / "parking").
   String get _ban => LoadingSigns.banFor(key);
   String get _banned => key == LoadingSigns.parkingRuleKey ? 'parking' : 'loading';
 
   /// Loading and parking have their own sentences; the other rules say what they check.
-  bool get _ownWords => key == 'illegal_loading' || key == LoadingSigns.parkingRuleKey;
+  bool get _ownWords => key == 'illegal_loading' || key == LoadingSigns.parkingRuleKey || key == LoadingSigns.turnRuleKey;
 
   /// The zone is optional for this rule (nothing drawn = the whole picture), see AnalysisDraft.wholeFrameKeys.
   bool get _zoneOptional => AnalysisDraft.wholeFrameKeys.contains(key);
@@ -342,9 +346,10 @@ class _ZoneEditorState extends State<ZoneEditor> {
 
   /// Illegal parking: what the next placed sign marks (a hydrant, a corner ...), see parking_reasons.dart.
   String _kind = ParkingReasons.defaultKind;
+  String _turnKind = LoadingSigns.defaultTurnKind; // Illegal turn: what the next placed sign bans
 
   void _placeLoadingSign(Offset local, Size size) {
-    _signs.add(LoadingSigns.make(_norm(local, size), kind: _isParking ? _kind : null));
+    _signs.add(LoadingSigns.make(_norm(local, size), kind: _isParking ? _kind : (_isTurn ? _turnKind : null)));
     widget.draft.touch();
     setState(() {
       _notice = null;
@@ -664,6 +669,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
                                         ]
                                       : const [],
                                   selectedSign: _tool == ZoneTool.sign ? _selSign : null,
+                                  markings: _isLane ? widget.draft.markingShapes : const [],
                                   boxSigns: _boxSigns ? _boxObjects() : const [],
                                   loadingHandles: _boxSigns && _tool == ZoneTool.sign,
                                 ),
@@ -987,6 +993,41 @@ class _ZoneEditorState extends State<ZoneEditor> {
     return 'No zone: each vehicle follows the sign nearest to it, so two roads can have different signs.';
   }
 
+  /// "Use the road markings": the lanes of the live setup, so a sign can be set to one (bus lane for this road): it goes to the middle of
+  /// the lane and says the lane's type.
+  List<Widget> _laneChoice(BuildContext context, int i) {
+    final lanes = [for (final m in widget.draft.markingShapes) if (m.kind == 'lane') m];
+    if (lanes.isEmpty) return const [];
+    final current = _signs[i]['lane'] as String?;
+    return [
+      Text('PUT THE SELECTED SIGN ON A MARKED LANE', style: Fx.label(context)),
+      DropdownButton<String?>(
+        key: const ValueKey('sign-lane'),
+        isExpanded: true,
+        value: lanes.any((l) => l.id == current) ? current : null,
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Not on a marked lane')),
+          for (final l in lanes) DropdownMenuItem<String?>(value: l.id, child: Text(l.label)),
+        ],
+        onChanged: (id) {
+          if (id == null) {
+            _signs[i].remove('lane');
+          } else {
+            final lane = lanes.firstWhere((l) => l.id == id);
+            final spot = lane.anchor;
+            _signs[i]['lane'] = id;
+            _signs[i]['x'] = spot.dx;
+            _signs[i]['y'] = spot.dy;
+            if (lane.laneType != null && LaneSigns.of(lane.laneType!) != null) _signs[i]['type'] = lane.laneType;
+          }
+          widget.draft.touch();
+          setState(() {});
+        },
+      ),
+      const SizedBox(height: Fx.s8),
+    ];
+  }
+
   Widget _signsCard(BuildContext context) {
     final placing = _tool == ZoneTool.sign;
     final zoneCount = widget.draft.zones(key).length;
@@ -1074,6 +1115,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
               ),
             if (_selSign != null && _selSign! < _signs.length) ...[
               const SizedBox(height: Fx.s8),
+              ..._laneChoice(context, _selSign!),
               Text('SIZE AND ANGLE OF THE SELECTED SIGN', style: Fx.label(context)),
               _lookSlider('sign-scale', 'Size', _scaleOf(_selSign!), SignGeometry.minScale, SignGeometry.maxScale, '${(_scaleOf(_selSign!) * 100).round()}%', 'scale'),
               _lookSlider('sign-angle', 'Rotate', _angleOf(_selSign!), -SignGeometry.maxAngle, SignGeometry.maxAngle, '${_angleOf(_selSign!).round()}°', 'angle'),
@@ -1307,6 +1349,7 @@ class _ZoneEditorState extends State<ZoneEditor> {
       if (zones > 0) '$zones zone${zones == 1 ? '' : 's'}',
     ];
     if (!_ownWords) return '"${ViolationCatalog.of(key).label}" is checked in the ${parts.join(' and ')}.';
+    if (_isTurn) return 'A banned turn is judged in the ${parts.join(' and ')}. A vehicle that is followed through the turn the banned way is flagged.';
     final who = key == LoadingSigns.parkingRuleKey ? 'A vehicle' : 'A bus, jeepney, tricycle or truck';
     return '${_cap(_banned)} is banned in the ${parts.join(' and ')}. $who that stands still there too long is flagged.';
   }
@@ -1348,12 +1391,31 @@ class _ZoneEditorState extends State<ZoneEditor> {
             const SizedBox(height: 4),
             Text(ParkingReasons.of(_kind).hint, key: const ValueKey('parking-kind-hint'), style: Fx.caption(context)),
           ],
+          if (_isTurn) ...[
+            const SizedBox(height: Fx.s8),
+            Text('Which turn is banned?', style: Fx.label(context)),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final e in LoadingSigns.turnKinds.entries)
+                  ChoiceChip(
+                    key: ValueKey('turn-kind-${e.key}'),
+                    label: Text(e.value),
+                    selected: _turnKind == e.key,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) => setState(() => _turnKind = e.key),
+                  ),
+              ],
+            ),
+          ],
           const SizedBox(height: Fx.s8),
           FilledButton.tonalIcon(
             key: const ValueKey('sign-place'),
             onPressed: () => setState(() => _tool = placing ? ZoneTool.zone : ZoneTool.sign),
             icon: Icon(placing ? Icons.check : Icons.add_location_alt_outlined, size: 18),
-            label: Text(placing ? 'Done placing signs' : (_isParking && _kind != ParkingReasons.defaultKind ? 'Place: ${ParkingReasons.of(_kind).short}' : 'Place a $_ban sign')),
+            label: Text(placing ? 'Done placing signs' : (_isParking && _kind != ParkingReasons.defaultKind ? 'Place: ${ParkingReasons.of(_kind).short}' : (_isTurn ? 'Place: ${LoadingSigns.turnKinds[_turnKind]}' : 'Place a $_ban sign'))),
           ),
           if (placing) ...[
             const SizedBox(height: 4),
@@ -1376,13 +1438,15 @@ class _ZoneEditorState extends State<ZoneEditor> {
                 child: Row(
                 key: ValueKey('loading-sign-row-$i'),
                 children: [
-                  Icon(key == LoadingSigns.parkingRuleKey ? Icons.local_parking : Icons.no_transfer, size: 16),
+                  Icon(key == LoadingSigns.parkingRuleKey ? Icons.local_parking : (_isTurn ? Icons.turn_left : Icons.no_transfer), size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _isParking
                           ? 'Sign ${i + 1}  ·  ${ParkingReasons.of(_signs[i]['kind'] as String?).label}  ·  ${LoadingSigns.sizeText(_signs[i])}'
-                          : 'Sign ${i + 1}  ·  ${LoadingSigns.sizeText(_signs[i])}',
+                          : (_isTurn
+                              ? 'Sign ${i + 1}  ·  ${LoadingSigns.turnKinds[LoadingSigns.turnKindOf(_signs[i]['kind'])]}  ·  ${LoadingSigns.sizeText(_signs[i])}'
+                              : 'Sign ${i + 1}  ·  ${LoadingSigns.sizeText(_signs[i])}'),
                       key: ValueKey('loading-sign-text-$i'),
                       style: Fx.body(context),
                       overflow: TextOverflow.ellipsis,
@@ -1401,6 +1465,21 @@ class _ZoneEditorState extends State<ZoneEditor> {
                       },
                       itemBuilder: (_) => [
                         for (final r in ParkingReasons.all) PopupMenuItem<String>(value: r.key, child: Text(r.label)),
+                      ],
+                    ),
+                  if (_isTurn)
+                    PopupMenuButton<String>(
+                      key: ValueKey('turn-sign-kind-$i'),
+                      tooltip: 'Change which turn this sign bans',
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      padding: EdgeInsets.zero,
+                      onSelected: (v) {
+                        _signs[i]['kind'] = v;
+                        widget.draft.touch();
+                        setState(() {});
+                      },
+                      itemBuilder: (_) => [
+                        for (final e in LoadingSigns.turnKinds.entries) PopupMenuItem<String>(value: e.key, child: Text(e.value)),
                       ],
                     ),
                   IconButton(
@@ -1583,9 +1662,13 @@ class _ZonePainter extends CustomPainter {
     required this.stopLine,
     this.signs = const [],
     this.selectedSign,
+    this.markings = const [],
     this.boxSigns = const [],
     this.loadingHandles = false,
   });
+
+  /// The road markings of the live setup, faint behind the zones (the lanes a sign can be put on, the roads, the crosswalks).
+  final List<MarkingShape> markings;
 
   final List<({Offset at, String type, double scale, double angle, double tilt, String stand})> signs;
   final int? selectedSign;
@@ -1835,6 +1918,20 @@ class _ZonePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    for (final m in markings) {                                    // the road markings, behind everything else
+      final pts = [for (final p in m.polygon) Offset(p.dx / ZoneGeometry.refWidth, p.dy / ZoneGeometry.refHeight)];
+      if (pts.length < 3) continue;
+      final colour = switch (m.kind) {
+        'lane' => Colors.amberAccent,
+        'road' => Colors.lightBlueAccent,
+        'sidewalk' => Colors.lightGreenAccent,
+        _ => Colors.cyanAccent,
+      };
+      final path = _path(pts, size);
+      canvas.drawPath(path, Paint()..color = colour.withValues(alpha: 0.12));
+      canvas.drawPath(path, Paint()..color = colour.withValues(alpha: 0.7)..style = PaintingStyle.stroke..strokeWidth = 1.5);
+      _label(canvas, m.label, _px(Offset(pts.map((p) => p.dx).reduce((a, b) => a < b ? a : b), pts.map((p) => p.dy).reduce((a, b) => a < b ? a : b)), size) + const Offset(3, 3), colour);
+    }
     // Saved zones: calm green, with their own arrows / light boxes and a number.
     for (var i = 0; i < saved.length; i++) {
       final z = saved[i];

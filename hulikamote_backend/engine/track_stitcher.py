@@ -25,6 +25,8 @@ import math
 
 import numpy as np
 
+from engine import track_guard
+
 # ── Tunables ────────────────────────────────────────────────────────────────
 MAX_GAP_SECONDS = 3.0        # longest a vehicle may be lost and still be re-linked
 MIN_GATE_PX = 40.0           # minimum spatial gate (pixels)
@@ -33,6 +35,13 @@ AREA_RATIO_RANGE = (0.4, 2.5)  # new box area / last box area
 MIN_MOVING_SPEED = 20.0      # px/s: below this the vehicle counts as stationary
 MIN_DIRECTION_STEP = 15.0    # px: ignore direction check for tiny jumps
 MAX_HIST_DISTANCE = 0.5      # Bhattacharyya distance (0 = identical colours)
+# A vehicle that has stopped in a no-parking zone (TrackLedger.holds_place) is followed strictly and for longer: it does not move, so the
+# new number must show up on the very same spot, with the same size and colours; but it may have been hidden for a good while (a bus
+# stopped in front of it) before it shows again.
+PARKED_KEEP_S = 25.0         # a stopped vehicle that is out of sight is kept this long before its ledger is closed
+PARKED_MAX_GAP_S = PARKED_KEEP_S
+PARKED_GATE_FACTOR = 0.6     # spatial gate = factor * max(box w, h): the same spot
+PARKED_AREA_RATIO_RANGE = (0.6, 1.7)
 APPEARANCE_EVERY_N = 5       # refresh a ledger's colour signature every N updates
 APPEARANCE_EMA = 0.3         # weight of the newest signature in the running mean
 _VELOCITY_SAMPLES = 8        # history samples used to estimate velocity
@@ -91,7 +100,8 @@ def score_candidate(birth_bbox, birth_cls: str | None, birth_sig, ledger, now: f
 
     t_last, lx, ly, vx, vy = _kinematics(ledger.history)
     gap = now - t_last
-    if gap <= 0 or gap > MAX_GAP_SECONDS:
+    held = bool(getattr(ledger, "holds_place", False))
+    if gap <= 0 or gap > (PARKED_MAX_GAP_S if held else MAX_GAP_SECONDS):
         return None
 
     # Class gate
@@ -111,13 +121,14 @@ def score_candidate(birth_bbox, birth_cls: str | None, birth_sig, ledger, now: f
 
     # Size gate
     ratio = (bw * bh) / (lw * lh)
-    if not (AREA_RATIO_RANGE[0] <= ratio <= AREA_RATIO_RANGE[1]):
+    low, high = PARKED_AREA_RATIO_RANGE if held else AREA_RATIO_RANGE
+    if not (low <= ratio <= high):
         return None
 
-    # Spatial gate: compare against where the lost vehicle should be by now
-    px, py = lx + vx * gap, ly + vy * gap
+    # Spatial gate: compare against where the lost vehicle should be by now (a stopped one is where it was)
+    px, py = (lx, ly) if held else (lx + vx * gap, ly + vy * gap)
     dist = math.hypot(nx - px, ny - py)
-    gate = max(MIN_GATE_PX, GATE_BOX_FACTOR * max(lw, lh))
+    gate = max(MIN_GATE_PX, (PARKED_GATE_FACTOR if held else GATE_BOX_FACTOR) * max(lw, lh))
     if dist > gate:
         return None
 
@@ -128,6 +139,13 @@ def score_candidate(birth_bbox, birth_cls: str | None, birth_sig, ledger, now: f
     if speed >= MIN_MOVING_SPEED and step >= MIN_DIRECTION_STEP:
         if (vx * sx + vy * sy) / (speed * step) < 0:
             return None
+
+    # Strict "same vehicle" test in the vehicle's own frame (engine/track_guard.py): not behind where it was heading, not much further
+    # ahead than its speed explains, not beside it (the next lane, the other side of the road), the same size
+    if track_guard.check(ledger.history, birth_bbox, now, max_gap=track_guard.PARKED_GAP_S if getattr(ledger, "holds_place", False) else MAX_GAP_SECONDS) is not None:
+        return None
+    if track_guard.class_clash(ledger.latest_class, birth_cls) is not None:
+        return None
 
     # Colour gate
     hd = 0.0

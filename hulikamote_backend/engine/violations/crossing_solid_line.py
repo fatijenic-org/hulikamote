@@ -62,7 +62,8 @@ class CrossingSolidLine(Violation):
                 zone = {"coordinates": z.get("polygon") or [], "stop_line": line}
                 if z.get("look") is not None:                                          # "Paint it": a look, even an empty one, means paint
                     zone["look"] = line_paint.look_of(z["look"])
-                    zone["realistic"] = realistic
+                    own = z["look"].get("realistic") if isinstance(z["look"], dict) else None     # the road markings say it per line
+                    zone["realistic"] = realistic if own is None else bool(own)
                 zones.append(zone)
         return zones
 
@@ -106,6 +107,14 @@ class CrossingSolidLine(Violation):
                 ledger.violations.add(self.key)
                 flagged = True
         return flagged
+
+    def has_overlay(self, zone):
+        return bool(zone.get("stop_line")) and zone.get("look") is not None
+
+    def draw_overlay(self, pipe, frame, index, zone):
+        if self.has_overlay(zone):
+            boxes = [d.bbox for d in getattr(pipe, "_draw_dets", ()) if getattr(d, "cls", None) in line_paint.OCCLUDES]
+            line_paint.draw(frame, zone["stop_line"], zone["look"], zone.get("realistic", True), occluders=boxes)
 
     def draw_zone(self, pipe, frame, index, zone):
         """The line itself, bent as drawn (and the road section, when one was drawn)."""

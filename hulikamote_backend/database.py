@@ -77,6 +77,10 @@ appeals_table = sqlalchemy.Table(
     sqlalchemy.Column("reason", sqlalchemy.Text, nullable=False),
     sqlalchemy.Column("status", sqlalchemy.String, nullable=False),         # pending | accepted | rejected
     sqlalchemy.Column("created_at", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("note", sqlalchemy.Text, nullable=False, server_default=""),            # the reviewer's words to the motorist
+    sqlalchemy.Column("decided_at", sqlalchemy.String, nullable=True),
+    sqlalchemy.Column("source", sqlalchemy.String, nullable=False, server_default="local"),   # local (this laptop) | cloud (Supabase)
+    sqlalchemy.Column("cloud_id", sqlalchemy.String, nullable=True),                          # the appeal's id in the cloud
 )
 
 # Every notice the system wrote to a motorist (the laptop's mailbox, opened from a phone in offline mode).
@@ -122,6 +126,10 @@ def run_migrations():
         "ALTER TABLE violations ADD COLUMN plate_text TEXT NOT NULL DEFAULT 'unidentified'",
         "ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE notices ADD COLUMN frames TEXT NOT NULL DEFAULT '[]'",
+        "ALTER TABLE appeals ADD COLUMN note TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE appeals ADD COLUMN decided_at TEXT",
+        "ALTER TABLE appeals ADD COLUMN source TEXT NOT NULL DEFAULT 'local'",
+        "ALTER TABLE appeals ADD COLUMN cloud_id TEXT",
     ]
     with engine.connect() as conn:
         for sql in migrations:

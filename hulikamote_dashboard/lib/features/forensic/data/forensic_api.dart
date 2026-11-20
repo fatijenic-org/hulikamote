@@ -144,6 +144,14 @@ class ForensicApi implements ReviewGateway {
     return {};
   }
 
+  /// The Live Monitor's plate queue: how many live tickets still wait for their plate to be read.
+  Future<int> liveQueueWaiting() async {
+    final r = await _client.get(_u('/api/forensic/live-queue')).timeout(_timeout);
+    if (r.statusCode != 200) _fail(r, 'Loading the plate queue');
+    final body = jsonDecode(r.body);
+    return body is Map ? (body['waiting'] as num?)?.toInt() ?? 0 : 0;
+  }
+
   Future<List<ForensicTicket>> report(String reportUrl) async {
     final r = await _client
         .get(_u(reportUrl))

@@ -104,6 +104,28 @@ def build_message(owner: dict, violation: dict, frames: list[str] = ()) -> Email
     return msg
 
 
+def appeal_text(owner_name: str, label: str, plate: str, case_no: str, accepted: bool, note: str) -> tuple[str, str]:
+    """(subject, body) of the notice that tells a motorist how their appeal was decided. Plain words, like the ticket notice."""
+    shown = plate or "unknown plate"
+    if accepted:
+        outcome = f"Your appeal for case {case_no} ({label}, plate {shown}) was accepted.\n\nThe ticket is cancelled and it no longer counts as a demerit point.\n"
+    else:
+        outcome = f"Your appeal for case {case_no} ({label}, plate {shown}) was not accepted.\n\nThe ticket stays on your record.\n"
+    if note.strip():
+        outcome += f"\nReviewer's note: {note.strip()}\n"
+    body = (f"Hello {owner_name or 'motorist'},\n\n{outcome}\n"
+            "This message comes from HULI-KAMOTE, a research prototype. It is not an official notice and has no legal weight.\n")
+    return f"Appeal {'accepted' if accepted else 'rejected'}: {label} ({shown})", body
+
+
+def build_text_message(owner: dict, subject: str, body: str) -> EmailMessage:
+    msg = EmailMessage()
+    msg["From"], msg["To"] = formataddr((SENDER_NAME, settings()["sender"])), owner.get("email", "")
+    msg["Subject"] = subject
+    msg.set_content(body)
+    return msg
+
+
 def send(msg: EmailMessage) -> Result:
     """Send through the configured mail server. Never raises: a mail problem must not stop a review decision."""
     cfg = settings()

@@ -224,7 +224,7 @@ class YoloDetection:
 
 
 class YoloInference:
-    def __init__(self, session_factory=None, tracker_type: str = "bytetrack"):
+    def __init__(self, session_factory=None, tracker_type: str = "bytetrack", reuse: "YoloInference | None" = None):
         if not MODEL_PATH.exists():
             raise FileNotFoundError(
                 f"ONNX model not found at {MODEL_PATH}. "
@@ -232,7 +232,6 @@ class YoloInference:
             )
 
         self.session_factory = session_factory or make_session
-        print(f"[YOLO] Loading model from {MODEL_PATH}")
         
         # Determine architecture version for routing (e.g. YOLO11, YOLO26)
         path_lower = MODEL_PATH.name.lower()
@@ -245,15 +244,25 @@ class YoloInference:
         else:
             self.model_version = "v8"
 
-        self._session = self.session_factory(str(MODEL_PATH))
+        self.model_path = MODEL_PATH
+        self.session_reused = False
+        if reuse is not None and session_factory is None and getattr(reuse, "model_path", None) == MODEL_PATH:
+            # A new Apply wants fresh trackers (ids from 1) but the model is the same file: the loaded session (and the ReID networks of the
+            # trackers, see _new_tracker) are used again instead of being loaded a second time - seconds of start-up, and the GPU memory.
+            self._session = reuse._session
+            self.session_reused = True
+            print(f"[YOLO] Using the model that is loaded ({MODEL_PATH.name})")
+        else:
+            print(f"[YOLO] Loading model from {MODEL_PATH}")
+            self._session = self.session_factory(str(MODEL_PATH))
         self._input_name = self._session.get_inputs()[0].name
         
         # Load tracker via Strategy Pattern
         self.tracker_type = tracker_type
         self.small_people = False                       # tile search for people on vehicles (see TILE_COLS)
         self._n_classes = 0
-        self.tracker = self._new_tracker()              # vehicles
-        self.people_tracker = self._new_tracker()       # riders and pedestrians (see PERSON_ID_BASE)
+        self.tracker = self._new_tracker(getattr(reuse, "tracker", None))               # vehicles
+        self.people_tracker = self._new_tracker(getattr(reuse, "people_tracker", None))  # riders and pedestrians (see PERSON_ID_BASE)
         self._class_votes: dict[int, deque] = {}        # vehicle track id -> recent (class, confidence)
 
         # If using Phase B custom model, load class names from model metadata
@@ -268,19 +277,38 @@ class YoloInference:
         print(f"[YOLO] Ready. {len(self._classes)} classes. "
               f"Provider: {self._session.get_providers()[0]}")
 
-    def _new_tracker(self):
+    def _new_tracker(self, replaces=None):
+        """A new tracker with nothing tracked. `replaces` = the tracker it takes the place of: DeepSORT keeps that one's loaded ReID network."""
         from engine.tracker import ByteTrackStrategy, DeepSortStrategy
         if self.tracker_type.lower() == "deepsort":
             print("[Tracker] Initializing DeepSORT Strategy (GPU enabled if available)")
-            return DeepSortStrategy(lost_track_buffer=60)
+            return DeepSortStrategy(lost_track_buffer=60, reuse=replaces)
         print("[Tracker] Initializing ByteTrack Strategy")
         return ByteTrackStrategy(lost_track_buffer=60, minimum_matching_threshold=0.2)
 
     def reset_tracker(self) -> None:
         """Forget every tracked vehicle (new ids from 1) without reloading the model."""
-        self.tracker = self._new_tracker()
-        self.people_tracker = self._new_tracker()
+        self.tracker = self._new_tracker(self.tracker)
+        self.people_tracker = self._new_tracker(self.people_tracker)
         self._class_votes = {}
+
+    def warm_up(self) -> None:
+        """Run the detector (and the ReID networks of the trackers) once on an empty picture. The first run of a CUDA model costs seconds
+        (cuDNN picks its kernels, lazy start-up): pay it here, behind the setup, not on the first live picture. A model that ran once is not
+        run again. Never raises: a failed warm-up only loses the head start."""
+        try:
+            if not getattr(self._session, "_hk_warm", False):
+                try:
+                    self._session._hk_warm = True
+                except Exception:
+                    pass
+                self._session.run(None, {self._input_name: np.zeros((1, 3, INPUT_SIZE, INPUT_SIZE), dtype=np.float32)})
+            for tracker in (self.tracker, self.people_tracker):
+                warm = getattr(tracker, "warm_up", None)
+                if warm is not None:
+                    warm()
+        except Exception as exc:
+            print(f"[YOLO] Warm-up skipped: {exc}")
 
     def _stable_class(self, track_id: int, cls: str, confidence: float) -> str:
         """The class this vehicle track is called: the confidence-weighted majority of its last CLASS_VOTES looks."""
@@ -602,10 +630,12 @@ _inference: Optional[YoloInference] = None
 
 
 def on_a_vehicle(person_xyxy, vehicles_xyxy) -> bool:
-    """A person's feet (bottom centre) lie on a vehicle box, or just above its top edge (sitting on a roof)."""
+    """A person's feet (bottom centre) lie on a vehicle box, just above its top edge (sitting on a roof) or a little off its sides and
+    bottom edge (hanging on a step or the tailgate)."""
     px, py = (person_xyxy[0] + person_xyxy[2]) / 2, person_xyxy[3]
     for vx1, vy1, vx2, vy2 in vehicles_xyxy:
-        if vx1 <= px <= vx2 and vy1 - 0.15 * (vy2 - vy1) <= py <= vy2:
+        w, h = vx2 - vx1, vy2 - vy1
+        if vx1 - 0.15 * w <= px <= vx2 + 0.15 * w and vy1 - 0.25 * h <= py <= vy2 + 0.08 * h:
             return True
     return False
 
@@ -615,11 +645,24 @@ def on_a_vehicle(person_xyxy, vehicles_xyxy) -> bool:
 _PEOPLE_TRACK_POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="track-people")
 
 
+import threading as _threading
+_INFERENCE_LOCK = _threading.Lock()
+
+
 def get_inference(force_reload: bool = False, session_factory=None, tracker_type: str = "bytetrack") -> YoloInference:
-    """Return the singleton YoloInference instance (lazy-loaded)."""
+    """Return the singleton YoloInference instance (lazy-loaded). `force_reload` = fresh trackers and state (a new Apply, a new analysis):
+    when the model is the same file, the loaded session and ReID networks are kept, so it takes milliseconds, not seconds. The new instance
+    is warmed up (see warm_up) before it replaces the old one, so a feed that is running meanwhile never meets a cold model."""
     global _inference
-    if force_reload or _inference is None:
-        _inference = YoloInference(session_factory=session_factory, tracker_type=tracker_type)
+    if _inference is not None and not force_reload:
+        return _inference
+    with _INFERENCE_LOCK:
+        if _inference is not None and not force_reload:
+            return _inference                      # another thread made it while this one waited
+        fresh = YoloInference(session_factory=session_factory, tracker_type=tracker_type, reuse=_inference)
+        if session_factory is None:
+            fresh.warm_up()
+        _inference = fresh
     return _inference
 
 _reader = None
