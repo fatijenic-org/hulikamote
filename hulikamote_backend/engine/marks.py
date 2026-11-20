@@ -7,6 +7,8 @@ vehicle's box (fractions of its width / height). On every frame it is placed on 
 vehicle's current box, so it follows the vehicle. A mark is drawn only while its violation
 is flagged on that vehicle, and only for MARK_TTL_S seconds after the last look.
 """
+import math
+
 import cv2
 import numpy as np
 
@@ -233,6 +235,43 @@ def draw_path(frame: np.ndarray, ledger, seconds: float = PATH_SECONDS) -> np.nd
     painted = layer.any(axis=2)
     roi[painted] = layer[painted]
     return frame
+
+
+TRAIL_SECONDS = 4.0
+TRAIL_POINTS = 24            # a trail is sent with at most this many points (it is only a picture of the way the vehicle drove)
+TRAIL_GAP_S = 0.8            # a silence this long in the path, or a jump of more than TRAIL_JUMP box sizes, ends the trail there
+TRAIL_JUMP = 2.5
+
+
+def trail_specs(mgr, detections, seconds: float = TRAIL_SECONDS) -> list[dict]:
+    """The light trail of every vehicle that is on screen now, as plain data (BGR colour): {"trail": [[x, y], ...], "color": [b, g, r]}.
+    The Live Monitor draws these under its boxes while Crossing a solid line is on, so a vehicle's way can be checked against the line.
+    Only the part of the path that is ONE vehicle is sent (a long silence or a jump ends it), smoothed and thinned out."""
+    out = []
+    for det in detections:
+        ledger = mgr.ledgers.get(getattr(det, "track_id", -1))
+        if ledger is None or len(ledger.path) < 2 or getattr(det, "cls", "person") == "person":
+            continue
+        path = list(ledger.path)
+        now = path[-1][0]
+        run = [path[-1]]
+        for before, after in zip(reversed(path[:-1]), reversed(path[1:])):          # back from the newest picture until the path stops being one vehicle
+            if now - before[0] > seconds or after[0] - before[0] > TRAIL_GAP_S:
+                break
+            if math.hypot(after[1] - before[1], after[2] - before[2]) > TRAIL_JUMP * max(after[3], before[3], 40.0):
+                break
+            run.append(before)
+        run.reverse()
+        if len(run) < 3:
+            continue
+        points = _smooth([(p[1], p[2]) for p in run])
+        points[-1] = (run[-1][1], run[-1][2])
+        step = max(1, math.ceil(len(points) / TRAIL_POINTS))
+        thin = points[::step]
+        if thin[-1] != points[-1]:
+            thin.append(points[-1])
+        out.append({"trail": [[round(x, 1), round(y, 1)] for x, y in thin], "color": list(PATH_LIGHT)})
+    return out
 
 
 def draw_boxes(image: np.ndarray, items: list, note: str | None = None) -> np.ndarray:

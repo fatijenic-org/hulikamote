@@ -12,7 +12,8 @@ from collections import namedtuple
 import cv2
 import numpy as np
 
-Cut = namedtuple("Cut", "point tangent")      # where a trip cut a line (x, y), and the direction of the piece it cut (a unit vector)
+Cut = namedtuple("Cut", "point tangent index frac")   # where a trip cut a line (x, y), the direction of the piece it cut (a unit vector), and which
+                                                       # step of the trip did it (index) and how far along that step (0..1)
 
 STOP_SPEED = 25.0   # px/s; below this a vehicle counts as stopped (jitter filter: boxes "breathe" a little)
 TURN_MIN_ANGLE_COS = math.cos(math.radians(45.0))   # heading must swing at least 45 deg to count as a turn
@@ -250,7 +251,7 @@ def line_cut(points, line, tol: float = 0.0):
         (ax, ay), (bx, by) = pieces[-1]
         d = math.hypot(bx - ax, by - ay)
         pieces[-1] = ((ax, ay), (bx + (bx - ax) / d * tol, by + (by - ay) / d * tol))
-    for (px, py), (qx, qy) in zip(points, points[1:]):
+    for step, ((px, py), (qx, qy)) in enumerate(zip(points, points[1:])):
         rx, ry = qx - px, qy - py
         for (ax, ay), (bx, by) in pieces:
             sx, sy = bx - ax, by - ay
@@ -261,7 +262,7 @@ def line_cut(points, line, tol: float = 0.0):
             along_line = ((ax - px) * ry - (ay - py) * rx) / denom
             if 0.0 <= along_trip <= 1.0 and 0.0 <= along_line <= 1.0:
                 length = math.hypot(sx, sy)
-                return Cut((px + along_trip * rx, py + along_trip * ry), (sx / length, sy / length))
+                return Cut((px + along_trip * rx, py + along_trip * ry), (sx / length, sy / length), step, along_trip)
     return None
 
 

@@ -43,6 +43,13 @@ class IllegalLoading(StoppedInZone):
                           **overlay_objects.zone_fields(sign, "no_loading", cfg)})
         return zones
 
+    def has_overlay(self, zone):
+        return bool(zone.get("sign"))
+
+    def draw_overlay(self, pipe, frame, index, zone):
+        if zone.get("sign"):
+            overlay_objects.draw_zone_object(frame, zone, "no_loading")
+
     def draw_zone(self, pipe, frame, index, zone):
         if zone.get("sign"):
             overlay_objects.draw_zone_object(frame, zone, "no_loading")

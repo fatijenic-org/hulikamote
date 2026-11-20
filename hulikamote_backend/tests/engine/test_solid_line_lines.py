@@ -1,8 +1,8 @@
 """
 Crossing a solid line, drawn or found: lines with any number of points (curves, corners), several lines, no road
 section needed, and the painted lines the road finder hands over when nothing was drawn (engine/auto_lines.py).
-Scripted vehicles only (no model, no video). A vehicle that crosses does so at a slant, as in a lane change: one that goes straight
-across is cross traffic (a turn, a side street) and not this rule's business (see engine/violations/line_watch.py).
+Scripted vehicles only (no model, no video). A vehicle that crosses does so as in a lane change (it drives along the line, then steers over it):
+one that goes straight across is cross traffic (a turn, a side street) and not this rule's business (see engine/violations/line_watch.py).
 """
 import json
 from types import SimpleNamespace
@@ -14,12 +14,15 @@ from engine.ledger import ActiveLedgerManager
 from engine.pipeline import DecoupledPipeline
 from engine.violations import REGISTRY
 from engine.violations.geometry import line_side
-from tests.helpers import BIG_ZONE, STOP_LINE, Det, drive
+from tests.helpers import BIG_ZONE, STOP_LINE, Det, drive, lane_change
 
 SOLID = REGISTRY["crossing_solid_line"]
 
 # A line that bends: along the bottom, then up the right side (an "L" that a road curve would also look like).
 BEND = [[400, 1000], [1000, 1000], [1000, 400]]
+# Long lines for the lane changes: a vehicle drives 12 px a picture and needs about a second and a half of line before and after the cut.
+LONG = [[0, 1000], [3000, 1000]]
+LONG_BEND = [[0, 1000], [3000, 1000], [3000, -2000]]
 
 
 def zone(line, polygon=None):
@@ -34,13 +37,13 @@ def solid(mgr, zones):
 
 def test_a_bent_line_is_crossed_at_its_first_piece():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(450 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(BEND)]))   # up across the bottom piece
+    assert drive(mgr, lane_change(200, 1090, 910), solid(mgr, [zone(LONG_BEND)]))                # up across the first piece
     assert "crossing_solid_line" in mgr.ledgers[1].violations
 
 
 def test_a_bent_line_is_crossed_at_its_second_piece():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(1300 - 9 * i, 500 + 8 * i) for i in range(40)], solid(mgr, [zone(BEND)]))   # left across the side piece
+    assert drive(mgr, [(across, 900 - (along - 200)) for along, across in lane_change(200, 3090, 2910)], solid(mgr, [zone(LONG_BEND)]))   # left across the second piece
 
 
 def test_driving_round_the_corner_on_one_side_is_not_crossing():
@@ -81,27 +84,28 @@ def test_two_points_behave_exactly_as_before():
 # ─── several lines, no road section ──────────────────────────────────────────
 
 TWO_LINES = [zone([[800, 1000], [1200, 1000]]), zone([[800, 600], [900, 560], [1200, 600]])]
+LONG_TWO = [zone(LONG), zone([[0, 600], [1500, 560], [3000, 600]])]
 
 
 def test_each_line_is_watched_on_its_own():
     mgr = ActiveLedgerManager()
     assert not drive(mgr, [(1000, 900 - 5 * i) for i in range(40)], solid(mgr, TWO_LINES))         # stays between the two lines
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(850 + 9 * i, 800 - 9 * i) for i in range(40)], solid(mgr, TWO_LINES))       # starts between them: crosses the upper (bent) line
+    assert drive(mgr, lane_change(200, 690, 470), solid(mgr, LONG_TWO))                            # starts between them: crosses the upper (bent) line
     assert "crossing_solid_line" in mgr.ledgers[1].violations
 
 
 def test_a_line_alone_needs_no_road_section():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE)]))
+    assert drive(mgr, lane_change(200, 1090, 910), solid(mgr, [zone(LONG)]))
 
 
 def test_a_road_section_still_limits_the_line_when_one_was_drawn():
     mgr = ActiveLedgerManager()
     far_away = [[0, 0], [100, 0], [100, 100], [0, 100]]
-    assert not drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE, far_away)]))
+    assert not drive(mgr, lane_change(200, 1090, 910), solid(mgr, [zone(LONG, far_away)]))
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr, [zone(STOP_LINE, BIG_ZONE)]))
+    assert drive(mgr, lane_change(200, 1090, 910), solid(mgr, [zone(LONG, BIG_ZONE)]))
 
 
 # ─── what the wizard writes, what the pipeline reads ─────────────────────────

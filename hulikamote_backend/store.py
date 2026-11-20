@@ -13,6 +13,7 @@ import json
 from datetime import datetime, timezone
 
 import firebase_admin
+import sqlalchemy
 from firebase_admin import credentials, messaging
 
 import cloud
@@ -252,6 +253,96 @@ async def list_appeals(user_id: str) -> list[dict]:
     return [dict(r) for r in await db.database.fetch_all(query)]
 
 
+# ─── Appeals: the reviewer's side ─────────────────────────────────────────────
+
+async def get_appeal(appeal_id: str) -> dict | None:
+    row = await db.database.fetch_one(db.appeals_table.select().where(db.appeals_table.c.id == appeal_id))
+    return dict(row) if row else None
+
+
+def _appeal_view(row: dict) -> dict:
+    """One appeal as the officer sees it: the motorist's words, the ticket it is about and its photos."""
+    plate = (row.get("plate_text") or "").strip()
+    return {
+        "id": row["id"], "source": row["source"], "status": row["status"], "reason": row["reason"], "note": row["note"],
+        "created_at": row["created_at"], "decided_at": row["decided_at"],
+        "case_no": row["violation_id"][:8].upper(),
+        "motorist": row.get("owner_name") or "",
+        "ticket": {
+            "id": row["violation_id"], "found": row.get("cls") is not None, "cls": row.get("cls") or "",
+            "plate": "" if plate in ("unidentified", "no_plate_found", "SCANNING") else plate,
+            "timestamp": row.get("timestamp") or "",
+            "frames": evidence_files.frames_of({"evidence_paths": row.get("evidence_paths") or "[]"}),
+        },
+    }
+
+
+async def appeals_for_review() -> list[dict]:
+    """Every appeal, newest first (pending ones are not mixed in by status: the screen filters)."""
+    a, v, u = db.appeals_table, db.violations_table, db.users_table
+    query = (sqlalchemy.select(a, v.c.cls, v.c.plate_text, v.c.timestamp, v.c.evidence_paths, u.c.name.label("owner_name"))
+             .select_from(a.outerjoin(v, a.c.violation_id == v.c.id).outerjoin(u, v.c.user_id == u.c.id))
+             .order_by(a.c.created_at.desc()))
+    return [_appeal_view(dict(r)) for r in await db.database.fetch_all(query)]
+
+
+async def sync_cloud_appeals(rows: list[dict]) -> int:
+    """Copy the appeals the phones filed in the cloud into this laptop's appeal list (so one list, one demerit rule). An appeal for a
+    ticket this laptop does not have is left out. The cloud stays the master of a cloud appeal. Returns how many were added."""
+    local = {r["violation_id"]: r for r in (dict(x) for x in await db.database.fetch_all(db.appeals_table.select()))}
+    added = 0
+    for row in rows:
+        ticket_id = row["ticket_id"]
+        mine = local.get(ticket_id)
+        if mine is None:
+            violation = await get_violation(ticket_id)
+            if not violation:
+                continue
+            await db.database.execute(db.appeals_table.insert().values(
+                id=str(uuid.uuid4()), violation_id=ticket_id, user_id=row["user_id"], reason=row["reason"], status=row["status"],
+                created_at=row["created_at"], note=row.get("note") or "", decided_at=row.get("decided_at"), source="cloud", cloud_id=row["id"]))
+            added += 1
+        elif mine["source"] == "cloud" and (mine["status"], mine["note"]) != (row["status"], row.get("note") or ""):
+            await db.database.execute(db.appeals_table.update().where(db.appeals_table.c.id == mine["id"]).values(
+                status=row["status"], note=row.get("note") or "", decided_at=row.get("decided_at")))
+    return added
+
+
+async def decide_appeal(appeal_id: str, status: str, note: str, decided_at: str) -> None:
+    await db.database.execute(db.appeals_table.update().where(db.appeals_table.c.id == appeal_id)
+                              .values(status=status, note=note, decided_at=decided_at))
+
+
+async def notify_appeal_decision(appeal: dict, violation: dict | None, status: str, note: str) -> None:
+    """Tell the motorist: a notice in the app (cloud or this laptop), an e-mail when online, and a push. Never raises: a problem
+    here must not undo the decision."""
+    try:
+        owner = await get_user_by_id(violation["user_id"]) if violation else None
+        label = violation["cls"].replace("_", " ").title() if violation else "Ticket"
+        plate = (violation or {}).get("plate_text") or ""
+        plate = "" if plate in ("unidentified", "no_plate_found", "SCANNING") else plate
+        accepted = status == "accepted"
+        subject, body = emailer.appeal_text((owner or {}).get("name", ""), label, plate, appeal["violation_id"][:8].upper(), accepted, note)
+
+        cloud_tokens: list[str] = []
+        if appeal["source"] == "cloud" and cloud.configured():
+            try:
+                await asyncio.to_thread(cloud.add_notice, appeal["user_id"], appeal["violation_id"], subject, body)
+                cloud_tokens = await asyncio.to_thread(cloud.device_tokens, appeal["user_id"])
+            except cloud.CloudError as exc:
+                print(f"[APPEAL] could not leave the notice in the cloud: {exc}")
+        if owner:
+            msg = emailer.build_text_message(owner, subject, body)
+            online = emailer.mode() == "online" and bool(owner.get("email"))
+            result = await asyncio.to_thread(emailer.send, msg) if online else emailer.Result("local", "")
+            await add_notice(owner["id"], owner.get("email", ""), msg, result)
+        await send_push_text(owner["id"] if owner else appeal["user_id"], f"Appeal {'accepted' if accepted else 'rejected'}",
+                             f"{label} \u00b7 {plate}" if plate else label, cloud_tokens,
+                             {"type": "appeal", "violation_id": appeal["violation_id"], "status": status})
+    except Exception as exc:
+        print(f"[APPEAL] could not notify the motorist: {exc}")
+
+
 async def seed_registry() -> None:
     """Give the 3 mock motorists a plate each, only while no plate is registered (so the demo works out of the box)."""
     if await db.database.fetch_val("SELECT COUNT(*) FROM vehicles"):
@@ -365,8 +456,10 @@ async def update_violation_status(violation_id: str, status: str) -> dict | None
 
 async def get_approved_violations() -> list[dict]:
     """Confirmed tickets only (id, plate, class, time) - what the demerit counter adds up."""
-    t = db.violations_table
-    query = t.select().with_only_columns(t.c.id, t.c.plate_text, t.c.cls, t.c.timestamp).where(t.c.status == "approved")
+    t, a = db.violations_table, db.appeals_table
+    cancelled = sqlalchemy.select(a.c.violation_id).where(a.c.status == "accepted")      # an accepted appeal cancels its ticket
+    query = (t.select().with_only_columns(t.c.id, t.c.plate_text, t.c.cls, t.c.timestamp)
+             .where(t.c.status == "approved").where(t.c.id.not_in(cancelled)))
     return [dict(r) for r in await db.database.fetch_all(query)]
 
 
@@ -476,6 +569,13 @@ async def delete_violations(ids: list[str]) -> int:
     for rid in ids:
         await db.database.execute(db.violations_table.delete().where(db.violations_table.c.id == rid))
     return len(ids)
+
+
+async def delete_violations_by_source(source: str) -> int:
+    """Delete every violation row of one source ("live" or "forensic"). Returns count deleted."""
+    count = await db.database.fetch_val("SELECT COUNT(*) FROM violations WHERE source = :source", {"source": source})
+    await db.database.execute(db.violations_table.delete().where(db.violations_table.c.source == source))
+    return int(count or 0)
 
 
 async def delete_all_violations() -> int:
@@ -626,6 +726,24 @@ async def _send_push_notification(v: dict, extra_tokens=()) -> None:
             print(f"FCM Error: {e}")
     else:
         print(f"[MOCK FCM] user={v['user_id']} | {v['cls']}")
+
+
+async def send_push_text(user_id: str, title: str, body: str, extra_tokens=(), data: dict | None = None) -> None:
+    """A plain push (title + text) to one motorist's phones: those registered with this laptop and `extra_tokens` (the cloud's)."""
+    tokens = list(dict.fromkeys([*await _get_tokens_for_user(user_id), *extra_tokens]))
+    if not tokens:
+        print(f"[FCM] No tokens registered for user {user_id}, skipping push.")
+        return
+    if not _firebase_initialized:
+        print(f"[MOCK FCM] user={user_id} | {title}")
+        return
+    try:
+        message = messaging.MulticastMessage(notification=messaging.Notification(title=title, body=body), android=_android_push(),
+                                             data={k: str(v) for k, v in (data or {}).items()}, tokens=tokens)
+        response = await asyncio.to_thread(messaging.send_each_for_multicast, message)
+        print(f"FCM [{user_id}]: Sent {response.success_count}, failed {response.failure_count}")
+    except Exception as exc:
+        print(f"FCM Error: {exc}")
 
 
 async def send_test_push() -> dict:

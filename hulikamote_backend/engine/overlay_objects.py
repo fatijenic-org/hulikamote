@@ -49,6 +49,8 @@ KINDS: dict[str, dict] = {
     "no_tricycles": {"share": 0.05, "stand": "post", "tint": (40, 40, 200), "label": "No tricycles plate"},
     "sidewalk": {"share": 0.05, "stand": "post", "tint": (200, 90, 20), "label": "Sidewalk plate"},
     "stop_sign": {"share": 0.05, "stand": "post", "tint": (40, 40, 200), "label": "Stop sign"},
+    "no_left_turn": {"share": 0.05, "stand": "post", "tint": (0, 128, 255), "label": "No left turn sign"},
+    "no_right_turn": {"share": 0.05, "stand": "post", "tint": (0, 128, 255), "label": "No right turn sign"},
     "traffic_light_red": {"share": 0.026, "stand": "post", "tint": (40, 40, 200), "label": "Traffic light"},
     "traffic_light_yellow": {"share": 0.026, "stand": "post", "tint": (0, 200, 250), "label": "Traffic light"},
     "traffic_light_green": {"share": 0.026, "stand": "post", "tint": (60, 200, 60), "label": "Traffic light"},
@@ -284,6 +286,26 @@ def _no_trucks(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
     return _plated(w, stand, w, plate)
 
 
+def _no_turn(side: str):
+    """A round "no left turn" / "no right turn" sign: a bent black arrow under the red ring and slash."""
+    m = 1.0 if side == "left" else -1.0                          # the arrow bends toward the banned side
+
+    def make(w: int, stand: str) -> tuple[np.ndarray, np.ndarray]:
+        def plate(c: _Canvas, w: int, h: int) -> None:
+            cx = cy = w / 2
+
+            def at(dx: float, dy: float) -> tuple[float, float]:
+                return cx + m * dx * w, cy + dy * w
+            c.disc(cx, cy, w * 0.50, WHITE, shade=False)
+            c.ring(cx, cy, w * 0.46, w * 0.35, RED)
+            c.stroke([at(0.12, 0.25), at(0.12, -0.04), at(-0.10, -0.04)], BLACK, w * 0.075)          # up, then toward the side
+            c.polygon([at(-0.27, -0.04), at(-0.10, -0.17), at(-0.10, 0.09)], BLACK)                  # the arrow head
+            d = w * 0.30
+            c.stroke([(cx - d, cy - d), (cx + d, cy + d)], RED, w * 0.075)
+        return _plated(w, stand, w, plate)
+    return make
+
+
 def _traffic_light(state: str):
     on = {"red": (40, 40, 235), "yellow": (30, 200, 250), "green": (70, 205, 60)}
     off = {"red": (20, 20, 75), "yellow": (20, 65, 75), "green": (25, 75, 25)}
@@ -330,6 +352,7 @@ _FLAT = {
     "keep_clear": lambda w, s: _rect_plate(w, s, (40, 200, 245), BLACK, BLACK, ("KEEP", "CLEAR")),
     "no_trucks": _no_trucks,
     "stop_sign": _stop_sign,
+    "no_left_turn": _no_turn("left"), "no_right_turn": _no_turn("right"),
     "no_tricycles": lambda w, s: _rect_plate(w, s, WHITE, RED, RED, ("NO", "TRICYCLES")),
     "sidewalk": lambda w, s: _rect_plate(w, s, WHITE, BLUE, BLUE, ("NO VEHICLES", "SIDEWALK")),
     "traffic_light_red": _traffic_light("red"), "traffic_light_yellow": _traffic_light("yellow"),

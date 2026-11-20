@@ -90,7 +90,7 @@ def test_a_cloud_failure_is_reported_and_never_raised(photos, monkeypatch):
     assert result.status == "failed" and "500" in result.detail and result.tokens == []
 
 
-ALL_GOOD = {"tables": True, "signup_trigger": True, "functions": True, "bucket": True, "plate_locked": True}
+ALL_GOOD = {"tables": True, "signup_trigger": True, "functions": True, "bucket": True, "plate_locked": True, "appeals_review": True}
 
 
 def test_the_connection_check_passes_when_everything_is_in_place(monkeypatch):
@@ -107,7 +107,7 @@ def test_the_connection_check_warns_when_new_motorists_could_not_sign_up(monkeyp
 
 @pytest.mark.parametrize("gap,words", [
     ("tables", "tables"), ("signup_trigger", "sign-up trigger"), ("functions", "helper functions"),
-    ("bucket", "photo bucket"), ("plate_locked", "edit their plate"),
+    ("bucket", "photo bucket"), ("plate_locked", "edit their plate"), ("appeals_review", "reviewer columns"),
 ])
 def test_the_connection_check_names_what_is_missing(monkeypatch, gap, words):
     monkeypatch.setattr(cloud, "_request", FakeSupabase(setup={**ALL_GOOD, gap: False}))

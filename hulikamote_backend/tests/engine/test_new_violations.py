@@ -11,7 +11,7 @@ from engine import marks
 from engine.ledger import ActiveLedgerManager
 from engine.violations import REGISTRY
 from engine.violations.onboard import in_trailing_body, moves_with, outside_position
-from tests.helpers import BIG_ZONE, FPS, H, STOP_LINE, W, Det, drive
+from tests.helpers import BIG_ZONE, FPS, H, STOP_LINE, W, Det, drive, lane_change
 
 U_TURN = REGISTRY["illegal_u_turn"]
 BLOCKING = REGISTRY["blocking_intersection"]
@@ -121,6 +121,7 @@ def test_blocking_and_pedestrian_lane_keep_separate_timers():
 
 # ─── Crossing a solid line ───────────────────────────────────────────────────
 
+LONG_ZONE = [{"polygon": BIG_ZONE, "stop_line": [[0, 1000], [3000, 1000]]}]            # the same line, long enough for a lane change
 LINE_ZONE = [{"polygon": BIG_ZONE, "stop_line": STOP_LINE}]               # a horizontal line at y = 1000, x 800 - 1200
 
 
@@ -130,13 +131,13 @@ def solid(mgr, zones=LINE_ZONE):
 
 def test_solid_line_flags_a_vehicle_that_drives_over_it():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(800 + 8 * i, 1300 - 9 * i) for i in range(40)], solid(mgr))                  # a lane change: at a slant
+    assert drive(mgr, lane_change(200, 1090, 910), solid(mgr, LONG_ZONE))                           # a lane change: along the line, then over it
     assert "crossing_solid_line" in mgr.ledgers[1].violations
 
 
 def test_solid_line_flags_a_crossing_in_the_other_direction_too():
     mgr = ActiveLedgerManager()
-    assert drive(mgr, [(800 + 8 * i, 700 + 9 * i) for i in range(40)], solid(mgr))
+    assert drive(mgr, lane_change(200, 910, 1090), solid(mgr, LONG_ZONE))
 
 
 def test_solid_line_ignores_a_vehicle_that_stays_on_one_side():

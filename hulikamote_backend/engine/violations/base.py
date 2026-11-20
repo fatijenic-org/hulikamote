@@ -85,6 +85,14 @@ class Violation:
     def draw_extra(self, pipe, frame: np.ndarray, index: int, zone: dict) -> None:
         """Anything else this violation shows on the picture (e.g. the simulated traffic light)."""
 
+    def has_overlay(self, zone: dict) -> bool:
+        """True when this zone carries an overlay object (a sign, a painted crosswalk or line) that is shown on the live picture."""
+        return False
+
+    def draw_overlay(self, pipe, frame: np.ndarray, index: int, zone: dict) -> None:
+        """Only the overlay object of the zone (no outline), for the live picture. `pipe` only needs `_draw_dets` (the vehicles the paint
+        goes under)."""
+
     def draw_zone(self, pipe, frame: np.ndarray, index: int, zone: dict) -> None:
         if zone.get("whole_frame"):      # the implicit whole-picture zone: nothing to outline
             return

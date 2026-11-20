@@ -12,7 +12,7 @@ from engine import line_paint
 from engine.ledger import ActiveLedgerManager
 from engine.violations import REGISTRY
 from routers.forensic import prepare_pipeline_config
-from tests.helpers import FPS, drive
+from tests.helpers import FPS, drive, lane_change
 
 FRAME = (540, 960, 3)
 LINE = [[300, 500], [320, 100]]                                   # up the picture, nearly vertical
@@ -163,9 +163,9 @@ def test_the_wizard_payload_carries_the_look_into_the_saved_rules():
 
 
 def test_painting_a_line_does_not_change_what_the_rule_judges():
-    cross = [(480 - 3 * i, 400 - 3 * i) for i in range(0, 100, 2)]               # a car driving across the line from right to left
+    cross = [(300 + across - 1000, along) for along, across in lane_change(200, 1090, 910)]   # a car driving down along the line and steering over it
     for look in (None, {"style": "double_yellow", "wear": 0.9}):
-        zone = SOLID.parse_zone({"stop_line": [[300, 100], [300, 500]], **({"look": look} if look is not None else {})})
+        zone = SOLID.parse_zone({"stop_line": [[300, -3000], [300, 3000]], **({"look": look} if look is not None else {})})
         mgr = ActiveLedgerManager()
         flagged = drive(mgr, [(x, y) for x, y in cross for _ in range(1)], lambda tid: SOLID.evaluate(mgr, tid, [zone]))
         assert flagged

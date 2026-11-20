@@ -43,6 +43,14 @@ class PedestrianLane(StoppedInZone):
                           "overlay": {"stripes": crosswalk["stripes"], "wear": crosswalk["wear"]}, "realistic": realistic, **extra})
         return zones
 
+    def has_overlay(self, zone):
+        return bool(zone.get("overlay"))
+
+    def draw_overlay(self, pipe, frame, index, zone):
+        if zone.get("overlay"):
+            boxes = [d.bbox for d in getattr(pipe, "_draw_dets", ()) if getattr(d, "cls", None) in OCCLUDES]
+            crosswalk_overlay.draw(frame, zone["polygon"], zone["overlay"], zone.get("realistic", True), occluders=boxes)
+
     def draw_zone(self, pipe, frame, index, zone):
         if zone.get("overlay"):                                        # painted on the road: no outline, just the zebra
             boxes = [d.bbox for d in getattr(pipe, "_draw_dets", ()) if getattr(d, "cls", None) in OCCLUDES]    # vehicles drive over the paint

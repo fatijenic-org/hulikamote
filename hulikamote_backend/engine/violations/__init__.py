@@ -65,4 +65,4 @@ ZONE_VIOLATIONS: list[Violation] = [v for v in ALL if v.zone_key]
 ZONE_RULES: dict[str, str] = {v.key: v.zone_key for v in ZONE_VIOLATIONS}
 ZONE_COLORS: dict[str, tuple] = {v.key: v.color for v in ZONE_VIOLATIONS}
 # Zone fields that are points (scaled with the polygon to the processed frame size)
-ZONE_POINT_FIELDS = ("stop_line", "light_box", "sign_points", "flow_path")
+ZONE_POINT_FIELDS = ("stop_line", "light_box", "sign_points", "flow_path", "turn_arrow_left", "turn_arrow_right")

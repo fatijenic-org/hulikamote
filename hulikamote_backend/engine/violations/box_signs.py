@@ -29,6 +29,13 @@ class BoxSigns:
                 zones.append({**zone, "sign": True, **overlay_objects.zone_fields(sign, self.sign_kind, cfg)})
         return zones
 
+    def has_overlay(self, zone):
+        return bool(zone.get("sign"))
+
+    def draw_overlay(self, pipe, frame, index, zone):
+        if zone.get("sign"):
+            overlay_objects.draw_zone_object(frame, zone, self.sign_kind)
+
     def draw_zone(self, pipe, frame, index, zone):
         if zone.get("sign"):
             overlay_objects.draw_zone_object(frame, zone, self.sign_kind)

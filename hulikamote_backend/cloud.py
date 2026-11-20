@@ -68,6 +68,7 @@ SETUP_GAPS = {
     "functions": "the helper functions are missing",
     "bucket": "the private 'evidence' photo bucket is missing",
     "plate_locked": "motorists could still edit their plate",
+    "appeals_review": "the appeals table has no reviewer columns",
 }
 
 
@@ -194,6 +195,26 @@ def delete_account(plate: str) -> bool:
 def device_tokens(user_id: str) -> list[str]:
     rows = _request("GET", f"/rest/v1/device_tokens?user_id=eq.{urllib.parse.quote(user_id)}&select=token") or []
     return [r["token"] for r in rows]
+
+
+def list_appeals() -> list[dict]:
+    """Every appeal the phones filed, newest first: {id, ticket_id, user_id, reason, status, note, decided_at, created_at}."""
+    columns = "id,ticket_id,user_id,reason,status,note,decided_at,created_at"
+    return _request("GET", f"/rest/v1/appeals?select={columns}&order=created_at.desc&limit=200") or []
+
+
+def decide_appeal(appeal_id: str, status: str, note: str, decided_at: str) -> None:
+    """Write the reviewer's decision on one appeal; the phone reads it back. Raises CloudError when it cannot."""
+    rows = _request("PATCH", f"/rest/v1/appeals?id=eq.{urllib.parse.quote(appeal_id)}",
+                    headers={"Prefer": "return=representation"}, body={"status": status, "note": note, "decided_at": decided_at})
+    if not rows:
+        raise CloudError("That appeal is not in the cloud (any more).")
+
+
+def add_notice(user_id: str, ticket_id: str | None, subject: str, body: str, frames=()) -> None:
+    """Leave a notice for one phone account (the app shows it in its Inbox)."""
+    _request("POST", "/rest/v1/notices", headers={"Prefer": "return=minimal"},
+             body={"id": str(uuid.uuid4()), "user_id": user_id, "ticket_id": ticket_id, "subject": subject, "body": body, "frames": list(frames)})
 
 
 def all_device_tokens() -> list[str]:

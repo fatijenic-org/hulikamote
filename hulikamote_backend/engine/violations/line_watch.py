@@ -13,14 +13,20 @@ where the paint is. So a crossing is only believed when ALL of this holds:
   4. its trip from the last picture on its own side to the other side really CUTS the line (geometry.line_cut), not round its end;
   5. it still looks like the same vehicle: the colours of its box did not change into another vehicle's (a colour histogram).
 
-  6. it crossed the way a vehicle crosses a line it drives ALONG (a lane change, an overtaking swerve: at most MAX_CROSS_ANGLE_DEG to
-     the line), not the way cross traffic does (a vehicle that turns across the road into a side street, comes out of one, or makes a
-     U-turn crosses at a steep angle: that is a turn, and the turning rules judge it, not this one).
+  6. it crossed the way a vehicle crosses a line it drives ALONG (a lane change, an overtaking swerve): the course it had been driving for
+     seconds before the line ran along the line (at most MAX_APPROACH_ANGLE_DEG) and so did its heading at the line (at most
+     MAX_CROSS_ANGLE_DEG). Cross traffic (a vehicle that comes from the roadside, turns across the road into a side street, or makes a
+     U-turn) heads across the line on its way to it: that is a turn, and the turning rules judge it, not this one;
+  7. it STEERED over: from its own straight course (the one it was driving 1 to 6 seconds before) it had moved sideways by MIN_SHIFT_WIDTHS
+     box widths or more. A vehicle that drives straight and only meets the line because the drawn line is not quite parallel to the road
+     (a drawn line never is), or that weaves a little within its lane, is not flagged.
 
 A picture that is not new (the vehicle was not seen this frame, the rule is only asked again) is ignored: nothing is counted twice.
 """
 import math
 from collections import namedtuple
+
+import numpy as np
 
 from engine.track_stitcher import blend_signature, hist_distance
 from engine.track_continuity import continues
@@ -32,7 +38,7 @@ TWO_WHEELERS = ("motorcycle", "bicycle")   # a ledger that turns from one of the
 
 MIN_BOX_PX = 12            # a box smaller than this (width or height) says too little about where the vehicle is
 MIN_MARGIN_PX = 10.0       # clearly on a side: at least this far from the line ...
-MARGIN_WIDTHS = 0.3        # ... and at least this share of its box width
+MARGIN_WIDTHS = 0.5        # ... and at least this share of its box width: it must be over the line with its whole width, not just touch it
 ARM_SAMPLES = 4            # pictures in a row on one side before that side counts as "its own"
 ARM_MIN_SPAN_S = 0.2       # ... and they must cover at least this much time
 HOLD_SAMPLES = 3           # pictures in a row on the other side before it counts as crossed
@@ -41,10 +47,18 @@ LAT_WIDTHS = 0.45          # sideways: it may be this many box widths from where
 LAT_SPEED_SHARE = 0.25     # ... plus this share of the sideways distance it was expected to travel ...
 LAT_SLACK_PX = 6.0         # ... plus this much for the jitter of the box
 CUT_TOLERANCE_WIDTHS = 0.25  # the line is lengthened by this share of the box width at both ends when asking "did the trip cut it"
-MAX_CROSS_ANGLE_DEG = 60.0  # steeper than this (seen on the picture, where a road runs away from the camera: about 40 degrees on the road) it is a turn
+MAX_APPROACH_ANGLE_DEG = 40.0  # the course before the line, seen on the picture (a road runs away from the camera: the angle on the road is about half): steeper = cross traffic
+MAX_CROSS_ANGLE_DEG = 45.0     # heading at the line: steeper = it is going across, not along
+MIN_SHIFT_WIDTHS = 0.8         # it must have moved sideways this many box widths from its own straight course by the time it is over the line
+COURSE_FROM_S, COURSE_TO_S = 6.0, 1.0   # its own course: how it drove from 6 s to 1 s before it cut the line ...
+COURSE_MIN_SPAN_S = 1.0        # ... over at least this much time,
+COURSE_MIN_SAMPLES = 6         # ... in at least this many pictures,
+COURSE_MIN_WIDTHS = 1.0        # ... and travelling at least this many box widths (a vehicle that stood or crept has no course)
+MIN_HEADING_WIDTHS = 0.3       # the heading at the line is only believed over a trip of at least this many box widths
 SIG_MAX_DISTANCE = 0.6     # colour histogram distance above which it is another vehicle (the stitcher accepts up to 0.5 as the same one)
 SIG_REFRESH = 5            # refresh its colours every this many pictures on its own side
 RUN_KEEP = 12              # samples of the current run that are remembered
+HIST_KEEP = 200            # ... and, for its own course before the line (up to 6 s), this many
 TRAIL_KEEP = 30            # points of its trip since it was last clearly on its own side
 
 
@@ -53,7 +67,8 @@ class LineWatch:
 
     def __init__(self):
         self.done = False             # it was flagged: nothing more to watch
-        self.last_angle = None        # the angle (deg) of the newest crossing that was weighed
+        self.last_angle = None        # the heading (deg to the line) at the newest crossing that was weighed
+        self.last_check = None        # what was found about that crossing (see _driving_along)
         self.last_t = None            # time of the newest picture seen (a picture is only ever used once)
         self._forget()
 
@@ -66,8 +81,9 @@ class LineWatch:
         self.cand_t0 = 0.0
         self.cross_n = 0              # pictures in a row clearly on the other side
         self.cross_t0 = 0.0
-        self.last_own = None          # (x, y) of its last picture clearly on its own side
-        self.trail: list = []         # (x, y) of every picture since
+        self.last_own = None          # (x, y, t) of its last picture clearly on its own side
+        self.trail: list = []         # (x, y, t) of every picture since
+        self.hist: list = []          # (t, x, y, w, h): every picture of the current run (longer than `run`)
         self.arm_sig = None           # the colours it had on its own side
         self.own_n = 0
         self.family = None            # 2: a two-wheeler, 4: any other vehicle (what the current run is)
@@ -103,6 +119,8 @@ class LineWatch:
         self.family = family or self.family
         self.run.append(new)
         del self.run[:-RUN_KEEP]
+        self.hist.append(new[:5])
+        del self.hist[:-HIST_KEEP]
 
         margin = max(MIN_MARGIN_PX, MARGIN_WIDTHS * w)
         now = 1 if s >= margin else (-1 if s <= -margin else 0)
@@ -116,18 +134,18 @@ class LineWatch:
             else:
                 self.cand_side, self.cand_n, self.cand_t0 = now, 1, t
             if self.cand_n >= ARM_SAMPLES and t - self.cand_t0 >= ARM_MIN_SPAN_S:
-                self.side, self.last_own, self.trail, self.cross_n, self.own_n = self.cand_side, (x, y), [], 0, 0
+                self.side, self.last_own, self.trail, self.cross_n, self.own_n = self.cand_side, (x, y, t), [], 0, 0
                 self.arm_sig = signature() if signature else None
             return None
 
         if now == self.side:                        # on its own side
-            self.cross_n, self.trail, self.last_own = 0, [], (x, y)
+            self.cross_n, self.trail, self.last_own = 0, [], (x, y, t)
             self.own_n += 1
             if signature and self.own_n % SIG_REFRESH == 0:
                 self.arm_sig = blend_signature(self.arm_sig, signature())
             return None
 
-        self.trail.append((x, y))                   # on the line, or past it
+        self.trail.append((x, y, t))                # on the line, or past it
         del self.trail[:-TRAIL_KEEP]
         if now == 0:
             self.cross_n = 0
@@ -156,15 +174,14 @@ class LineWatch:
 
     def _confirm(self, line, w, t, signature):
         trip = ([self.last_own] if self.last_own else []) + self.trail
-        cut = line_cut(trip, line, tol=max(4.0, CUT_TOLERANCE_WIDTHS * w))
+        cut = line_cut([(p[0], p[1]) for p in trip], line, tol=max(4.0, CUT_TOLERANCE_WIDTHS * w))
         if cut is None:                             # it went round the end of the line (or the line bends away): never crossed
             self._forget()
             return None
-        dx, dy = trip[-1][0] - trip[0][0], trip[-1][1] - trip[0][1]
-        travelled = math.hypot(dx, dy)
-        angle = math.degrees(math.acos(min(1.0, abs(dx * cut.tangent[0] + dy * cut.tangent[1]) / travelled))) if travelled > 0 else 90.0
-        self.last_angle = angle                     # (for the notes of the evidence and for tuning)
-        if angle > MAX_CROSS_ANGLE_DEG:             # cross traffic: it did not drive along the line and drift over it, it went across
+        verdict = self._driving_along(trip, cut, w)
+        self.last_angle = verdict["at"]             # (for the notes of the evidence and for tuning)
+        self.last_check = verdict
+        if not verdict["ok"]:                       # cross traffic, or a straight vehicle that only meets a skewed line: not a violation
             self._rearm_on_other_side(trip[-1])
             return None
         if signature and self.arm_sig is not None:
@@ -173,7 +190,58 @@ class LineWatch:
                 self._forget()                      # other colours than the vehicle that was on this side: another vehicle
                 return None
         self.done = True
-        return Crossing(cut.point, t, angle)
+        return Crossing(cut.point, t, verdict["at"])
+
+    @staticmethod
+    def _heading(points, w, least):
+        """(ux, uy) of the way `points` ((x, y) oldest first) go, or None when they travel less than `least` box widths."""
+        if len(points) < 3:
+            return None
+        dx, dy = points[-1][0] - points[0][0], points[-1][1] - points[0][1]
+        d = math.hypot(dx, dy)
+        return None if d < least * w else (dx / d, dy / d)
+
+    @staticmethod
+    def _course(points, w):
+        """The straight course through `points` ((x, y) oldest first): ((ux, uy), (cx, cy)), the direction it was driven in and a point on it.
+        A least-squares line, so a vehicle that weaves a little round a straight course still has that course (two end points would tilt it).
+        (None, None) when the points travel less than COURSE_MIN_WIDTHS box widths."""
+        pts = np.asarray(points, dtype=float)
+        if len(pts) < 3 or math.hypot(*(pts[-1] - pts[0])) < COURSE_MIN_WIDTHS * w:
+            return None, None
+        centre = pts.mean(axis=0)
+        _vals, vecs = np.linalg.eigh(np.cov((pts - centre).T))
+        u = vecs[:, -1]
+        if float(np.dot(u, pts[-1] - pts[0])) < 0:
+            u = -u
+        return (float(u[0]), float(u[1])), (float(centre[0]), float(centre[1]))
+
+    @staticmethod
+    def _angle(a, b) -> float:
+        """The angle (0 to 90 deg) between two directions, whichever way each points."""
+        return math.degrees(math.acos(min(1.0, abs(a[0] * b[0] + a[1] * b[1]))))
+
+    def _driving_along(self, trip, cut, w) -> dict:
+        """Did the vehicle drive ALONG the line and steer over it? {"ok", "before", "at", "shift"}: the angle (deg) of its own course and of its
+        heading at the line to the line, and how far (box widths) it had moved sideways from that course; None where it could not be told. Not ok
+        when it has no course to judge (it was not tracked for seconds before the line, or it stood or crept), or it came heading across the line,
+        or it did not move sideways enough."""
+        i = min(cut.index, len(trip) - 2)
+        t_cut = trip[i][2] + cut.frac * (trip[i + 1][2] - trip[i][2])
+        hist = self.hist
+        out = {"ok": False, "before": None, "at": None, "shift": None}
+        course = [p for p in hist if t_cut - COURSE_FROM_S <= p[0] <= t_cut - COURSE_TO_S]
+        if len(course) < COURSE_MIN_SAMPLES or course[-1][0] - course[0][0] < COURSE_MIN_SPAN_S:
+            return out
+        c, centre = self._course([(p[1], p[2]) for p in course], w)
+        k = max((j for j, p in enumerate(hist) if p[0] <= t_cut), default=0)                      # the last picture before the cut
+        h_at = self._heading([(p[1], p[2]) for p in hist[max(0, k - 1):k + 4]], w, MIN_HEADING_WIDTHS)   # the pictures around the crossing
+        if c is None or h_at is None:
+            return out
+        out["before"], out["at"] = self._angle(c, cut.tangent), self._angle(h_at, cut.tangent)
+        out["shift"] = abs((hist[-1][1] - centre[0]) * c[1] - (hist[-1][2] - centre[1]) * c[0]) / max(w, 1.0)   # now, sideways from the straight course
+        out["ok"] = out["before"] <= MAX_APPROACH_ANGLE_DEG and out["at"] <= MAX_CROSS_ANGLE_DEG and out["shift"] >= MIN_SHIFT_WIDTHS
+        return out
 
     def _rearm_on_other_side(self, here) -> None:
         """The vehicle crossed, but not as a violation: from now on the side it is on is its own (so one turn is not judged on every picture)."""
