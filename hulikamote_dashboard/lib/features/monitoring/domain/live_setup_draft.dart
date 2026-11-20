@@ -102,6 +102,7 @@ class LiveSetupDraft extends AnalysisDraft {
   void rememberPulled(String key) => _pulled[key] = _signature(key);
 
   /// Pulls the markings into the zones of every PICKED violation (a violation that is not picked takes nothing).
+  @override
   void syncMarkings() {
     for (final key in selection) {
       final now = _signature(key);

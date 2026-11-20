@@ -49,7 +49,7 @@ class OverviewApi {
 
   Future<OverviewData> load() async {
     final results = await Future.wait([
-      _try('the Inbox', _pending),
+      _try('the tickets to review', _pending),
       _try('the confirmed violations', _confirmed),
       _try('the demerit points', _demerit.standings),
       _try('the motorists', _registry.motorists),

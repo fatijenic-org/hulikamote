@@ -109,9 +109,9 @@ class _OverviewScreenState extends State<OverviewScreen> with AutomaticKeepAlive
         value: d?.toReview,
         icon: Icons.inbox_outlined,
         color: Fx.warning,
-        hint: 'waiting in the Inbox',
+        hint: 'waiting in the Live Monitor',
         loading: _loading && d == null,
-        onTap: () => _open('/inbox'),
+        onTap: () => _open('/'),
       ),
       StatTile(
         label: 'Confirmed violations',
@@ -120,7 +120,7 @@ class _OverviewScreenState extends State<OverviewScreen> with AutomaticKeepAlive
         color: Fx.success,
         hint: 'a reviewer approved',
         loading: _loading && d == null,
-        onTap: () => _open('/violations'),
+        onTap: () => _open('/demerit'),
       ),
       StatTile(
         label: 'Plates with points',
@@ -165,8 +165,8 @@ class _Steps extends StatelessWidget {
   final void Function(String path) onOpen;
 
   static const _steps = [
-    _Step('Analyse a video', 'Choose a clip. The system finds the violations and reads the plates.', '/offline-video', Icons.video_library_outlined, 'Open Video Analysis'),
-    _Step('Review what it found', 'Look at the photos, then confirm or reject each ticket. Only confirmed tickets count.', '/inbox', Icons.fact_check_outlined, 'Open the Inbox'),
+    _Step('Analyse a video', 'Start the Live Monitor on a camera or a video file. The system finds the violations and reads the plates.', '/', Icons.video_library_outlined, 'Open the Live Monitor'),
+    _Step('Review what it found', 'Look at the photos, set the plate, then confirm or reject each ticket in the Live tickets list. Only confirmed tickets count.', '/', Icons.fact_check_outlined, 'Open the Live Monitor'),
     _Step('Check the points', 'Every confirmed ticket adds one demerit point to the plate.', '/demerit', Icons.balance_outlined, 'Open Demerit Points'),
     _Step('Notify the driver', 'The motorist gets the notice on the phone app, and by e-mail if one is set.', '/registry', Icons.contact_mail_outlined, 'Open Motorists'),
   ];
@@ -220,7 +220,7 @@ class _Latest extends StatelessWidget {
   Widget build(BuildContext context) {
     final recent = data?.recent ?? const [];
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SectionLabel('Latest confirmed', trailing: TextButton(onPressed: () => onOpen('/violations'), child: const Text('See all'))),
+      SectionLabel('Latest confirmed', trailing: TextButton(onPressed: () => onOpen('/demerit'), child: const Text('See all'))),
       if (loading && data == null)
         const SizedBox(height: 280, child: SkeletonRows(count: 4))
       else if (recent.isEmpty)
@@ -230,8 +230,8 @@ class _Latest extends StatelessWidget {
             child: EmptyState(
               icon: Icons.playlist_add_check,
               title: 'Nothing confirmed yet',
-              message: 'Confirmed tickets show here. Review one in the Inbox to see it appear.',
-              action: FilledButton.tonal(onPressed: () => onOpen('/inbox'), child: const Text('Open the Inbox')),
+              message: 'Confirmed tickets show here. Confirm one in the Live Monitor to see it appear.',
+              action: FilledButton.tonal(onPressed: () => onOpen('/'), child: const Text('Open the Live Monitor')),
             ),
           ),
         )

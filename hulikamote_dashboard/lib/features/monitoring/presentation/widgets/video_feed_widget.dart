@@ -115,6 +115,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
               }
             }
             if (mounted) {
+              widget.onBuffer?.call(Map<String, dynamic>.from(data));     // (paused: no picture comes, but the timeline is told)
               setState(() {
                 _buffer = Map<String, dynamic>.from(data);
                 if (bytes != null) {

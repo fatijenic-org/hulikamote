@@ -56,6 +56,8 @@ class BackendControl extends ChangeNotifier {
   Timer? _timer;
   bool _busy = false;
   int _listeners = 0;
+  int _misses = 0;               // answers missed in a row while it was running
+  bool _userStopped = false;     // the operator pressed Shut down: it stays off
 
   bool get busy => _busy;
 
@@ -88,9 +90,18 @@ class BackendControl extends ChangeNotifier {
     final up = await _answers();
     if (state == BackendState.stopping) return;               // a stop or restart sets its own state
     if (up) {
+      _misses = 0;
       _set(BackendState.running);
       _startedAt = null;
       error = null;
+      return;
+    }
+    // It was running and stopped answering (it died, or the machine was too busy to answer twice): start it again by itself.
+    if (state == BackendState.running && !_userStopped && !_busy) {
+      _misses++;
+      if (_misses < 2) return;
+      _misses = 0;
+      unawaited(start());
       return;
     }
     final started = _startedAt;
@@ -129,6 +140,7 @@ class BackendControl extends ChangeNotifier {
     if (_busy) return;
     _busy = true;
     try {
+      _userStopped = false;
       error = null;
       if (await _answers()) {
         _set(BackendState.running);
@@ -146,6 +158,7 @@ class BackendControl extends ChangeNotifier {
     if (_busy) return;
     _busy = true;
     try {
+      _userStopped = true;
       await _kill();
     } finally {
       _busy = false;
@@ -158,6 +171,7 @@ class BackendControl extends ChangeNotifier {
     if (_busy) return;
     _busy = true;
     try {
+      _userStopped = false;
       await _kill();
       if (error == null) await _spawn();
     } finally {

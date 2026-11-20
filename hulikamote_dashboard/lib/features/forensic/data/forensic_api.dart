@@ -152,6 +152,28 @@ class ForensicApi implements ReviewGateway {
     return body is Map ? (body['waiting'] as num?)?.toInt() ?? 0 : 0;
   }
 
+  /// The reviewer left the live review: the live monitor runs again at once (it pauses while a plate is read).
+  Future<void> releaseLiveFocus() async {
+    await _client.post(_u('/api/forensic/live-tickets/release-focus')).timeout(_timeout);
+  }
+
+  /// The reviewer opened a live ticket whose plate is not read yet: the backend reads it now (one ticket at a time, in the plate process)
+  /// and returns the full, updated list of live tickets.
+  Future<List<ForensicTicket>> readLivePlate(String ticketUid) async {
+    final r = await _client
+        .post(
+          _u('/api/forensic/live-tickets/read-plate'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'ticket_uid': ticketUid}),
+        )
+        .timeout(const Duration(minutes: 15));
+    if (r.statusCode == 404 && _isUnknownRoute(r)) {
+      throw ForensicApiException('This backend cannot read a live plate yet. It needs the latest backend update and a restart.', statusCode: 404);
+    }
+    if (r.statusCode != 200) _fail(r, 'Reading the plate');
+    return ForensicTicket.parseList(jsonDecode(r.body)['tickets'] as List);
+  }
+
   Future<List<ForensicTicket>> report(String reportUrl) async {
     final r = await _client
         .get(_u(reportUrl))

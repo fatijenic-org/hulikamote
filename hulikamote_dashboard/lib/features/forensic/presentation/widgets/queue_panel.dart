@@ -20,6 +20,8 @@ class TicketTile extends StatelessWidget {
     this.selecting = false,
     this.checked = false,
     this.onCheck,
+    this.plateBadge = false,
+    this.reading = false,
   });
 
   final ForensicTicket ticket;
@@ -30,6 +32,10 @@ class TicketTile extends StatelessWidget {
   final bool selecting;
   final bool checked;
   final VoidCallback? onCheck;
+
+  /// Mark a ticket whose plate is read (the live run), and show "Reading the plate…" while it is being read.
+  final bool plateBadge;
+  final bool reading;
 
   String get _meta {
     final parts = <String>['#${ticket.trackId}'];
@@ -97,12 +103,30 @@ class TicketTile extends StatelessWidget {
                 children: [
                   Row(children: [
                     Expanded(
-                      child: ticket.plateRead
-                          ? Text(ticket.plateText,
-                              maxLines: 1, overflow: TextOverflow.ellipsis, style: Fx.plate.copyWith(fontSize: 15))
-                          : Text(ticket.unreadPlateLabel,
-                              maxLines: 1,
-                              style: Fx.body(context).copyWith(color: Fx.muted(context), fontStyle: FontStyle.italic)),
+                      child: reading
+                          ? Row(children: [
+                              const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text('Reading the plate…',
+                                    maxLines: 1,
+                                    style: Fx.body(context).copyWith(color: Fx.muted(context), fontStyle: FontStyle.italic)),
+                              ),
+                            ])
+                          : ticket.plateRead
+                              ? Row(children: [
+                                  Flexible(
+                                    child: Text(ticket.plateText,
+                                        maxLines: 1, overflow: TextOverflow.ellipsis, style: Fx.plate.copyWith(fontSize: 15)),
+                                  ),
+                                  if (plateBadge) ...[
+                                    const SizedBox(width: 4),
+                                    const Tooltip(message: 'Plate read', child: Icon(Icons.verified, size: 15, color: Fx.success)),
+                                  ],
+                                ])
+                              : Text(ticket.unreadPlateLabel,
+                                  maxLines: 1,
+                                  style: Fx.body(context).copyWith(color: Fx.muted(context), fontStyle: FontStyle.italic)),
                     ),
                     Tooltip(
                       message: Fx.statusLabel(status),
@@ -208,6 +232,7 @@ class _QueuePanelState extends State<QueuePanel> {
   };
 
   static const _sortLabels = {
+    QueueSort.arrival: 'Arrival order (first come first)',
     QueueSort.flaggedFirst: 'Needs attention first',
     QueueSort.timeInVideo: 'Time in video',
     QueueSort.mostFrames: 'Most photos',
@@ -314,8 +339,10 @@ class _QueuePanelState extends State<QueuePanel> {
                         selecting: selecting,
                         checked: c.checked.contains(t.uid),
                         onCheck: () => c.toggleChecked(t.uid),
+                        plateBadge: c.plateBadge,
+                        reading: c.isReading(t.uid),
                         onTap: () {
-                          c.select(t.uid);
+                          c.openTicket(t.uid);
                           widget.onPicked?.call();
                         },
                       );
