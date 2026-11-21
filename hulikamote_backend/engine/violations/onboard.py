@@ -226,12 +226,26 @@ def remember_places(memory: dict, t: float, vehicle: list, places: list) -> None
         seen.popleft()
 
 
+HITS_MIN = 3              # the fewest looks that can flag a vehicle, when looks come slowly (a slow backend, a camera with few pictures a second)
+
+
 def count_hit(memory: dict, t: float, hit: bool) -> bool:
-    """Note whether this look had a passenger outside; True when HITS_NEEDED looks in the last HITS_WINDOW_S seconds did."""
+    """Note whether this look had a passenger outside; True when enough looks in the last HITS_WINDOW_S seconds did. Enough = HITS_NEEDED when
+    there are plenty of looks (about 10 a second), fewer when looks are rare (a quarter of the looks the window would hold at the rate seen,
+    at least HITS_MIN): the rule must not need more looks than the window can hold."""
     from collections import deque
     hits = memory.setdefault("hits", deque())
+    looks = memory.setdefault("looks", deque())
+    looks.append(t)
     if hit:
         hits.append(t)
     while hits and t - hits[0] > HITS_WINDOW_S:
         hits.popleft()
-    return len(hits) >= HITS_NEEDED
+    while looks and t - looks[0] > HITS_WINDOW_S:
+        looks.popleft()
+    needed = HITS_NEEDED
+    span = looks[-1] - looks[0]
+    if len(looks) >= 3 and span > 0.8:                       # the look rate is known: a quarter of the looks the window would hold
+        rate = (len(looks) - 1) / span
+        needed = max(HITS_MIN, min(HITS_NEEDED, round(0.25 * rate * HITS_WINDOW_S)))
+    return len(hits) >= needed

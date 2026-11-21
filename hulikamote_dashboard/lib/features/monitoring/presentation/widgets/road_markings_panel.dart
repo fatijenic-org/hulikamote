@@ -9,9 +9,11 @@ import '../../../forensic/domain/zone_geometry.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
 import '../../data/camera_api.dart';
 import '../../domain/models/road_detect.dart';
+import '../../domain/models/road_preset.dart';
 import '../../domain/road_markings.dart';
 import 'road_detect_view.dart';
 import 'road_zone_editor.dart';
+import 'road_pick_dialog.dart';
 import 'saved_roads_dialog.dart';
 
 /// The "Road" step of the live setup: the road is marked ONCE, on the setup picture, with the same editor as "Detect road" (many points,
@@ -23,7 +25,11 @@ import 'saved_roads_dialog.dart';
 ///
 /// Every change is reported to [onChanged] at once, in the 1920x1080 reference space (the step has no save button).
 class RoadMarkingsPanel extends StatefulWidget {
-  const RoadMarkingsPanel({super.key, required this.cameraApi, required this.markings, required this.onChanged, this.api});
+  const RoadMarkingsPanel({super.key, required this.cameraApi, required this.markings, required this.onChanged, this.api, this.videoHash, this.videoName});
+
+  /// The fingerprint and name of the video in use: roads saved for it are offered at once, and a road saved now is tied to it.
+  final String? videoHash;
+  final String? videoName;
 
   final CameraApi cameraApi;
 
@@ -77,6 +83,7 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
         _size = size;
         _areas = [for (final m in widget.markings) m.scaled(fx, fy)];
       });
+      if (_areas.isEmpty) _suggest();                          // nothing marked yet: a road saved for this video is offered
     } catch (e) {
       if (mounted) setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
     }
@@ -93,11 +100,60 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
     return [for (final a in _areas) a.scaled(fx, fy).withId(a.id.startsWith('auto-') ? a.id : 'm${++n}')];
   }
 
+  /// A road saved for THIS video (same fingerprint) opens a pop-up with the saved roads in a drop-down and a preview. Once per video.
+  Future<void> _suggest() async {
+    final hash = widget.videoHash;
+    if (hash == null) return;
+    try {
+      final all = await widget.cameraApi.roadPresets(hash: hash);
+      if (!mounted || !all.any((p) => p.match)) return;
+      await _pick(all, suggested: true);
+    } catch (_) {
+      // no suggestion then: the road is marked by hand, or "Saved roads" is used
+    }
+  }
+
+  /// The pop-up: the saved roads in a drop-down (this video's first), the chosen one previewed on the setup picture.
+  Future<void> _pick(List<RoadPreset>? known, {bool suggested = false}) async {
+    List<RoadPreset> all;
+    try {
+      all = known ?? await widget.cameraApi.roadPresets(hash: widget.videoHash);
+    } catch (e) {
+      if (mounted) setState(() => _notice = '$e'.replaceFirst('Exception: ', ''));
+      return;
+    }
+    if (!mounted) return;
+    if (all.isEmpty) {
+      setState(() => _notice = 'No saved roads yet. Mark the road, then use "Saved roads" to keep it.');
+      return;
+    }
+    final picked = await showDialog<RoadPick>(
+      context: context,
+      builder: (_) => RoadPickDialog(api: widget.cameraApi, presets: all, frame: _frame, size: _size, suggested: suggested),
+    );
+    final size = _size;
+    if (picked == null || !mounted || size == null) return;
+    final fx = size.width / ZoneGeometry.refWidth, fy = size.height / ZoneGeometry.refHeight;
+    setState(() {
+      _presetId = picked.id;
+      _presetName = picked.name;
+      _areas = [for (final m in picked.markings) m.scaled(fx, fy)];
+    });
+    _emit();
+  }
+
   /// "Saved roads": save the road, use a saved one, duplicate, rename, delete.
   Future<void> _openSaved() async {
     final result = await showDialog<SavedRoadsResult>(
       context: context,
-      builder: (_) => SavedRoadsDialog(api: widget.cameraApi, current: _refAreas(), loadedId: _presetId, loadedName: _presetName),
+      builder: (_) => SavedRoadsDialog(
+        api: widget.cameraApi,
+        current: _refAreas(),
+        loadedId: _presetId,
+        loadedName: _presetName,
+        videoHash: widget.videoHash,
+        videoName: widget.videoName,
+      ),
     );
     if (result == null || !mounted) return;
     final size = _size;
@@ -193,6 +249,12 @@ class _RoadMarkingsPanelState extends State<RoadMarkingsPanel> {
         Tooltip(
           message: _uses,
           child: const Icon(Icons.info_outline, size: 18),
+        ),
+        OutlinedButton.icon(
+          key: const ValueKey('pick-road-button'),
+          onPressed: () => _pick(null),
+          icon: const Icon(Icons.preview_outlined, size: 18),
+          label: const Text('Pick a saved road'),
         ),
         OutlinedButton.icon(
           key: const ValueKey('saved-roads-button'),

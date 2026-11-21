@@ -11,6 +11,7 @@ Handles one frame at a time:
 """
 import json
 import logging
+import os
 import time
 import types
 from dataclasses import dataclass
@@ -55,6 +56,9 @@ EVIDENCE_DIR = Path(__file__).resolve().parent.parent / "snapshots" / "evidence"
 # The rules marked `whole_frame` (engine/violations/*.py) need no drawing: when one is on and nothing is drawn for it, it gets one
 # implicit zone, the whole picture, built from its own wizard settings (Violation.whole_frame_zone)
 WHOLE_FRAME_ZONE_KEYS = tuple(v.zone_key for v in ZONE_VIOLATIONS if v.whole_frame)
+# The rules that judge a vehicle from the way it drove (one unbroken run of its path): the Live Monitor draws the light path line of a flagged
+# vehicle on its evidence photos, and a trail behind every vehicle while one of them is on (Layers: "Vehicle paths")
+PATH_RULES = frozenset({"crossing_solid_line", "illegal_turn", "swerving", "overtaking_on_right"})
 
 
 # ─── Plate reading (its own process) ───────────────────────────────────────────
@@ -97,6 +101,12 @@ class DecoupledPipeline:
 
     def __init__(self, config_path: str):
         self.registry = ModelRegistry(config_path)
+        from engine.box_stabilizer import BoxStabilizer
+        self.stabilizer = BoxStabilizer(hold_s=float(os.environ.get("HK_BOX_HOLD_S", "0.8")),
+                                        enabled=os.environ.get("HK_BOX_STABILIZER", "1").strip() != "0")   # keeps boxes on the screen (ghosts)
+        self.setup_violations = list(self.registry.active_violations)   # the rules of the setup: the live switch moves between these only
+        self.rule_cost: dict = {}                    # rule key -> average milliseconds per picture (what switching it off would save)
+        self._cost_acc: dict = {}
         self.ledger_manager = ActiveLedgerManager()
         self.rois = self._parse_rois(config_path)
         try:
@@ -175,6 +185,44 @@ class DecoupledPipeline:
         # Monitor never set it at all.
         if yolo is not None:
             yolo.small_people = bool((getattr(self, "config", None) or {}).get("use_sahi")) or "passenger_outside" in self.registry.active_violations
+
+    def set_active_rules(self, keys) -> list:
+        """The live switch: from the next picture on only `keys` (the ones that are in the setup) are judged. A rule that is off runs no
+        model and no rule code and draws nothing; the detector and the trackers go on, and vehicles already followed keep their history.
+        A rule that comes on gets its helper model (loaded now when it was not). Blocking when a model has to be loaded: call it in a
+        thread. Returns the rules that are on."""
+        wanted = set(keys)
+        new = [k for k in self.setup_violations if k in wanted]
+        self.registry.active_violations = new                         # one assignment: the frame loop reads the list, never edits it
+        self.registry.ensure_models()
+        try:
+            from yolo_inference import get_inference
+            yolo = get_inference()
+            if yolo is not None:                                       # the people helper (tiles) is only run for Passenger outside
+                yolo.small_people = bool((getattr(self, "config", None) or {}).get("use_sahi")) or "passenger_outside" in new
+        except Exception:
+            log.exception("The people helper could not be switched")
+        for key in list(self.rule_cost):
+            if key not in new:
+                self.rule_cost.pop(key, None)
+        return new
+
+    def _cost_add(self, key: str, seconds: float) -> None:
+        self._cost_acc[key] = self._cost_acc.get(key, 0.0) + seconds
+
+    def _cost_job(self, job_name: str, active: list, seconds: float) -> None:
+        """A specialist model's look is shared by the rules that read it: each of them is shown the whole cost."""
+        for violation in ALL_VIOLATIONS:
+            if violation.job == job_name and violation.key in active:
+                self._cost_add(violation.key, seconds)
+
+    def _cost_flush(self, active: list) -> None:
+        """Once a picture: the time each rule took in it goes into its average (so a model that runs every few pictures shows its mean)."""
+        for key in active:
+            now = self._cost_acc.get(key, 0.0) * 1000.0
+            before = self.rule_cost.get(key)
+            self.rule_cost[key] = now if before is None else before * 0.97 + now * 0.03
+        self._cost_acc = {}
 
     @staticmethod
     def _parse_native_dims(config_path: str) -> tuple[int, int]:
@@ -339,7 +387,7 @@ class DecoupledPipeline:
         """True for a ledger flagged ONLY for Crossing a solid line whose tracker number has gone to another vehicle since (a jump or a long
         silence in its path, engine/track_continuity.py): the vehicle that crossed is gone from it, so the box that now carries its number
         must not be called a violator and gets no evidence photo. The ticket keeps the photos taken while it still was the vehicle."""
-        if not ledger.violations or not ledger.violations <= {"crossing_solid_line", "illegal_turn"} or ledger.pending or not ledger.cross_points:
+        if not ledger.violations or not ledger.violations <= PATH_RULES or ledger.pending or not ledger.cross_points:
             return False
         run = last_run(list(ledger.path))
         return bool(run) and run[0][0] > ledger.cross_points[-1][0]
@@ -379,7 +427,7 @@ class DecoupledPipeline:
         # Burn the vehicle bounding box
         annotated = yolo.draw_detections(base_frame, [det])
         marks.draw_marks(annotated, ledger, det.bbox)
-        if getattr(self, "show_paths", False) and ledger.violations & {"crossing_solid_line", "illegal_turn"}:
+        if getattr(self, "show_paths", False) and ledger.violations & PATH_RULES:
             marks.draw_path(annotated, ledger)       # the Live Monitor shows how the vehicle drove across the line, or turned
 
         path = YoloInference.save_snapshot(annotated, EVIDENCE_DIR)
@@ -437,6 +485,24 @@ class DecoupledPipeline:
         self._draw_dets = detections
         return self._draw_rois(out_frame)
 
+    def _locked_specs(self) -> list[dict]:
+        """Illegal parking: a vehicle that was locked on and that the detector has dropped for a moment keeps its box (and its running
+        stopwatch) at the locked spot, so the box does not blink away while the tracker looks for it (engine/parking_lock.py)."""
+        mgr = self.ledger_manager
+        locks, now = getattr(mgr, "locks", None), getattr(mgr, "now", None)
+        if locks is None or now is None or "illegal_parking" not in self.registry.active_violations:
+            return []
+        out = []
+        for lock, owner in locks.ghosts(mgr.ledgers, now):
+            box = [int(v) for v in owner.history[-1][3]]
+            elapsed = max(0.0, now - lock.since)
+            over = lock.ticketed or (lock.limit > 0 and elapsed >= lock.limit)
+            title = "ILLEGAL PARKING" if lock.ticketed else "PARKED"
+            out.append({"box": box, "color": marks.RED if lock.ticketed else marks.AMBER, "lines": [title, "locked, not in view"], "plate": None})
+            text = f"PARKED {marks.clock(elapsed)} / {marks.clock(lock.limit)}" if lock.limit > 0 else f"PARKED {marks.clock(elapsed)}"
+            out.append({"timer": text, "box": box, "color": list(marks.RED if over else marks.AMBER), "lines": []})
+        return out
+
     def box_specs(self, detections: list) -> list[dict]:
         """What annotate_frame_fast would draw as boxes, as plain data with RGB colours (the replay's box file)."""
         from yolo_inference import box_specs
@@ -445,7 +511,8 @@ class DecoupledPipeline:
             ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
             if ledger is not None:
                 specs += marks.mark_specs(ledger, det.bbox)
-        if getattr(self, "show_paths", False) and "crossing_solid_line" in self.registry.active_violations:
+        specs += self._locked_specs()
+        if getattr(self, "show_paths", False) and PATH_RULES & set(self.registry.active_violations):
             specs += marks.trail_specs(self.ledger_manager, detections)     # the Live Monitor: the way of every vehicle, to check it against the line
         for spec in specs:
             if "color" in spec:
@@ -593,7 +660,14 @@ class DecoupledPipeline:
         t0 = time.perf_counter()
         fh, fw = frame.shape[:2]
         scaled_rois = self._get_scaled_rois(fw, fh)
-        found = get_inference().infer(frame)
+        yolo = get_inference()
+        found = yolo.infer(frame)
+        if "passenger_outside" in self.registry.active_violations and getattr(yolo, "heavy_turn", True):
+            # the people around each vehicle are searched in a cut of the picture around it: the whole-picture search misses most of them
+            # (on every HEAVY_EVERY-th detection: see yolo_inference.HEAVY_EVERY)
+            t_near = time.perf_counter()
+            found = found + yolo.people_near(frame, found)
+            TIMER.add("people_near", time.perf_counter() - t_near)
         t1 = time.perf_counter()
         detections = self._filter_to_roi(found, scaled_rois)
         TIMER.add("roi", time.perf_counter() - t1)
@@ -654,7 +728,13 @@ class DecoupledPipeline:
         TIMER.add("B", time.perf_counter() - t0)
         TIMER.mark("judged")
         # The clean frame goes back to the streamer: boxes and zones are drawn from the JSON overlay by the dashboard.
-        return frame, detections
+        # Boxes the detector lost for a moment come back as ghosts (engine/box_stabilizer.py): for the screen only, after everything above.
+        try:
+            ghosts = self.stabilizer.step(detections, frame_count, (fw, fh))
+        except Exception:
+            log.exception("The box stabilizer failed")
+            ghosts = []
+        return frame, (detections + ghosts if ghosts else detections)
 
 
     def reset_tracking(self) -> None:
@@ -715,12 +795,15 @@ class DecoupledPipeline:
             for job in JOBS:
                 if not job.wanted(active, det):
                     continue
+                t_job = time.perf_counter()
                 look = job.look(self, frame, det, detections)
                 if look is None:
+                    self._cost_job(job.name, active, time.perf_counter() - t_job)
                     continue
                 for violation in ALL_VIOLATIONS:
                     if violation.job == job.name and violation.key in active:
                         violation.judge(self, det, look)
+                self._cost_job(job.name, active, time.perf_counter() - t_job)
 
             ledger = self.ledger_manager.ledgers.get(det.track_id)
             if ledger is not None:
@@ -733,17 +816,24 @@ class DecoupledPipeline:
         for violation in ZONE_VIOLATIONS:
             zones = scaled_rois.get(violation.zone_key)
             if violation.key in active and zones:
+                t_rule = time.perf_counter()
                 violation.prepare(self, frame, detections, zones, t)
+                self._cost_add(violation.key, time.perf_counter() - t_rule)
                 rules.append((violation, zones))
         for tid, ledger in list(self.ledger_manager.ledgers.items()):
             if "person" in (ledger.vclass, ledger.latest_class):   # latest_class: a new track has no settled class yet
                 continue
             for violation, zones in rules:
+                t_rule = time.perf_counter()
                 violation.evaluate(self.ledger_manager, tid, zones)
+                self._cost_add(violation.key, time.perf_counter() - t_rule)
 
         for violation in ALL_VIOLATIONS:
             if violation.key in active:
+                t_rule = time.perf_counter()
                 violation.check_frame(self, detections)
+                self._cost_add(violation.key, time.perf_counter() - t_rule)
+        self._cost_flush(active)
 
 
 # ─── Local test entry point ───────────────────────────────────────────────────

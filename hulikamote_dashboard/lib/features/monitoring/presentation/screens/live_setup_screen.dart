@@ -13,6 +13,7 @@ import '../../data/camera_api.dart';
 import '../../domain/live_setup_draft.dart';
 import '../../domain/models/road_detect.dart';
 import '../widgets/frame_picker_step.dart';
+import '../widgets/setup_preset_bar.dart';
 import '../widgets/road_markings_panel.dart';
 import '../widgets/setup_layers_dialog.dart';
 
@@ -75,6 +76,8 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   bool _loading = true;       // the current live setup is being read
   bool _hadSetup = false;     // a live setup existed and was loaded
   bool _applying = false;
+  String? _videoHash;             // the fingerprint of the video in use (null: a camera): saved setups and roads are matched on it
+  String? _videoName;
   bool _saveRun = false;          // "Save this run": every picture and its boxes go to a folder, to replay later like a forensic run
   String _saveDir = '';
   late bool _clearTickets = widget.chooseFrame;   // a fresh start clears the tickets of earlier monitoring; changing the rules of a running feed keeps them
@@ -93,6 +96,46 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     super.initState();
     _savedLoad = _loadSaved();
     _loadModels();
+    _loadRecord();
+    _loadHash();
+  }
+
+  /// The fingerprint of the video in use: saved setups and roads made for it are offered again.
+  Future<void> _loadHash() async {
+    try {
+      final h = await widget.cameraApi.videoHash();
+      if (!mounted) return;
+      setState(() {
+        _videoHash = h['hash'] as String?;
+        _videoName = h['name'] as String?;
+      });
+    } catch (_) {
+      // no backend answer: nothing is offered
+    }
+  }
+
+  /// A saved setup was chosen: all its violations are switched on with their settings (the road is not part of it). The operator can add more
+  /// and change each one in the next steps.
+  void _usePreset(Map<String, dynamic> config, String name) {
+    final saved = Map<String, dynamic>.from(config)..remove('road_markings');
+    setState(() {
+      _applySaved(saved);
+      _draft.syncMarkings();                                  // the zones the road markings give are taken at once
+    });
+  }
+
+  /// "Save this run" keeps its last choice (and the folder on the hard drive): the switch and the folder come back as they were.
+  Future<void> _loadRecord() async {
+    try {
+      final record = await widget.cameraApi.liveRecord();
+      if (!mounted) return;
+      setState(() {
+        if (_saveDir.isEmpty) _saveDir = '${record['dir'] ?? ''}';
+        if (_saveDir.isNotEmpty && record['save'] == true) _saveRun = true;
+      });
+    } catch (_) {
+      // no backend answer: the switch stays off, the folder is chosen by hand
+    }
   }
 
   @override
@@ -376,16 +419,39 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
         cameraApi: widget.cameraApi,
         markings: _draft.markings,
         api: _api,                           // the painted solid lines are drawn by the backend, like on the video
+        videoHash: _videoHash,               // roads saved for this video are offered at once
+        videoName: _videoName,
         onChanged: _draft.setMarkings,       // the violations that are picked already take what they need at once
       ),
-      'Violations' => ViolationsStep(draft: _draft, models: _models),
-      'Rules & zones' => RulesStep(
-        draft: _draft,
-        media: widget.media,
-        current: _rulesKey ?? (_draft.selection.isEmpty ? '' : _draft.selection.first),
-        onPick: (k) => setState(() => _rulesKey = k),
-        api: _api,                                    // the realistic overlay objects (hydrant, signs, painted lines) are drawn by the backend
-      ),
+      'Violations' => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SetupPresetBar(
+          api: widget.cameraApi,
+          videoHash: _videoHash,
+          videoName: _videoName,
+          currentConfig: () => _draft.buildConfig(activePlateModel: _models.active('plate')),
+          onUse: _usePreset,
+        ),
+        Expanded(child: ViolationsStep(draft: _draft, models: _models)),
+      ]),
+      'Rules & zones' => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SetupPresetBar(
+          compact: true,                              // the zones and signs set here are kept in the saved setup too
+          api: widget.cameraApi,
+          videoHash: _videoHash,
+          videoName: _videoName,
+          currentConfig: () => _draft.buildConfig(activePlateModel: _models.active('plate')),
+          onUse: _usePreset,
+        ),
+        Expanded(
+          child: RulesStep(
+            draft: _draft,
+            media: widget.media,
+            current: _rulesKey ?? (_draft.selection.isEmpty ? '' : _draft.selection.first),
+            onPick: (k) => setState(() => _rulesKey = k),
+            api: _api,                                // the realistic overlay objects (hydrant, signs, painted lines) are drawn by the backend
+          ),
+        ),
+      ]),
       'Settings' => SettingsStep(draft: _draft, models: _models),
       _ => _review(context),
     };

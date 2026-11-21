@@ -113,6 +113,11 @@ class ModelRegistry:
 
         self._forget_unused_sessions()
 
+    def ensure_models(self) -> None:
+        """The models the rules that are on need are loaded (a rule switched on while the monitor runs): one that is loaded already is not
+        loaded again. Models of rules that were switched off stay in memory (the rules just do not run them)."""
+        self._initialize_models()
+
     def _load_model(self, name: str, path: Path, fallback: bool = False):
         if path.exists():
             self.models[name] = self._session(name, path)

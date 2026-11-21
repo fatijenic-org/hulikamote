@@ -20,10 +20,15 @@ Like a video stream that buffers: pictures (with their boxes) are pushed in as t
 
 Pure logic: no threads, no I/O, a clock that can be replaced.
 """
+import os
 import time
 from collections import deque
 
 RATE_WINDOW_S = 4.0       # the backend's speed is read over this much real time
+# A file that has far more in hand than the gap (after the viewer went back, or paused for long) is played at most this fast while it catches up
+# (HK_PLAYOUT_MAX_SPEED; 1.0 = no limit): it stays a steady slow motion instead of jumping to normal speed. A backend that is itself faster than
+# this plays at its own speed (up to 1.0); the cap only limits the catch-up.
+MAX_CATCHUP_SPEED = min(1.0, max(0.1, float(os.environ.get("HK_PLAYOUT_MAX_SPEED", "0.8"))))
 SPEED_SMOOTH_S = 1.0      # the playing speed moves to its new value over about this long (no jerks)
 
 
@@ -190,12 +195,19 @@ class Playout:
         self._last = now
         gap_error = (self.ahead_s() - self.start_s) / self.start_s        # > 0: more in hand than the gap, < 0: less
         if self.finished:
-            self.speed = 1.0
+            # the last pictures at normal speed; but a large amount in hand (the viewer went back) is still played in the steady slow motion
+            self.speed = 1.0 if self.ahead_s() <= self.start_s else (self.speed if self.speed <= MAX_CATCHUP_SPEED else MAX_CATCHUP_SPEED)
+            if self.speed < MAX_CATCHUP_SPEED and self.ahead_s() > self.start_s:
+                self.speed += (MAX_CATCHUP_SPEED - self.speed) * min(1.0, dt / SPEED_SMOOTH_S)
         elif self.live:
             target = 1.0 + min(0.25, max(0.0, gap_error) * 0.25)          # a camera cannot be slowed; with more in hand than the gap: a bit faster
             self.speed += (target - self.speed) * min(1.0, dt / SPEED_SMOOTH_S)
         else:
-            target = min(1.0, max(self.min_speed, self.backend_speed() * (1.0 + gap_error)))
+            backend = self.backend_speed()
+            raw = backend * (1.0 + gap_error)
+            if gap_error > 0:
+                raw = min(raw, max(backend, MAX_CATCHUP_SPEED))      # catching up a big gap: never faster than the steady slow motion
+            target = min(1.0, max(self.min_speed, raw))
             self.speed += (target - self.speed) * min(1.0, dt / SPEED_SMOOTH_S)
         self.play_t += dt * self.speed
         if self.live and self._items and self._items[0][0] - self.play_t > 1.5:

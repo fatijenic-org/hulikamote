@@ -24,10 +24,11 @@ def clock(seconds: float) -> str:
     return f"{minutes}:{secs:02d}"
 
 
-def set_timer(ledger, key: str, text: str, over: bool, t: float) -> None:
+def set_timer(ledger, key: str, text: str, over: bool, t: float, colour: tuple | None = None) -> None:
     """A stopwatch on the vehicle's own box (e.g. illegal parking: "PARKED 0:07 / 0:10"): amber while counting, red once over the
-    limit. It is a separate chip on the bottom edge of the box: the labels above the box and the marks are not touched."""
-    ledger.timers[key] = {"t": t, "text": text, "over": over}
+    limit. It is a separate chip on the bottom edge of the box: the labels above the box and the marks are not touched.
+    `colour` (BGR) gives the chip a colour of its own (a status chip such as "BLINK: NO" is not a stopwatch)."""
+    ledger.timers[key] = {"t": t, "text": text, "over": over, "colour": colour}
 
 
 def clear_timer(ledger, key: str) -> None:
@@ -40,7 +41,7 @@ def current_timers(ledger) -> list[tuple]:
     if not timers:
         return []
     now = ledger.path[-1][0] if ledger.path else 0.0
-    return [(tm["text"], RED if tm["over"] else AMBER) for tm in timers.values() if now - tm["t"] <= TIMER_TTL_S]
+    return [(tm["text"], tm.get("colour") or (RED if tm["over"] else AMBER)) for tm in timers.values() if now - tm["t"] <= TIMER_TTL_S]
 
 
 def to_relative(box: list, vehicle: list) -> tuple:
@@ -132,7 +133,7 @@ def draw_timers(frame: np.ndarray, ledger, vehicle: list) -> None:
         y = int(max(0, min(bottom - bh, height - bh)))
         cv2.rectangle(frame, (x, y), (x + bw, y + bh), colour, -1)
         cv2.putText(frame, text, (x + 3, y + bh - 5), cv2.FONT_HERSHEY_SIMPLEX, scale,
-                    (255, 255, 255) if colour == RED else (0, 0, 0), thick, cv2.LINE_AA)
+                    (255, 255, 255) if sum(colour) / 3 < 125 else (0, 0, 0), thick, cv2.LINE_AA)
         bottom = y
 
 

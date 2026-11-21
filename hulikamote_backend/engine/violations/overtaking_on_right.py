@@ -13,7 +13,10 @@ Heuristic, judged for vehicle A against every other vehicle B in the same zone, 
   - at the moment A drew level it was on B's RIGHT (the driver's right: image right when driving up the picture,
     image left when driving down), between 0.3 and 3 box widths away (nearer is the same lane, farther is another road),
   - B did not turn left during the pass (its heading swung less than 20 deg to the left).
-Both tracks must exist during the whole pass, so a tracker ID that jumps from one car to another is not a pass.
+Both tracks must exist during the whole pass, so a tracker ID that jumps from one car to another is not a pass: each path is cut where
+it stops being one vehicle (engine/track_continuity.py, engine/violations/run_mark.py), and only the part both vehicles share is read.
+The same verdict must hold for HOLD_PICTURES new pictures of the passing vehicle in a row (one wrong box is not a pass). The light path
+line of the passing vehicle, with a ring where it was flagged, is drawn on the live evidence photos.
 
 VIEW REQUIRED: both vehicles visible during the whole pass, seen from the front or the rear at a moderate height.
 A side view cannot tell left from right (one vehicle hides the other).
@@ -21,8 +24,10 @@ A side view cannot tell left from right (one vehicle hides the other).
 import math
 
 from engine import marks
+from engine.track_continuity import last_run
 from engine.violations.base import Violation
 from engine.violations.geometry import dot, is_driving, point_in_polygon, unit
+from engine.violations.run_mark import run_start
 
 WINDOW_S = 3.0                    # the pass must happen within this long
 MIN_PASS_S = 0.8                  # ...and both vehicles must be tracked together at least this long
@@ -31,6 +36,7 @@ LEFT_TURN_SIN = math.sin(math.radians(20.0))
 AHEAD_WIDTHS = 0.5                # behind -> ahead by this many widths of the overtaken vehicle
 MIN_SIDE_WIDTHS, MAX_SIDE_WIDTHS = 0.3, 3.0
 MIN_TRAVEL_PX = 15.0              # a direction needs this much travel (beats box jitter)
+HOLD_PICTURES = 3                 # new pictures of the passing vehicle in a row that must show the pass
 
 
 def _since(path, t0: float) -> list:
@@ -50,12 +56,36 @@ def _travel(a, b):
     return unit(dx, dy) if math.hypot(dx, dy) >= MIN_TRAVEL_PX else None
 
 
-def passed_on_right(a_path, b_path) -> bool:
-    """True when the vehicle with path `a_path` has just overtaken the one with `b_path` on its right (see the module text)."""
+class PassWatch:
+    """One vehicle about one other vehicle: how many NEW pictures of it in a row show that it passed the other one on its right."""
+
+    def __init__(self):
+        self.last_t = None
+        self.n = 0
+
+    def update(self, t, hit: bool) -> bool:
+        if self.last_t is not None and t <= self.last_t:
+            return False                                 # not a new picture: nothing is counted twice
+        self.last_t = t
+        self.n = self.n + 1 if hit else 0
+        return self.n >= HOLD_PICTURES
+
+
+def _run_from(path) -> float:
+    """When the newest part of `path` that is one vehicle began."""
+    run = last_run(list(path))
+    return run[0][0] if run else path[0][0]
+
+
+def passed_on_right(a_path, b_path, a_from=None, b_from=None) -> bool:
+    """True when the vehicle with path `a_path` has just overtaken the one with `b_path` on its right (see the module text).
+    `a_from` / `b_from`: when the newest continuous run of each path began (run_mark.run_start); worked out here when not given."""
     if not a_path or not b_path:
         return False
+    a_from = _run_from(a_path) if a_from is None else a_from
+    b_from = _run_from(b_path) if b_from is None else b_from
     now = min(a_path[-1][0], b_path[-1][0])
-    t0 = max(a_path[0][0], b_path[0][0], now - WINDOW_S)
+    t0 = max(a_path[0][0], b_path[0][0], now - WINDOW_S, a_from, b_from)      # only the part where both are one vehicle
     if now - t0 < MIN_PASS_S:
         return False
     a, b = _since(a_path, t0), _since(b_path, t0)
@@ -111,8 +141,11 @@ class OvertakingOnRight(Violation):
         if ledger is None or not zones or len(ledger.path) < 3 or self.key in ledger.violations:
             return False
         if "person" in (ledger.vclass, ledger.latest_class) or not is_driving(ledger):
+            for watch in ledger.pass_watch.values():
+                watch.n = 0                                  # not driving: what was seen of a pass is stale
             return False
-        _t, cx, cy, _w = ledger.path[-1]
+        now, cx, cy, _w = ledger.path[-1]
+        a_from = run_start(ledger)
         for zone in zones:
             if zone.get("one_way_lanes", 1) >= 2 or not point_in_polygon(cx, cy, zone["polygon"]):
                 continue
@@ -120,9 +153,14 @@ class OvertakingOnRight(Violation):
                 if other_id == track_id or len(other.path) < 3 or "person" in (other.vclass, other.latest_class):
                     continue
                 _ot, ox, oy, _ow = other.path[-1]
+                watch = ledger.pass_watch.setdefault(other_id, PassWatch())
                 if not point_in_polygon(ox, oy, zone["polygon"]) or not is_driving(other):
+                    watch.n = 0
                     continue
-                if passed_on_right(ledger.path, other.path):
+                if watch.last_t is not None and now <= watch.last_t:
+                    continue                                 # no new picture of this vehicle since the last look
+                if watch.update(now, passed_on_right(ledger.path, other.path, a_from, run_start(other))):
+                    ledger.cross_points.append((now, cx, cy))      # a ring on the live evidence photo
                     ledger.violations.add(self.key)
                     if ledger.history and other.history:
                         marks.set_marks(ledger, self.key, ledger.history[-1][3],

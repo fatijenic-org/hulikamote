@@ -1277,6 +1277,7 @@ async def use_wizard_for_live(config: dict):
         try:
             get_inference(force_reload=True, tracker_type=config.get("tracker", "bytetrack"))
             START.mark("detector ready")
+            stream.reset_rules()                               # a new setup: every rule of it is on
             stream.reload_pipeline()
             START.mark("pipeline built")
             stream.warm_up_pipeline()                          # the first run of each model, now and not on the first live picture

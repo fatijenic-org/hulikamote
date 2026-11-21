@@ -22,6 +22,7 @@ class TicketTile extends StatelessWidget {
     this.onCheck,
     this.plateBadge = false,
     this.reading = false,
+    this.unread = false,
   });
 
   final ForensicTicket ticket;
@@ -36,6 +37,9 @@ class TicketTile extends StatelessWidget {
   /// Mark a ticket whose plate is read (the live run), and show "Reading the plate…" while it is being read.
   final bool plateBadge;
   final bool reading;
+
+  /// A dot before the plate: nobody has opened this ticket yet (the live run).
+  final bool unread;
 
   String get _meta {
     final parts = <String>['#${ticket.trackId}'];
@@ -102,6 +106,14 @@ class TicketTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
+                    if (unread)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: Tooltip(
+                          message: 'New: not opened yet',
+                          child: SizedBox(width: 9, height: 9, child: DecoratedBox(decoration: BoxDecoration(color: Fx.accent, shape: BoxShape.circle))),
+                        ),
+                      ),
                     Expanded(
                       child: reading
                           ? Row(children: [
@@ -341,6 +353,7 @@ class _QueuePanelState extends State<QueuePanel> {
                         onCheck: () => c.toggleChecked(t.uid),
                         plateBadge: c.plateBadge,
                         reading: c.isReading(t.uid),
+                        unread: c.isUnread(t.uid),
                         onTap: () {
                           c.openTicket(t.uid);
                           widget.onPicked?.call();
