@@ -24,7 +24,10 @@ import '../widgets/road_detect_view.dart';
 import '../widgets/upload_status_card.dart';
 import '../widgets/video_feed_widget.dart';
 import '../widgets/live_tickets_panel.dart';
+import '../widgets/live_rules_bar.dart';
 import '../widgets/live_timeline.dart';
+import '../widgets/demo_dialog.dart';
+import '../widgets/replay_dialog.dart';
 import 'live_setup_screen.dart';
 
 /// Picks the video file to upload. Replaceable in tests.
@@ -436,6 +439,60 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       try {
         await _pollCamera();
       } catch (_) {}
+    }
+  }
+
+  /// "Replay a saved run…": pick a saved run (a folder with its pictures, boxes and tickets). The Live Monitor plays it in order with no
+  /// backend work, no setup and no models; its tickets show as they happened, and everything done on them is saved back into that folder.
+  Future<void> _openReplay() async {
+    final picked = await ReplayDialog.show(context, _cameraApi);
+    final run = picked?['run'] as String?;
+    if (run == null || !mounted) return;
+    if (_isPlaying) _stopMonitoring();
+    _resumable = false;
+    _resumeAtS = null;
+    setState(() {
+      _sourceName = run;
+      _gate = false;
+    });
+    await _connect(checked: true);
+  }
+
+  /// "Continue a saved monitoring…": a monitoring that was saved with "Save and pause" comes back as it was (setup, learned road, source,
+  /// tickets) and the real monitoring goes on from where the video was; new pictures and tickets are added to the same run folder.
+  Future<void> _continueSaved() async {
+    final picked = await ReplayDialog.show(context, _cameraApi, forContinue: true);
+    if (picked == null || !mounted) return;
+    if (_isPlaying) _stopMonitoring();
+    final name = ((picked['source_name'] as String?) ?? '').isNotEmpty ? picked['source_name'] as String : (picked['run'] as String);
+    final at = (picked['pos_s'] as num?)?.toDouble() ?? 0.0;
+    _resumable = false;
+    _resumeAtS = null;
+    setState(() {
+      _sourceName = name;
+      _positionSource = name;
+      _gate = false;
+    });
+    unawaited(_cameraApi.prepareFeed());          // the models load while the feed opens
+    await _connect(startAt: at, checked: true);
+  }
+
+  /// "Save and pause": everything to go on later is written into the run folder, then the monitoring stops. Continue it from the source menu.
+  Future<void> _saveAndPause() async {
+    try {
+      // Where to go on: where the BACKEND has finished (not where the screen is). What lies between them is already processed and saved.
+      final info = _bufferInfo.value;
+      final play = (info?['play_s'] as num?)?.toDouble();
+      final proc = (info?['proc_s'] as num?)?.toDouble();
+      final ahead = (play != null && proc != null && proc > play) ? proc - play : 0.0;
+      await _cameraApi.saveSession((_resumeAtS ?? 0.0) + ahead);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))));
+      return;
+    }
+    _stopMonitoring();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved. Continue it from Change source, Continue a saved monitoring.')));
     }
   }
 
@@ -929,6 +986,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
               onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LiveTicketsScreen())),
             ),
             IconButton(
+              key: const ValueKey('demo-button'),
+              tooltip: 'Demo replay: play a recorded run for a video file',
+              icon: const Icon(Icons.slideshow),
+              onPressed: () => DemoDialog.show(context, _cameraApi),
+            ),
+            IconButton(
               key: const ValueKey('performance-button'),
               tooltip: 'Performance: CPU, GPU, RAM and every step of the pipeline',
               icon: const Icon(Icons.speed),
@@ -936,6 +999,13 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
             ),
             _moreMenu(),
           ]),
+          if (_playing)
+            OutlinedButton.icon(
+              key: const ValueKey('save-pause-button'),
+              onPressed: _saveAndPause,
+              icon: const Icon(Icons.save_outlined),
+              label: Text(compact ? 'Save' : 'Save and pause'),
+            ),
           if (_playing)
             FilledButton.icon(
               onPressed: _stopMonitoring,
@@ -1055,6 +1125,12 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
       if (!_roadDetecting)
         ValueListenableBuilder<Map<String, dynamic>?>(
           valueListenable: _bufferInfo,
+          // the switch needs the running backend: a replay of a saved run has none
+          builder: (context, info, _) => (info == null || info['replay'] == true) ? const SizedBox.shrink() : LiveRulesBar(api: _cameraApi),
+        ),
+      if (!_roadDetecting)
+        ValueListenableBuilder<Map<String, dynamic>?>(
+          valueListenable: _bufferInfo,
           builder: (context, info, _) => info == null
               ? const SizedBox.shrink()
               : LiveTimeline(
@@ -1126,6 +1202,8 @@ class _LiveMonitoringScreenState extends State<LiveMonitoringScreen> {
         MenuItemButton(leadingIcon: const Icon(Icons.phone_android), onPressed: _connectPhone, child: const Text('Connect phone (one click)')),
         MenuItemButton(leadingIcon: const Icon(Icons.videocam_outlined), onPressed: _openCameraInput, child: const Text('Camera or address…')),
         MenuItemButton(leadingIcon: const Icon(Icons.upload_file), onPressed: _uploadVideoSource, child: const Text('Video file…')),
+        MenuItemButton(leadingIcon: const Icon(Icons.history), onPressed: _openReplay, child: const Text('Replay a saved run…')),
+        MenuItemButton(leadingIcon: const Icon(Icons.restore), onPressed: _continueSaved, child: const Text('Continue a saved monitoring…')),
       ],
       builder: (context, controller, _) {
         final onPressed = _uploading ? null : () => controller.isOpen ? controller.close() : controller.open();   // not while a file is going up

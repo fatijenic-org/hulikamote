@@ -467,6 +467,13 @@ class _NoticeCardState extends State<NoticeCard> {
       Text('No internet needed. Put the phone on the same Wi-Fi (or on this laptop\'s hotspot) and open this address in its browser:',
           style: Fx.caption(context)),
       const SizedBox(height: Fx.s8),
+      if (s.mailboxUrls.isNotEmpty) ...[
+        Text(
+          'In the phone app: Connection > Same Wi-Fi > type ${s.mailboxUrls.map((u) => Uri.parse(u).authority).join(' or ')} (or press "Find the laptop for me").',
+          style: Fx.caption(context),
+        ),
+        const SizedBox(height: Fx.s8),
+      ],
       if (s.mailboxUrls.isEmpty)
         const FxBanner(
           message: 'No Wi-Fi or hotspot address found. Connect this laptop to the phone\'s network first.',

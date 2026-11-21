@@ -58,6 +58,7 @@ class _LiveTimelineState extends State<LiveTimeline> {
     final play = _drag ?? _num('play_s') ?? first;
     final video = _num('video_s') ?? proc;
     final paused = widget.info['paused'] == true;
+    final pauses = [for (final m in (widget.info['pauses'] as List? ?? const [])) if (m is num) m.toDouble()];   // replay: where it was saved and paused
     var span = 1.0;
     for (final v in [video, proc, play]) {
       if (v > span) span = v;
@@ -110,6 +111,8 @@ class _LiveTimelineState extends State<LiveTimeline> {
                     ),
                     // the video itself, at its own speed
                     Positioned(left: x(video) - 1, top: 4, width: 2, height: 22, child: const ColoredBox(color: Colors.white70)),
+                    // where this monitoring was saved and paused (replay)
+                    for (final m in pauses) Positioned(left: x(m) - 1.5, top: 2, width: 3, height: 26, child: const ColoredBox(color: Colors.amber)),
                     // the backend: how far it has finished
                     Positioned(
                       left: x(proc) - 5,
@@ -133,10 +136,35 @@ class _LiveTimelineState extends State<LiveTimeline> {
               );
             }),
             Wrap(spacing: Fx.s12, runSpacing: 2, children: [
-              _legend(context, Fx.accent, 'Output ${_clock(play)}'),
-              _legend(context, _backendColor, 'Backend ${_clock(proc)}'),
-              _legend(context, Colors.white70, 'Video ${_clock(video)}'),
-              Text('${delay.round()} s behind the backend', style: Fx.caption(context)),
+              if (widget.info['demo'] == true)
+                Container(
+                  key: const ValueKey('demo-badge'),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(border: Border.all(color: Fx.accent), borderRadius: BorderRadius.circular(4)),
+                  child: Text('DEMO REPLAY', style: Fx.caption(context).copyWith(color: Fx.accent, fontWeight: FontWeight.w700)),
+                ),
+              if (widget.info['replay'] == true) ...[
+                Container(
+                  key: const ValueKey('replay-badge'),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(border: Border.all(color: Fx.accent), borderRadius: BorderRadius.circular(4)),
+                  child: Text('REPLAY OF A SAVED RUN', style: Fx.caption(context).copyWith(color: Fx.accent, fontWeight: FontWeight.w700)),
+                ),
+                _legend(context, Fx.accent, 'At ${_clock(play)} of ${_clock(proc)}'),
+                if (pauses.isNotEmpty) ...[
+                  _legend(context, Colors.amber, pauses.length == 1 ? 'Paused at ${_clock(pauses.last)}' : 'Last paused at ${_clock(pauses.last)} (${pauses.length} times)'),
+                  InkWell(
+                    key: const ValueKey('go-last-pause'),
+                    onTap: () => widget.onSeek(pauses.last),
+                    child: Text('Go to it', style: Fx.caption(context).copyWith(color: Fx.accent, decoration: TextDecoration.underline)),
+                  ),
+                ],
+              ] else ...[
+                _legend(context, Fx.accent, 'Output ${_clock(play)}'),
+                _legend(context, _backendColor, 'Backend ${_clock(proc)}'),
+                _legend(context, Colors.white70, 'Video ${_clock(video)}'),
+                Text('${delay.round()} s behind the backend', style: Fx.caption(context)),
+              ],
             ]),
           ]),
         ),

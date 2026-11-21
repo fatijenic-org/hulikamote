@@ -15,8 +15,11 @@ class OverlayLayer {
   /// The Layers key of the banned-turn arrows (the backend hides them from the live zones, see routers/stream.py).
   static const turnArrowsKey = 'illegal_turn:arrows';
 
-  /// The Layers key of the vehicle paths (the light line behind every vehicle, drawn while Crossing a solid line is on; the backend hides them).
+  /// The Layers key of the vehicle paths (the light line behind every vehicle, drawn while one of [pathRules] is on; the backend hides them).
   static const pathsKey = 'crossing_solid_line:paths';
+
+  /// The rules that judge a vehicle from the way it drove: they share the light path line (the same list as the backend's PATH_RULES).
+  static const pathRules = ['crossing_solid_line', 'illegal_turn', 'swerving', 'overtaking_on_right'];
 
   /// The layers of a live setup (GET /settings/live/setup): one for each switched-on violation that has overlay objects. A violation that is
   /// switched off, or has none, has no row, so rows appear and go with the violations.
@@ -34,11 +37,14 @@ class OverlayLayer {
         _ => (signs, 'signs'),
       };
       if (count > 0) out.add(OverlayLayer(key, '${ViolationCatalog.of(key).label}: $noun', count));
-      if (key == 'crossing_solid_line') out.add(const OverlayLayer(pathsKey, 'Crossing a solid line: vehicle paths', 0, hint: 'The light line behind every vehicle'));
       if (key == 'illegal_turn') {                      // the banned-turn arrows of the marked roads: their own switch (the backend key has a suffix)
         final arrows = rois.where((z) => z['turn_arrow_left'] != null || z['turn_arrow_right'] != null).length;
         if (arrows > 0) out.add(OverlayLayer(turnArrowsKey, 'Illegal turn: banned-turn arrows', arrows));
       }
+    }
+    final onPaths = [for (final raw in (setup['active_violations'] as List? ?? const [])) if (pathRules.contains('$raw')) ViolationCatalog.of('$raw').label];
+    if (onPaths.isNotEmpty) {                          // one switch for the light path line: the rules that follow a vehicle's way share it
+      out.add(OverlayLayer(pathsKey, 'Vehicle paths', 0, hint: 'The light line behind every vehicle (${onPaths.join(', ')})'));
     }
     return out;
   }

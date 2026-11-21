@@ -18,7 +18,11 @@ class SavedRoadsResult {
 /// "Saved roads": the road markings of the setup under a name. Save the current road, use a saved one again, duplicate it, rename it,
 /// delete it. A road that was used can be edited in the setup and then saved over itself ("Update").
 class SavedRoadsDialog extends StatefulWidget {
-  const SavedRoadsDialog({super.key, required this.api, required this.current, this.loadedId, this.loadedName});
+  const SavedRoadsDialog({super.key, required this.api, required this.current, this.loadedId, this.loadedName, this.videoHash, this.videoName});
+
+  /// The video in use: a road saved now is tied to it, so it is offered again when the same video is used.
+  final String? videoHash;
+  final String? videoName;
 
   final CameraApi api;
 
@@ -98,7 +102,7 @@ class _SavedRoadsDialogState extends State<SavedRoadsDialog> {
   Future<void> _saveNew() => _run(() async {
     final name = _name.text.trim();
     if (name.isEmpty) throw Exception('Give the road a name.');
-    final saved = await widget.api.saveRoadPreset(name, widget.current);
+    final saved = await widget.api.saveRoadPreset(name, widget.current, videoHash: widget.videoHash, videoName: widget.videoName);
     _close(SavedRoadsResult(loadedId: saved.id, loadedName: saved.name));
   });
 

@@ -7,6 +7,7 @@ import '../../../core/constants/api_constants.dart';
 import '../domain/models/frame_job.dart';
 import '../domain/models/road_detect.dart';
 import '../domain/models/road_preset.dart';
+import '../domain/models/setup_preset.dart';
 
 /// A saved camera address. The backend never sends passwords back: they show as `***`.
 class CameraProfile {
@@ -163,8 +164,8 @@ class CameraApi {
 
   // ── Saved roads: the road markings of the setup under a name, to use again, duplicate and edit later ──
 
-  Future<List<RoadPreset>> roadPresets() async {
-    final body = await _json(await _client.get(_uri('/settings/road-presets')));
+  Future<List<RoadPreset>> roadPresets({String? hash}) async {
+    final body = await _json(await _client.get(_uri('/settings/road-presets', hash == null ? null : {'hash': hash})));
     return [for (final p in (body['presets'] as List? ?? const [])) RoadPreset.fromJson(Map<String, dynamic>.from(p as Map))];
   }
 
@@ -174,11 +175,43 @@ class CameraApi {
     return [for (final m in (body['markings'] as List? ?? const [])) if (m is Map) RoadArea.fromJson(Map<String, dynamic>.from(m))];
   }
 
-  Future<RoadPreset> saveRoadPreset(String name, List<RoadArea> markings) async => RoadPreset.fromJson(await _json(await _client.post(
-    _uri('/settings/road-presets'),
+  Future<RoadPreset> saveRoadPreset(String name, List<RoadArea> markings, {String? videoHash, String? videoName}) async =>
+      RoadPreset.fromJson(await _json(await _client.post(
+        _uri('/settings/road-presets'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'name': name, 'markings': [for (final m in markings) m.toJson()], 'video_hash': ?videoHash, 'video_name': ?videoName}),
+      )));
+
+  /// The fingerprint of the video file in use: {hash (null for a camera), name, size}. A saved setup or road is tied to it.
+  Future<Map<String, dynamic>> videoHash() async => _json(await _client.get(_uri('/settings/video/hash')));
+
+  /// The saved violation setups; with [hash] the ones saved for that video come first (match: true).
+  Future<List<SetupPreset>> setupPresets(String? hash) async {
+    final body = await _json(await _client.get(_uri('/settings/setup-presets', hash == null ? null : {'hash': hash})));
+    return [for (final p in (body['presets'] as List? ?? const [])) SetupPreset.fromJson(Map<String, dynamic>.from(p as Map))];
+  }
+
+  /// The violations and settings of a saved setup (the live setup's shape).
+  Future<Map<String, dynamic>> setupPresetConfig(String id) async {
+    final body = await _json(await _client.get(_uri('/settings/setup-presets/$id')));
+    return Map<String, dynamic>.from(body['config'] as Map? ?? const {});
+  }
+
+  Future<SetupPreset> saveSetupPreset(String name, Map<String, dynamic> config, {String? videoHash, String? videoName}) async =>
+      SetupPreset.fromJson(await _json(await _client.post(
+        _uri('/settings/setup-presets'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({'name': name, 'config': config, 'video_hash': ?videoHash, 'video_name': ?videoName}),
+      )));
+
+  /// Replaces the setup kept under [id] with [config] (the name and the video stay).
+  Future<SetupPreset> updateSetupPreset(String id, Map<String, dynamic> config) async => SetupPreset.fromJson(await _json(await _client.put(
+    _uri('/settings/setup-presets/$id'),
     headers: const {'Content-Type': 'application/json'},
-    body: jsonEncode({'name': name, 'markings': [for (final m in markings) m.toJson()]}),
+    body: jsonEncode({'config': config}),
   )));
+
+  Future<void> deleteSetupPreset(String id) async => _json(await _client.delete(_uri('/settings/setup-presets/$id')));
 
   /// Changes what is sent: the [name] and/or the [markings].
   Future<RoadPreset> updateRoadPreset(String id, {String? name, List<RoadArea>? markings}) async => RoadPreset.fromJson(await _json(await _client.put(
@@ -205,6 +238,111 @@ class CameraApi {
     headers: const {'Content-Type': 'application/json'},
     body: jsonEncode({'save': save, 'dir': dir}),
   ));
+
+  /// The saved runs that can be replayed in the Live Monitor: {runs: [{id, started, pictures, tickets, source}], roots: [folder], active}.
+  Future<Map<String, dynamic>> replayRuns() async => _json(await _client.get(_uri('/settings/replay/runs')));
+
+  /// Make the saved run [run] (its folder name) the Live Monitor's source; the feed then plays it, with no models.
+  Future<Map<String, dynamic>> openReplay(String run) async => _json(await _client.post(
+    _uri('/settings/replay/open'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'run': run}),
+  ));
+
+  /// The live switch: {ready, setup: [rules], active: [rules on], cost_ms: {rule: ms per picture}, needs: {rule: what it needs}}.
+  Future<Map<String, dynamic>> liveRules() async => _json(await _client.get(_uri('/settings/live/rules')));
+
+  /// Switch the rules of the running monitoring: only [active] are judged from the next picture on. Returns the new state (as liveRules).
+  Future<Map<String, dynamic>> setLiveRules(List<String> active) async => _json(await _client.post(
+    _uri('/settings/live/rules'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'active': active}),
+  ));
+
+  /// What "Re-detect a part" needs of a saved run: {duration, rules, source, can, why}.
+  Future<Map<String, dynamic>> replayInfo(String run) async => _json(await _client.get(_uri('/settings/replay/$run/info')));
+
+  /// Run the detection again on [startS]..[endS] (seconds on the run's timeline) with [rules]: a Forensic analysis. {task_id, ...}
+  Future<Map<String, dynamic>> startRedetect(String run, double startS, double endS, List<String> rules) async => _json(await _client.post(
+    _uri('/settings/replay/redetect'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'run': run, 'start_s': startS, 'end_s': endS, 'rules': rules}),
+  ));
+
+  /// Progress of a Forensic analysis: {status, progress, ticket_count, message, error, ...}.
+  Future<Map<String, dynamic>> forensicStatus(String taskId) async => _json(await _client.get(_uri('/api/forensic/status/$taskId')));
+
+  /// Stop a Forensic analysis ([cancel]: throw it away; else keep what was found).
+  Future<void> stopForensic(String taskId, {bool cancel = false}) async =>
+      _json(await _client.post(_uri('/api/forensic/stop/$taskId', {'mode': cancel ? 'cancel' : 'finish'})));
+
+  /// The box stabilizer (keeps a lost box on the screen for a moment): switch it, or set the seconds a box is held. Returns {on, hold_s, ghost_boxes, ...}.
+  /// [keepConf]: the lowest score a vehicle that is tracked already keeps its box at (0 = off).
+  Future<Map<String, dynamic>> setStabilizer({bool? on, double? holdS, double? keepConf}) async => _json(await _client.post(
+    _uri('/settings/live/stabilizer'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'on': ?on, 'hold_s': ?holdS, 'keep_conf': ?keepConf}),
+  ));
+
+  /// "Save and pause": the setup, the source and the video position ([posS]) of the running monitoring are written into its run folder.
+  Future<Map<String, dynamic>> saveSession(double posS) async => _json(await _client.post(
+    _uri('/settings/live/session/save'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'pos_s': posS}),
+  ));
+
+  /// Go on with a saved monitoring: its setup, source and tickets come back. {pos_s, source_name, tickets}
+  Future<Map<String, dynamic>> continueSession(String run) async => _json(await _client.post(
+    _uri('/settings/live/session/continue'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'run': run}),
+  ));
+
+  /// A saved run without tickets of its own takes the tickets that are in the Live Monitor now.
+  Future<Map<String, dynamic>> adoptReplayTickets(String run) async => _json(await _client.post(
+    _uri('/settings/replay/adopt'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'run': run}),
+  ));
+
+  /// The Demo replay switch and the demos made so far: {on, demos: [{id, title, videos, pictures, tickets, duration_s}]}.
+  Future<Map<String, dynamic>> demoState() async => _json(await _client.get(_uri('/settings/demo')));
+
+  /// Demo replay on or off: a video file that has a demo plays its recorded run in the Live Monitor.
+  Future<Map<String, dynamic>> setDemo(bool on) async => _json(await _client.post(
+    _uri('/settings/demo'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'on': on}),
+  ));
+
+  /// Make a demo from the last saved live run and the live tickets as they are now. [video] empty = the run's own video file.
+  Future<Map<String, dynamic>> createDemo(String title, String video) async => _json(await _client.post(
+    _uri('/settings/demo/create'),
+    headers: const {'Content-Type': 'application/json'},
+    body: jsonEncode({'title': title, 'video': video}),
+  ));
+
+  Future<void> deleteDemo(String id) async => _json(await _client.delete(_uri('/settings/demo/$id')));
+
+  /// The vehicles of a demo (for the demo editor): {tracks: [{track_id, kind, plate, violation, frames, first_s, last_s, tickets}], kinds, violations}.
+  Future<Map<String, dynamic>> demoTracks(String id) async => _json(await _client.get(_uri('/settings/demo/$id/tracks')));
+
+  /// The picture of one vehicle of a demo (a JPEG url).
+  String demoTrackPictureUrl(String id, int trackId) => '$baseUrl/settings/demo/$id/track-picture/$trackId';
+
+  /// Correct one vehicle of a demo in every picture and ticket. Only what is given changes: [kind], [plate], [violation] ('' = none), [delete].
+  Future<Map<String, dynamic>> editDemoTrack(String id, int trackId, {String? kind, String? plate, String? violation, bool delete = false}) async =>
+      _json(await _client.post(
+        _uri('/settings/demo/$id/edit'),
+        headers: const {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'track_id': trackId,
+          'kind': ?kind,
+          'plate': ?plate,
+          'violation': ?violation,
+          if (delete) 'delete': true,
+        }),
+      ));
 
   /// Empties the setup (violations, zones, road markings, setup picture): the Live Monitor starts empty each time it is opened.
   Future<void> resetLiveSetup() async => _json(await _client.post(_uri('/settings/live/reset')));

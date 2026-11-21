@@ -37,7 +37,10 @@ class ReplayBoxes {
 
 /// One thing to draw: a vehicle box with its label lines, a mark box (why it was flagged), or a note under a vehicle.
 class BoxSpec {
-  const BoxSpec({this.box, required this.color, this.lines = const [], this.plate, this.note, this.noteAt, this.timer, this.trail});
+  const BoxSpec({this.box, required this.color, this.lines = const [], this.plate, this.note, this.noteAt, this.timer, this.trail, this.fade = 1.0});
+
+  /// 1 = a real box; less = a predicted one (the detector lost the vehicle for a moment): drawn fainter the longer it stands in.
+  final double fade;
 
   final List<double>? box; // x, y, w, h in video pixels
   final Color color;
@@ -60,6 +63,7 @@ class BoxSpec {
       note: j['note'] as String?,
       noteAt: _nums(j['at']),
       timer: j['timer'] as String?,
+      fade: (j['fade'] as num?)?.toDouble() ?? 1.0,
       trail: j['trail'] is List ? [for (final p in (j['trail'] as List)) if (p is List && p.length >= 2) [(p[0] as num).toDouble(), (p[1] as num).toDouble()]] : null,
     );
   }
@@ -96,16 +100,18 @@ class ReplayBoxesPainter extends CustomPainter {
     for (final b in specs) {
       if (b.trail != null) _trail(canvas, b, px);                 // the trails go under the boxes
     }
+    final lifted = <String, double>{};                            // chips of one box stack upwards from its bottom edge
     for (final b in specs) {
       if (b.trail != null) continue;
       if (b.note != null && b.noteAt != null) {
         _note(canvas, b.note!, b.noteAt!, width, height, px);
       } else if (b.timer != null && b.box != null) {
-        _timer(canvas, b, width, height, px);
+        final key = b.box!.join(',');
+        lifted[key] = (lifted[key] ?? 0) + _timer(canvas, b, width, height, px, lifted[key] ?? 0);
       } else if (b.box != null) {
         final r = Rect.fromLTWH(b.box![0], b.box![1], b.box![2], b.box![3]);
-        canvas.drawRect(r, Paint()..style = PaintingStyle.stroke..strokeWidth = lineWidth * px..color = b.color);
-        _label(canvas, r, b, width, height, px);
+        canvas.drawRect(r, Paint()..style = PaintingStyle.stroke..strokeWidth = lineWidth * px..color = b.fade < 1 ? b.color.withValues(alpha: b.fade) : b.color);
+        if (b.fade >= 1) _label(canvas, r, b, width, height, px);          // a predicted box keeps its outline only: no second label on top of the vehicle
         final p = b.plate;
         if (p != null) {
           canvas.drawRect(
@@ -161,7 +167,7 @@ class ReplayBoxesPainter extends CustomPainter {
   }
 
   /// The stopwatch: a small chip sitting on the bottom edge of the vehicle's box (the labels above the box are not touched).
-  static void _timer(Canvas canvas, BoxSpec b, double vw, double vh, double px) {
+  static double _timer(Canvas canvas, BoxSpec b, double vw, double vh, double px, [double lift = 0]) {
     final box = b.box!;
     final dark = b.color.computeLuminance() > 0.6;
     final text = TextPainter(
@@ -171,9 +177,10 @@ class ReplayBoxesPainter extends CustomPainter {
     final pad = 3 * px;
     final w = text.width + 2 * pad, h = text.height + pad;
     final x = box[0].clamp(0.0, math.max(0.0, vw - w)).toDouble();
-    final y = (box[1] + box[3] - h).clamp(0.0, math.max(0.0, vh - h)).toDouble();
+    final y = (box[1] + box[3] - h - lift).clamp(0.0, math.max(0.0, vh - h)).toDouble();
     canvas.drawRect(Rect.fromLTWH(x, y, w, h), Paint()..color = b.color);
     text.paint(canvas, Offset(x + pad, y + pad / 2));
+    return h;
   }
 
   static void _note(Canvas canvas, String text, List<double> at, double vw, double vh, double px) {

@@ -25,7 +25,11 @@ class ReviewController extends ChangeNotifier {
     QueueSort sort = QueueSort.flaggedFirst,
     this.plateBadge = false,
     this.readOnOpen,
-  }) : _tickets = List.of(tickets) {
+    this.unreadDot = false,
+    Set<String>? seen,
+    this.onSeen,
+  })  : _tickets = List.of(tickets),
+        _seen = {...?seen} {
     _sort = sort;
     if (statuses != null) _status.addAll(statuses);
     _selectedUid = _firstToLookAt()?.uid;
@@ -37,6 +41,22 @@ class ReviewController extends ChangeNotifier {
 
   /// The list marks a ticket whose plate is read (the live run).
   final bool plateBadge;
+
+  /// The list marks a ticket nobody has opened yet with a dot (the live run). A ticket is "seen" once it was opened, or decided.
+  /// [onSeen] gets the whole set of seen tickets each time it grows, so the screen can keep it.
+  final bool unreadDot;
+  final void Function(Set<String> seen)? onSeen;
+  final Set<String> _seen;
+
+  /// True for a ticket that was not opened yet and has no decision (only with [unreadDot]).
+  bool isUnread(String uid) => unreadDot && !_seen.contains(uid) && (_status[uid] ?? ReviewStatus.pending) == ReviewStatus.pending;
+
+  void _markSeen(String uid) {
+    if (unreadDot && _byUid(uid) != null && _seen.add(uid)) {
+      onSeen?.call(Set.of(_seen));
+      notifyListeners();
+    }
+  }
 
   /// The live run: reads the plate of a ticket that is not read yet and returns the updated ticket list. Called by [openTicket] only:
   /// the plates are not read on their own, only when the reviewer clicks a ticket.
@@ -213,6 +233,7 @@ class ReviewController extends ChangeNotifier {
 
   /// A click on a ticket of the list: opens it, like [select]. In the live run a ticket whose plate is not read yet is read now.
   void openTicket(String uid) {
+    _markSeen(uid);
     select(uid);
     final t = _byUid(uid);
     if (readOnOpen != null && t != null && t.plateStatus == 'pending' && !_reading.contains(uid)) {

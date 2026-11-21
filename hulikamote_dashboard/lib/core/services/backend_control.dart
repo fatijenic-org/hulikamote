@@ -228,7 +228,8 @@ class BackendControl extends ChangeNotifier {
       return;
     }
     try {
-      final args = ['-m', 'uvicorn', 'main:app', '--port', '$port'];
+      // 0.0.0.0 = listen on the Wi-Fi as well, so a phone on the same network can reach the laptop (the dashboard still uses 127.0.0.1)
+      final args = ['-m', 'uvicorn', 'main:app', '--host', '0.0.0.0', '--port', '$port'];
       if (Platform.isWindows) {
         // cmd keeps the redirection of the output into a file; the process is detached and survives the dashboard
         await Process.start('cmd', ['/c', python, ...args, '>', 'backend_run.log', '2>&1'],

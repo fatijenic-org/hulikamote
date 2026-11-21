@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../forensic/data/forensic_api.dart';
 import '../../../forensic/data/forensic_media.dart';
@@ -32,6 +33,8 @@ class LiveTicketsPanel extends StatefulWidget {
 
 class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
   static const _reportUrl = '/snapshots/evidence/forensic/live/output/report.json';
+  static const _seenKey = 'live_tickets_seen';     // the tickets that were opened: the others carry a "new" dot
+  static const _seenLimit = 500;
 
   late final ForensicApi _api = widget.api ?? ForensicApi();
   ReviewController? _controller;
@@ -82,6 +85,7 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
       if (c == null || rebuild) {
         if (tickets.isNotEmpty) {
           final saved = await _api.savedStatuses({for (final t in tickets) ...t.dbIds});
+          final seen = await _loadSeen();
           if (!mounted) return;
           final next = ReviewController(
             gateway: _api,
@@ -90,6 +94,9 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
             statuses: {for (final t in tickets) t.uid: _statusFromRows(t, saved)},
             sort: QueueSort.arrival,
             plateBadge: true,
+            unreadDot: true,
+            seen: seen,
+            onSeen: _saveSeen,
           );
           final old = _controller;
           _controller = next;
@@ -101,6 +108,7 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
           if (tickets.isEmpty) {
             _controller = null;
             c.dispose();
+            unawaited(_saveSeen({}));                 // a new run starts: its tickets are all new
           } else {
             c.replaceTickets(tickets);
           }
@@ -120,6 +128,21 @@ class _LiveTicketsPanelState extends State<LiveTicketsPanel> {
     } finally {
       _busy = false;
     }
+  }
+
+  Future<Set<String>> _loadSeen() async {
+    try {
+      return {...?(await SharedPreferences.getInstance()).getStringList(_seenKey)};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> _saveSeen(Set<String> seen) async {
+    try {
+      final list = seen.toList();
+      await (await SharedPreferences.getInstance()).setStringList(_seenKey, list.length > _seenLimit ? list.sublist(list.length - _seenLimit) : list);
+    } catch (_) {}
   }
 
   Future<void> _openReview({String? uid}) async {
