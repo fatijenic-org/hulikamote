@@ -75,6 +75,9 @@ class TrackLedger:
         self.line_watch: dict = {}        # (rule, zone index) -> LineWatch: what Crossing a solid line has learned about this vehicle
         self.cross_points: list = []      # (t, x, y) where the vehicle was seen to cut a solid line or to turn the banned way (drawn on the live evidence photo)
         self.turn_watch: dict = {}        # (rule, zone index) -> TurnWatch: what Illegal turn has learned about this vehicle
+        self.swerve_watch: dict = {}      # (rule, zone index) -> SwerveWatch: what Swerving has learned about this vehicle
+        self.pass_watch: dict = {}        # other vehicle's number -> PassWatch: what Overtaking on the right has seen of this vehicle passing it
+        self.run_mark = None              # RunMark (engine/violations/run_mark.py): when the current continuous run of the path began
         self.made_stop: set = set()       # keys of stop-sign zones where it came to a full stop
         self.votes: dict = {}             # violation -> deque of recent True/False looks (see vote)
         self.marks: dict = {}             # violation -> boxes showing why (see engine/marks.py)
@@ -270,6 +273,7 @@ class ActiveLedgerManager:
         self._split_ids = 1_000_000      # numbers of the ledgers made for a vehicle that took a tracker number over
         # Illegal parking: the vehicles that stand still, locked on their spot, and the ones that already got a ticket (engine/parking_lock.py)
         self.locks = ParkingLocks()
+        self.now: float | None = None
 
     def _log_event(self, event: str, timestamp: float | None, **fields) -> None:
         record = {"event": event, "t": timestamp, **fields}
@@ -286,6 +290,7 @@ class ActiveLedgerManager:
         stable ID per vehicle even if the tracker re-issued a new one.
         """
         now = timestamp if timestamp is not None else time.time()
+        self.now = now               # the time of the newest picture (the locked boxes of vehicles that were dropped are timed with it)
         assigned: list[tuple] = []   # (det, canonical_id)
         present: set[int] = set()    # canonical IDs seen this frame
         pending: list[tuple] = []    # (det, raw_id) with no ledger of their own

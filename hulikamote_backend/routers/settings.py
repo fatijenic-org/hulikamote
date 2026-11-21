@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from engine.frame_grabber import FrameGrabber
 from engine.setup_scan import SetupScan
 from engine.road_presets import PresetError, RoadPresets
+from engine.setup_presets import PresetError as SetupPresetError, SetupPresets
 from engine.hls_broadcaster import server_status
 from engine.camera_source import mask_url, parse_source, restore_password, test_connection
 from routers.trimmer import local_only
@@ -65,6 +66,7 @@ async def save_camera_config(config: dict):
             config[key] = existing[key]
     with open(CONFIG_PATH, "w") as f:
         json.dump(config, f, indent=2)
+    stream.reset_rules()                                          # a new setup: every rule of it is on
     await asyncio.to_thread(stream.reload_pipeline)               # loads models: not on the event loop (it would freeze the whole backend)
     return {"message": "Config saved successfully"}
 
@@ -133,6 +135,9 @@ def _remember_source(path: str, profile: str | None = None) -> None:
 
 
 def _apply_video_source(path: str):
+    from engine import live_run, replay_run
+    replay_run.deactivate()                 # a real source is chosen: a saved run is not replayed any more
+    live_run.CONTINUE["folder"] = None      # ... and no saved monitoring waits to go on
     stream.VIDEO_SOURCE = path
     stream._stream_generation += 1
     stream.mark_pipeline_stale()          # the fresh pipeline is built when the feed starts (or "Apply" builds one): nothing to wait for now
@@ -334,6 +339,7 @@ async def discard_road_scan():
 
 # Saved road configurations (the road markings of the setup, under a name): use again, duplicate, edit later.
 road_presets = RoadPresets()
+setup_presets = SetupPresets()
 
 
 def _preset_or_404(preset: dict | None) -> dict:
@@ -350,8 +356,9 @@ def _preset_call(fn, *args):
 
 
 @router.get("/road-presets")
-async def list_road_presets():
-    return {"presets": road_presets.list()}
+async def list_road_presets(hash: str | None = None):
+    """The saved roads; with the fingerprint of the video in use ("hash"), the roads saved for it come first and carry match: true."""
+    return {"presets": road_presets.list(hash)}
 
 
 @router.get("/road-presets/{preset_id}")
@@ -362,13 +369,14 @@ async def get_road_preset(preset_id: str):
 @router.post("/road-presets")
 async def save_road_preset(payload: dict = Body(...)):
     """{"name", "markings": [...]} -> the saved road (with its id)."""
-    return _preset_call(road_presets.create, payload.get("name"), payload.get("markings"))
+    return _preset_call(road_presets.create, payload.get("name"), payload.get("markings"), payload.get("video_hash") or "", payload.get("video_name") or "")
 
 
 @router.put("/road-presets/{preset_id}")
 async def update_road_preset(preset_id: str, payload: dict = Body(...)):
     """Any of {"name", "markings"}: only what is sent changes."""
-    return _preset_or_404(_preset_call(road_presets.update, preset_id, payload.get("name"), payload.get("markings")))
+    return _preset_or_404(_preset_call(road_presets.update, preset_id, payload.get("name"), payload.get("markings"),
+                                       payload.get("video_hash"), payload.get("video_name")))
 
 
 @router.post("/road-presets/{preset_id}/duplicate")
@@ -380,6 +388,57 @@ async def duplicate_road_preset(preset_id: str):
 async def delete_road_preset(preset_id: str):
     if not road_presets.delete(preset_id):
         raise HTTPException(status_code=404, detail="There is no such saved road")
+    return {"ok": True}
+
+
+# ─── Saved violation setups, and the fingerprint of the video they belong to ───────────────────────────────────────
+
+@router.get("/video/hash")
+async def current_video_hash():
+    """The fingerprint of the video file the Live Monitor uses now ({hash, name, size}; hash is null for a camera or an address)."""
+    from engine import video_fingerprint
+    found = await asyncio.to_thread(video_fingerprint.of_source, stream.VIDEO_SOURCE)
+    return found or {"hash": None, "name": "", "size": 0}
+
+
+def _setup_call(fn, *args):
+    try:
+        return fn(*args)
+    except SetupPresetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/setup-presets")
+async def list_setup_presets(hash: str | None = None):
+    return {"presets": setup_presets.list(hash)}
+
+
+@router.get("/setup-presets/{preset_id}")
+async def get_setup_preset(preset_id: str):
+    found = setup_presets.get(preset_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="There is no such saved setup")
+    return found
+
+
+@router.post("/setup-presets")
+async def save_setup_preset(payload: dict = Body(...)):
+    """{"name", "config": {active_violations, per_violation_configs, ...}, "video_hash", "video_name"} -> the saved setup."""
+    return _setup_call(setup_presets.create, payload.get("name"), payload.get("config"), payload.get("video_hash") or "", payload.get("video_name") or "")
+
+
+@router.put("/setup-presets/{preset_id}")
+async def update_setup_preset(preset_id: str, payload: dict = Body(...)):
+    found = _setup_call(setup_presets.update, preset_id, payload.get("name"), payload.get("config"), payload.get("video_hash"), payload.get("video_name"))
+    if found is None:
+        raise HTTPException(status_code=404, detail="There is no such saved setup")
+    return found
+
+
+@router.delete("/setup-presets/{preset_id}")
+async def delete_setup_preset(preset_id: str):
+    if not setup_presets.delete(preset_id):
+        raise HTTPException(status_code=404, detail="There is no such saved setup")
     return {"ok": True}
 
 
@@ -486,6 +545,35 @@ async def prepare_live():
     return stream.prepare_feed()
 
 
+@router.get("/live/rules")
+async def get_live_rules():
+    """The live switch: {ready, setup: [rules of the setup], active: [rules on], cost_ms: {rule: average ms per picture}, needs: {rule: what it needs}}."""
+    return stream.rules_state()
+
+
+@router.post("/live/stabilizer")
+async def set_live_stabilizer(body: dict):
+    """The box stabilizer: {"on": bool, "hold_s": seconds a lost box stays on the screen (0 to 5), "keep_conf": the lowest score a tracked
+    vehicle keeps its box at (0 = off)}. Only what is sent changes."""
+    try:
+        return stream.set_stabilizer(body.get("on"), body.get("hold_s"), body.get("keep_conf"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="The hold time and the score must be numbers.") from exc
+
+
+@router.post("/live/rules")
+async def set_live_rules(body: dict):
+    """Switch the rules of the running monitoring ({"active": [keys]}): the backend judges only those from the next picture on, and runs only the
+    models they need. A rule that is not in the setup cannot be switched on here."""
+    active = body.get("active")
+    if not isinstance(active, list):
+        raise HTTPException(status_code=400, detail="Send the rules that should be on as a list.")
+    try:
+        return await asyncio.to_thread(stream.set_rules, [str(k) for k in active])
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get("/live/record")
 async def get_live_record():
     """Whether the next live run is saved (every picture and its boxes, to replay later like a forensic run) and where."""
@@ -499,6 +587,297 @@ async def set_live_record(body: dict):
     from engine import live_run
     try:
         return live_run.write_settings(bool(body.get("save")), str(body.get("dir") or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# ─── Replay of a saved run (engine/replay_run.py) ───────────────────────────────────────────────────────────────
+
+@router.get("/replay/runs")
+async def list_replay_runs():
+    """The saved runs (folders with pictures + index.jsonl) in the folder chosen for saving and in the default one, newest first."""
+    from engine import replay_run
+    active = replay_run.active()
+    return {"runs": await asyncio.to_thread(replay_run.list_runs), "active": active.name if active else None,
+            "roots": [str(r) for r in replay_run.roots()]}
+
+
+@router.post("/replay/open")
+async def open_replay_run(body: dict):
+    """Make a saved run the Live Monitor's source ({"run": folder name}). The dashboard opens the feed after this; it plays the run, with no models."""
+    from engine import replay_run
+    folder = replay_run.find(str(body.get("run") or ""))
+    if folder is None:
+        raise HTTPException(status_code=404, detail="That saved run was not found.")
+    replay_run.activate(folder)
+    return {"ok": True, "run": folder.name}
+
+
+@router.post("/live/session/save")
+async def save_live_session(body: dict):
+    """"Save and pause": everything needed to go on with this monitoring later goes into the run folder (session.json): the setup, the
+    learned road, the source and where on the video the picture is ({"pos_s"}). The run must be a saved one ("Save this run")."""
+    from datetime import datetime
+    from engine import live_run
+    run = live_run.CURRENT.get("run")
+    if run is None or not run.keep_all:
+        raise HTTPException(status_code=409, detail="This run is not being saved. Turn on \"Save this run\" in the last setup step, then start monitoring.")
+    config = _read_config()
+    keep = {k: config[k] for k in LIVE_SETUP_KEYS if k in config}
+    if "learned_road" in config:
+        keep["learned_road"] = config["learned_road"]
+    source = str(stream.VIDEO_SOURCE)
+    masked = mask_url(source) == source                      # an address with a password is never written down
+    run.save_session({
+        "status": "paused", "saved_at": datetime.now().isoformat(timespec="seconds"), "pos_s": float(body.get("pos_s") or 0.0),
+        "source": source if masked else None, "source_name": source.replace("\\", "/").split("/")[-1] if masked else "",
+        "config": keep, "hidden_overlays": stream.hidden_overlays(), "rules_off": sorted(stream._rules_off),
+    })
+    return {"ok": True, "folder": str(run.folder)}
+
+
+async def apply_session(folder: Path, restore_tickets: bool = True) -> dict:
+    """Bring a saved monitoring back: its setup and learned road, its source, its overlays; its tickets become the live tickets again (not when
+    they are on screen already: the replay shows them); the pictures that follow are written after the ones already saved. Returns
+    {"pos_s", "source_name", "tickets"}. Raises HTTPException (404, 400) in words."""
+    from engine import live_run, replay_run
+    session_file = folder / "session.json"
+    if not session_file.is_file():
+        raise HTTPException(status_code=404, detail="That monitoring was not saved with \"Save and pause\".")
+    session = json.loads(session_file.read_text(encoding="utf-8"))
+    source = session.get("source")
+    if source and not source.startswith(("rtsp://", "http://", "https://")) and not source.isdigit() and not Path(source).exists():
+        raise HTTPException(status_code=400, detail=f"The video of this monitoring is not there any more: {source}")
+    config = _read_config()
+    config.update(session.get("config") or {})
+    learned = (session.get("config") or {}).get("learned_road")
+    if learned:
+        config["learned_road"] = {**(config.get("learned_road") or {}), **learned}
+    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    if source:
+        _check_source(source)
+        _remember_source(source)
+        _apply_video_source(source)
+    stream.set_hidden_overlays(session.get("hidden_overlays") or [])
+    stream.reset_rules()
+    stream._rules_off = set(session.get("rules_off") or [])            # the rules that were off stay off
+    stream.mark_pipeline_stale()
+    tickets = await replay_run.put_back_all(folder) if restore_tickets else -1
+    live_run.CONTINUE["folder"] = folder
+    return {"ok": True, "pos_s": float(session.get("pos_s") or 0.0), "source_name": session.get("source_name") or "", "tickets": tickets}
+
+
+@router.post("/live/session/continue")
+async def continue_live_session(body: dict):
+    """Go on with a saved monitoring ({"run": folder name}); the dashboard then opens the feed at {"pos_s"}. See apply_session."""
+    from engine import replay_run
+    folder = replay_run.find(str(body.get("run") or ""))
+    if folder is None:
+        raise HTTPException(status_code=404, detail="That monitoring was not saved with \"Save and pause\".")
+    return await apply_session(folder)
+
+
+def _redetect_source(folder: Path):
+    """(source file, setup config, the rules in it) of a saved run: from the session saved with Save and pause, else the run's own record and
+    the setup that is applied now."""
+    session = {}
+    try:
+        session = json.loads((folder / "session.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    meta = {}
+    try:
+        meta = json.loads((folder / "run.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    config = session.get("config") or {k: _read_config()[k] for k in LIVE_SETUP_KEYS if k in _read_config()}
+    source = session.get("source") or meta.get("source")
+    return source, config
+
+
+@router.get("/replay/{run_id}/info")
+async def redetect_info(run_id: str):
+    """What "Re-detect a part" needs to know about a saved run: its length, the rules of its setup, and whether its video can be read."""
+    from engine import replay_run
+    folder = replay_run.find(run_id)
+    if folder is None:
+        raise HTTPException(status_code=404, detail="That saved run was not found.")
+    source, config = _redetect_source(folder)
+    ok = bool(source) and Path(str(source)).is_file()
+    return {"duration": await asyncio.to_thread(replay_run.quick_duration, folder), "rules": list(config.get("active_violations") or []),
+            "source": Path(str(source)).name if source else "", "can": ok,
+            "why": "" if ok else "The video of this run is not on this computer any more, so it cannot be analyzed again."}
+
+
+@router.post("/replay/redetect")
+async def start_redetect(body: dict):
+    """Run the detection again on a stretch of a saved run's video ({"run", "start_s", "end_s", "rules": [...]}; seconds on the run's timeline).
+    It is a Forensic analysis of that stretch with the saved setup and the chosen rules: its result (the evidence video with boxes, the
+    tickets, the plates) is in the Forensic Library, and the original video file is never touched. Needs the live feed stopped (the analysis
+    uses the same detector). Returns {"task_id"}; the progress is /api/forensic/status/{task_id}."""
+    import copy
+    import threading
+    import uuid
+    from engine import replay_run
+    from engine.pipeline import EVIDENCE_DIR
+    from routers import forensic
+
+    folder = replay_run.find(str(body.get("run") or ""))
+    if folder is None:
+        raise HTTPException(status_code=404, detail="That saved run was not found.")
+    if stream._active_source is not None:
+        raise HTTPException(status_code=409, detail="Stop the live monitoring first (Save and pause), then analyze again: both use the same detector.")
+    source, config = _redetect_source(folder)
+    if not source or not Path(str(source)).is_file():
+        raise HTTPException(status_code=400, detail="The video of this run is not on this computer any more.")
+    config = copy.deepcopy(config)
+    in_setup = list(config.get("active_violations") or [])
+    rules = [str(r) for r in (body.get("rules") or []) if str(r) in in_setup] or in_setup
+    if not rules:
+        raise HTTPException(status_code=400, detail="This run has no rules to analyze again.")
+    try:
+        start_s, end_s = float(body.get("start_s")), float(body.get("end_s"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Give the start and the end of the part, in seconds.")
+    if end_s - start_s < 1.0:
+        raise HTTPException(status_code=400, detail="The part must be at least one second long.")
+    v_start, v_end = replay_run.video_time(folder, start_s), replay_run.video_time(folder, end_s)
+    config.update({
+        "active_violations": rules, "trim_start": max(0.0, v_start), "trim_end": max(v_start + 1.0, v_end),
+        "keep_input_video": True,                     # the video file of the run is the operator's: it must never be deleted
+        "video_name": Path(str(source)).name, "redetect_of": folder.name,
+    })
+    task_id = str(uuid.uuid4())
+    task_dir = EVIDENCE_DIR / "forensic" / task_id
+    output_dir = task_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    forensic.forensic_tasks[task_id] = {"status": "processing", "progress": 0.0, "result_video": None, "tickets": [], "ticket_count": 0,
+                                         "video_done": False, "message": ""}
+    forensic._main_loop = asyncio.get_running_loop()            # the analysis thread posts its report and database work here
+    threading.Thread(target=forensic.forensic_processing_task, args=(task_id, Path(str(source)), output_dir, config),
+                     name=f"redetect-{task_id[:8]}", daemon=True).start()
+    try:                                                         # the run remembers which parts were analyzed again
+        record = folder / "redetects.json"
+        items = json.loads(record.read_text(encoding="utf-8")) if record.exists() else []
+        items.append({"task_id": task_id, "start_s": start_s, "end_s": end_s, "rules": rules})
+        record.write_text(json.dumps(items, indent=2), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+    return {"ok": True, "task_id": task_id, "rules": rules, "video_start_s": v_start, "video_end_s": v_end}
+
+
+@router.post("/replay/close")
+async def close_replay_run():
+    from engine import replay_run
+    replay_run.deactivate()
+    return {"ok": True}
+
+
+@router.post("/replay/adopt")
+async def adopt_live_tickets(body: dict):
+    """A saved run that has no tickets of its own yet (made before runs kept them): take the tickets that are in the Live Monitor now."""
+    from engine import replay_run
+    folder = replay_run.find(str(body.get("run") or ""))
+    if folder is None:
+        raise HTTPException(status_code=404, detail="That saved run was not found.")
+    await replay_run.Syncer(folder).once(force=True)
+    return {"ok": True, "tickets": len(replay_run.Run(folder).saved_tickets())}
+
+
+@router.get("/demo")
+async def get_demo():
+    """The Demo replay switch and the demos made so far (each belongs to a video file, by name)."""
+    from engine import demo_replay
+    return {"on": demo_replay.is_on(), "demos": demo_replay.list_demos()}
+
+
+@router.post("/demo")
+async def set_demo(body: dict):
+    """Turn the Demo replay on or off: {"on": bool}. On: a video file that has a demo plays the recorded run in the Live Monitor."""
+    from engine import demo_replay
+    return {"on": demo_replay.set_on(bool(body.get("on"))), "demos": demo_replay.list_demos()}
+
+
+@router.post("/demo/create")
+async def create_demo(body: dict):
+    """Make a demo from a saved live run and the live tickets as they are now (after the review): {"title", "video" (file name; default: the
+    run's own video), "run_dir" (default: the newest saved run)}."""
+    import asyncio
+    from engine import demo_replay, live_run
+    from routers import forensic
+
+    title = str(body.get("title") or "").strip() or "Demo"
+    run_dir = Path(str(body["run_dir"])) if body.get("run_dir") else None
+    if run_dir is None:
+        saved = live_run.read_settings().get("dir") or str(Path(__file__).resolve().parent.parent / "snapshots" / "live_runs_saved")
+        run_dir = demo_replay.last_saved_run(Path(saved))
+    if run_dir is None or not (run_dir / "index.jsonl").exists():
+        raise HTTPException(status_code=400, detail="There is no saved run. Run the Live Monitor once with 'Save this run' on.")
+    video = str(body.get("video") or "").strip()
+    if not video:
+        try:
+            video = str(json.loads((run_dir / "run.json").read_text(encoding="utf-8")).get("source") or "")
+        except (OSError, ValueError):
+            video = ""
+    if not video:
+        raise HTTPException(status_code=400, detail="Tell me the name of the video file this run belongs to.")
+    out = forensic.live_output_dir()
+    async with forensic._report_lock:
+        tickets = await asyncio.to_thread(forensic._load_tickets, out / "report.json")
+    try:
+        config = json.loads((out / "forensic_config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        config = {}
+    try:
+        return await asyncio.to_thread(demo_replay.create, run_dir, [video], title, tickets, config, lambda t: forensic._live_photo_files([t]))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.delete("/demo/{demo_id}")
+async def delete_demo(demo_id: str):
+    from engine import demo_replay
+    return {"deleted": demo_replay.delete_demo(demo_id)}
+
+
+def _demo_folder(demo_id: str) -> Path:
+    from engine import demo_replay
+    folder = demo_replay.DEMO_ROOT / Path(demo_id).name
+    if not (folder / "demo.json").exists():
+        raise HTTPException(status_code=404, detail="That demo does not exist.")
+    return folder
+
+
+@router.get("/demo/{demo_id}/tracks")
+async def get_demo_tracks(demo_id: str):
+    """The vehicles of a demo, for the demo editor: [{track_id, kind, plate, violation, frames, first_s, last_s, tickets}], with the choices."""
+    from engine import demo_replay
+    folder = _demo_folder(demo_id)
+    return {"tracks": await asyncio.to_thread(demo_replay.tracks, folder), "kinds": list(demo_replay.VEHICLE_KINDS),
+            "violations": demo_replay.violation_keys()}
+
+
+@router.get("/demo/{demo_id}/track-picture/{track_id}")
+async def get_demo_track_picture(demo_id: str, track_id: int):
+    """One vehicle of a demo, cut out of its biggest picture (to see which one is being edited)."""
+    from engine import demo_replay
+    folder = _demo_folder(demo_id)
+    jpeg = await asyncio.to_thread(demo_replay.track_crop_jpeg, folder, track_id)
+    if jpeg is None:
+        raise HTTPException(status_code=404, detail="No picture of that vehicle.")
+    return Response(content=jpeg, media_type="image/jpeg")
+
+
+@router.post("/demo/{demo_id}/edit")
+async def edit_demo_track(demo_id: str, body: dict):
+    """Correct one vehicle of a demo in every picture and ticket: {"track_id", "kind"?, "plate"?, "violation"? ("" = none), "delete"?}."""
+    from engine import demo_replay
+    folder = _demo_folder(demo_id)
+    if not isinstance(body.get("track_id"), int):
+        raise HTTPException(status_code=400, detail="track_id is needed.")
+    try:
+        return await asyncio.to_thread(
+            demo_replay.edit_track, folder, int(body["track_id"]), body.get("kind"), body.get("plate"), body.get("violation"), bool(body.get("delete")))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -542,6 +921,7 @@ async def reset_live_setup():
         config.pop(key, None)
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
     scan.cancel()
+    stream.reset_rules()                         # a new setup starts with all its rules on
     stream.set_hidden_overlays(())               # a new setup shows all its overlays
     stream.clear_reference()
     stream.mark_pipeline_stale()                 # the next feed is built without the old rules

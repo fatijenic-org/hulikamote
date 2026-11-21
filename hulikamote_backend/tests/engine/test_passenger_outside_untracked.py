@@ -79,3 +79,27 @@ def test_a_passenger_on_the_far_back_step_shows_only_over_the_roof_edge():
     jeepney = [1204, 723, 494, 716]                                  # drives toward the camera: its back is the top of the box
     assert outside_position(jeepney, [1319, 640, 76, 70], (0.0, 1.0)) == "roof"      # head and shoulders over the roof's back edge
     assert outside_position(jeepney, [1319, 690, 76, 10], (0.0, 1.0)) is None        # a speck is no person
+
+
+# ─── people searched close to each vehicle ───────────────────────────────────
+
+def test_people_near_looks_around_every_vehicle_but_the_motorcycle():
+    import numpy as np
+    from yolo_inference import YoloDetection, YoloInference
+    yolo = YoloInference.__new__(YoloInference)
+    seen = []
+
+    def fake(img, x0=0, y0=0):                                # the people model: the jeepney's cut shows the person that is already known, the car's a new one
+        seen.append((x0, y0, img.shape[1], img.shape[0]))
+        box = [110.0, 310.0, 150.0, 390.0] if x0 < 300 else [520.0, 120.0, 560.0, 200.0]
+        return np.array([box]), np.array([0.6]), np.array([4])
+
+    yolo._people_in = fake
+    frame = np.zeros((1000, 1000, 3), np.uint8)
+    found = [YoloDetection("jeepney", 0.9, [100, 300, 300, 400], "jeepney"), YoloDetection("motorcycle", 0.9, [600, 600, 100, 150], "motorcycle"),
+             YoloDetection("car", 0.9, [500, 100, 200, 200], "car"), YoloDetection("person", 0.9, [110, 310, 40, 80], "person")]
+    people = yolo.people_near(frame, found)
+    assert len(seen) == 2                                     # jeepney and car, not the motorcycle
+    assert all(p.cls == "person" and p.track_id == -1 for p in people)
+    assert len(people) == 1                                   # the known person is not added twice; the car's person is new
+    assert seen[0][1] == 300 - int(0.45 * 400)                # the cut starts well above the roof

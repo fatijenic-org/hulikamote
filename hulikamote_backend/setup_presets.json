@@ -1,0 +1,3801 @@
+[
+ {
+  "id": "473409b2d23b",
+  "name": "15m_allviolations-2.mp4",
+  "config": {
+   "active_violations": [
+    "counterflow",
+    "restricted_lane",
+    "illegal_parking",
+    "pedestrian_lane",
+    "blocking_intersection",
+    "illegal_turn",
+    "illegal_u_turn",
+    "swerving",
+    "crossing_solid_line",
+    "illegal_loading",
+    "truck_ban",
+    "tricycle_on_highway",
+    "sidewalk_driving",
+    "double_parking",
+    "overtaking_on_right",
+    "red_light",
+    "disregarding_signs",
+    "signal_light",
+    "overloading",
+    "passenger_outside",
+    "no_helmet",
+    "no_plate",
+    "no_seatbelt",
+    "missing_side_mirror",
+    "distracted_driving"
+   ],
+   "per_violation_configs": {
+    "counterflow": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "vector": {
+        "x_dir": -594.2637889688249,
+        "y_dir": 812.8153477218224
+       },
+       "ui_vector": [
+        [
+         913.1894484412469,
+         166.81055155875308
+        ],
+        [
+         318.92565947242207,
+         979.6258992805755
+        ]
+       ],
+       "marking": "auto-1"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "vector": {
+        "x_dir": 20.872901678657172,
+        "y_dir": -924.546762589928
+       },
+       "ui_vector": [
+        [
+         1097.3621103117505,
+         1055.7505995203837
+        ],
+        [
+         1118.2350119904077,
+         131.20383693045568
+        ]
+       ],
+       "marking": "auto-2"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "restricted_lane": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "pedestrian_lane": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "crosswalks": []
+    },
+    "blocking_intersection": {
+     "rois": [],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "illegal_turn": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         -263.44612116070704,
+         1238.0503573879632
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ],
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         387.01538718363776,
+         1439.3333310090663
+        ],
+        [
+         -263.44612116070704,
+         1439.3333310090663
+        ]
+       ],
+       "banned_turns": [
+        "left"
+       ],
+       "approach": {
+        "x_dir": -0.5902000165025022,
+        "y_dir": 0.8072570473649927
+       },
+       "turn_arrow_left": [
+        [
+         407.4556619477974,
+         858.5373421758266
+        ],
+        [
+         318.92565947242207,
+         979.6258992805755
+        ],
+        [
+         561.1027736819199,
+         1156.685904231326
+        ]
+       ],
+       "vector": {
+        "x_dir": 0.8072570473649927,
+        "y_dir": 0.5902000165025022
+       },
+       "ui_vectors": [
+        [
+         [
+          318.92565947242207,
+          979.6258992805755
+         ],
+         [
+          561.1027736819199,
+          1156.685904231326
+         ]
+        ]
+       ],
+       "marking": "auto-1"
+      },
+      {
+       "polygon": [
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ],
+        [
+         661.2845009592239,
+         709.8723958672385
+        ],
+        [
+         1094.8898924010125,
+         -366.0198128185383
+        ],
+        [
+         1155.5521266307946,
+         -363.3197133721089
+        ],
+        [
+         1196.593638216522,
+         -258.26615668087226
+        ],
+        [
+         1554.5845547937058,
+         710.5950993371157
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ]
+       ],
+       "banned_turns": [
+        "left"
+       ],
+       "approach": {
+        "x_dir": 0.022570609923906665,
+        "y_dir": -0.9997452513353904
+       },
+       "turn_arrow_left": [
+        [
+         1114.8494205018217,
+         281.1656246307642
+        ],
+        [
+         1118.2350119904077,
+         131.20383693045568
+        ],
+        [
+         818.3114365897906,
+         124.43265395328368
+        ]
+       ],
+       "vector": {
+        "x_dir": -0.9997452513353904,
+        "y_dir": -0.022570609923906665
+       },
+       "ui_vectors": [
+        [
+         [
+          1118.2350119904077,
+          131.20383693045568
+         ],
+         [
+          818.3114365897906,
+          124.43265395328368
+         ]
+        ]
+       ],
+       "marking": "auto-2"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "illegal_u_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "swerving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "crossing_solid_line": {
+     "rois": [
+      {
+       "line": [
+        [
+         1086.032630398488,
+         5.6252071800613885
+        ],
+        [
+         1050.4774072830683,
+         97.61621715682685
+        ],
+        [
+         656.7258845984416,
+         1079.0
+        ]
+       ],
+       "marking": "auto-3"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "auto_lines": false
+    },
+    "illegal_loading": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "bus",
+      "tricycle",
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "truck_ban": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "tricycle_on_highway": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "sidewalk_driving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "car",
+      "motorcycle",
+      "bus",
+      "truck",
+      "pickup",
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "double_parking": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "overtaking_on_right": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "red_light": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "disregarding_signs": {
+     "rois": [],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "signal_light": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "overloading": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "passenger_outside": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_helmet": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_plate": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_seatbelt": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "missing_side_mirror": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "distracted_driving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true
+  },
+  "video_hash": "b202c20a3769221ecf9d",
+  "video_name": "15m_allviolations-2.mp4",
+  "updated": 1795214013.9495451
+ },
+ {
+  "id": "129400d3363b",
+  "name": "15m_allviolations-2.mp4",
+  "config": {
+   "active_violations": [
+    "counterflow",
+    "restricted_lane",
+    "illegal_parking",
+    "pedestrian_lane",
+    "blocking_intersection",
+    "illegal_turn",
+    "illegal_u_turn",
+    "swerving",
+    "crossing_solid_line",
+    "illegal_loading",
+    "truck_ban",
+    "tricycle_on_highway",
+    "sidewalk_driving",
+    "double_parking",
+    "overtaking_on_right",
+    "red_light",
+    "disregarding_signs",
+    "signal_light",
+    "overloading",
+    "passenger_outside",
+    "no_helmet",
+    "no_plate",
+    "no_seatbelt",
+    "missing_side_mirror",
+    "distracted_driving"
+   ],
+   "per_violation_configs": {
+    "counterflow": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "vector": {
+        "x_dir": -594.2637889688249,
+        "y_dir": 812.8153477218224
+       },
+       "ui_vector": [
+        [
+         913.1894484412469,
+         166.81055155875308
+        ],
+        [
+         318.92565947242207,
+         979.6258992805755
+        ]
+       ],
+       "marking": "auto-1"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "vector": {
+        "x_dir": 20.872901678657172,
+        "y_dir": -924.546762589928
+       },
+       "ui_vector": [
+        [
+         1097.3621103117505,
+         1055.7505995203837
+        ],
+        [
+         1118.2350119904077,
+         131.20383693045568
+        ]
+       ],
+       "marking": "auto-2"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "restricted_lane": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "marking": "auto-1",
+       "lane_type": "no_tricycles"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "marking": "auto-2",
+       "lane_type": "bus_only"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "type": "bus_only",
+       "x": 1429.8246732547022,
+       "y": 495.3071672354949,
+       "scale": 0.4887014204007538,
+       "angle": 0.0,
+       "tilt": 0.0,
+       "road": "auto-2",
+       "stand": "post"
+      },
+      {
+       "type": "no_tricycles",
+       "x": 480.53554351291035,
+       "y": 312.8498293515359,
+       "scale": 0.4240540540540615,
+       "angle": 0.0,
+       "tilt": 0.0,
+       "road": "auto-1",
+       "stand": "post"
+      }
+     ]
+    },
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "pedestrian_lane": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "crosswalks": [
+      {
+       "x": 1007.3871239117138,
+       "y": 403.92493085794825,
+       "scale": 1.0,
+       "depth": 1.0,
+       "angle": 0.0,
+       "slant": 30.0,
+       "stripes": 30,
+       "wear": 1.0,
+       "pts": [
+        [
+         -380.95118255820455,
+         -67.93801160418263
+        ],
+        [
+         251.51603172761838,
+         -48.738138759522315
+        ],
+        [
+         328.0004390366014,
+         138.8298497998514
+        ],
+        [
+         -564.8079308971064,
+         104.86084399776013
+        ]
+       ]
+      }
+     ]
+    },
+    "blocking_intersection": {
+     "rois": [],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "illegal_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 210.88938476251192,
+       "y": 662.0989761092152,
+       "w": 421.77876952502385,
+       "h": 363.0716723549489,
+       "kind": "no_left_turn",
+       "area": [
+        [
+         0.0,
+         480.5631399317407
+        ],
+        [
+         421.77876952502385,
+         498.99317406143354
+        ],
+        [
+         221.63850812878536,
+         683.2935153583618
+        ],
+        [
+         0.0,
+         843.6348122866896
+        ]
+       ],
+       "ax": 300.59292317500785,
+       "ay": 491.6211604095563
+      },
+      {
+       "x": 1677.6665604080333,
+       "y": 889.018771331058,
+       "w": 484.6668791839337,
+       "h": 381.9624573378839,
+       "kind": "no_right_turn",
+       "area": [
+        [
+         1435.3331208160664,
+         703.5665529010239
+        ],
+        [
+         1909.0596110934016,
+         698.037542662116
+        ],
+        [
+         1920.0,
+         1080.0
+        ],
+        [
+         1567.5358622888114,
+         1080.0
+        ],
+        [
+         1472.0561045584955,
+         839.9488054607509
+        ]
+       ],
+       "ax": 1663.0156200191268,
+       "ay": 725.6825938566553
+      }
+     ]
+    },
+    "illegal_u_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "swerving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "crossing_solid_line": {
+     "rois": [
+      {
+       "line": [
+        [
+         1086.032630398488,
+         5.6252071800613885
+        ],
+        [
+         1050.4774072830683,
+         97.61621715682685
+        ],
+        [
+         656.7258845984416,
+         1079.0
+        ]
+       ],
+       "marking": "auto-3"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "auto_lines": false
+    },
+    "illegal_loading": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "bus",
+      "tricycle",
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "truck_ban": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "tricycle_on_highway": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "sidewalk_driving": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1115.8431622569328,
+         1080.0
+        ],
+        [
+         1527.1405801721385,
+         1080.0
+        ],
+        [
+         1188.0235403339243,
+         97.85779938168552
+        ],
+        [
+         1120.6351691893362,
+         99.39507046268957
+        ]
+       ]
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "car",
+      "motorcycle",
+      "bus",
+      "truck",
+      "pickup",
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "double_parking": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "overtaking_on_right": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "red_light": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1027.7080012751037,
+         161.72354948805457
+        ],
+        [
+         1207.6506216130058,
+         163.5665529010239
+        ],
+        [
+         1545.5020720433536,
+         1072.1672354948807
+        ],
+        [
+         651.2974179152055,
+         1075.8532423208192
+        ]
+       ],
+       "vector": {
+        "x_dir": 605.9292317500797,
+        "y_dir": 9.215017064846315
+       },
+       "ui_vector": [
+        [
+         803.6978004462862,
+         740.4266211604096
+        ],
+        [
+         1409.627032196366,
+         749.641638225256
+        ]
+       ]
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 10.0,
+     "green": 10.0,
+     "yellow": 3.0
+    },
+    "disregarding_signs": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1440.8415683774308,
+         701.7235494880547
+        ],
+        [
+         1912.7319094676443,
+         710.9385665529012
+        ],
+        [
+         1920.0,
+         1080.0
+        ],
+        [
+         1551.010519604718,
+         1080.0
+        ]
+       ],
+       "vector": {
+        "x_dir": 271.7500796939753,
+        "y_dir": 44.23208191126274
+       },
+       "ui_vector": [
+        [
+         1556.5189671660821,
+         830.7337883959045
+        ],
+        [
+         1828.2690468600574,
+         874.9658703071673
+        ]
+       ],
+       "sign": "no_entry"
+      }
+     ],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "signal_light": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "overloading": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 1,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "passenger_outside": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_helmet": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_plate": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_seatbelt": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "missing_side_mirror": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "distracted_driving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true
+  },
+  "video_hash": "b202c20a3769221ecf9d",
+  "video_name": "15m_allviolations-2.mp4",
+  "updated": 1795215290.7954135
+ },
+ {
+  "id": "1ba8294067f6",
+  "name": "15m_allviolations-2.mp4",
+  "config": {
+   "active_violations": [
+    "counterflow",
+    "restricted_lane",
+    "illegal_parking",
+    "pedestrian_lane",
+    "blocking_intersection",
+    "illegal_turn",
+    "illegal_u_turn",
+    "swerving",
+    "crossing_solid_line",
+    "illegal_loading",
+    "truck_ban",
+    "tricycle_on_highway",
+    "sidewalk_driving",
+    "double_parking",
+    "overtaking_on_right",
+    "red_light",
+    "disregarding_signs",
+    "signal_light",
+    "overloading",
+    "passenger_outside",
+    "no_helmet",
+    "no_plate",
+    "no_seatbelt",
+    "missing_side_mirror",
+    "distracted_driving"
+   ],
+   "per_violation_configs": {
+    "counterflow": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "vector": {
+        "x_dir": -594.2637889688249,
+        "y_dir": 812.8153477218224
+       },
+       "ui_vector": [
+        [
+         913.1894484412469,
+         166.81055155875308
+        ],
+        [
+         318.92565947242207,
+         979.6258992805755
+        ]
+       ],
+       "marking": "auto-1"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "vector": {
+        "x_dir": 20.872901678657172,
+        "y_dir": -924.546762589928
+       },
+       "ui_vector": [
+        [
+         1097.3621103117505,
+         1055.7505995203837
+        ],
+        [
+         1118.2350119904077,
+         131.20383693045568
+        ]
+       ],
+       "marking": "auto-2"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": true,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "restricted_lane": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "marking": "auto-1",
+       "lane_type": "no_tricycles"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "marking": "auto-2",
+       "lane_type": "bus_only"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "type": "bus_only",
+       "x": 1429.8246732547022,
+       "y": 495.3071672354949,
+       "scale": 0.4887014204007538,
+       "angle": 0.0,
+       "tilt": 0.0,
+       "road": "auto-2",
+       "stand": "post"
+      },
+      {
+       "type": "no_tricycles",
+       "x": 480.53554351291035,
+       "y": 312.8498293515359,
+       "scale": 0.4240540540540615,
+       "angle": 0.0,
+       "tilt": 0.0,
+       "road": "auto-1",
+       "stand": "post"
+      }
+     ]
+    },
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "pedestrian_lane": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "crosswalks": [
+      {
+       "x": 1007.3871239117138,
+       "y": 403.92493085794825,
+       "scale": 1.0,
+       "depth": 1.0,
+       "angle": 0.0,
+       "slant": 30.0,
+       "stripes": 30,
+       "wear": 1.0,
+       "pts": [
+        [
+         -380.95118255820455,
+         -67.93801160418263
+        ],
+        [
+         251.51603172761838,
+         -48.738138759522315
+        ],
+        [
+         328.0004390366014,
+         138.8298497998514
+        ],
+        [
+         -564.8079308971064,
+         104.86084399776013
+        ]
+       ]
+      }
+     ]
+    },
+    "blocking_intersection": {
+     "rois": [],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "illegal_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 210.88938476251192,
+       "y": 662.0989761092152,
+       "w": 421.77876952502385,
+       "h": 363.0716723549489,
+       "kind": "no_left_turn",
+       "area": [
+        [
+         0.0,
+         480.5631399317407
+        ],
+        [
+         421.77876952502385,
+         498.99317406143354
+        ],
+        [
+         221.63850812878536,
+         683.2935153583618
+        ],
+        [
+         0.0,
+         843.6348122866896
+        ]
+       ],
+       "ax": 300.59292317500785,
+       "ay": 491.6211604095563
+      },
+      {
+       "x": 1677.6665604080333,
+       "y": 889.018771331058,
+       "w": 484.6668791839337,
+       "h": 381.9624573378839,
+       "kind": "no_right_turn",
+       "area": [
+        [
+         1435.3331208160664,
+         703.5665529010239
+        ],
+        [
+         1909.0596110934016,
+         698.037542662116
+        ],
+        [
+         1920.0,
+         1080.0
+        ],
+        [
+         1567.5358622888114,
+         1080.0
+        ],
+        [
+         1472.0561045584955,
+         839.9488054607509
+        ]
+       ],
+       "ax": 1663.0156200191268,
+       "ay": 725.6825938566553
+      }
+     ]
+    },
+    "illegal_u_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "swerving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "crossing_solid_line": {
+     "rois": [
+      {
+       "line": [
+        [
+         1086.032630398488,
+         5.6252071800613885
+        ],
+        [
+         1050.4774072830683,
+         97.61621715682685
+        ],
+        [
+         656.7258845984416,
+         1079.0
+        ]
+       ],
+       "marking": "auto-3"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "auto_lines": false
+    },
+    "illegal_loading": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "bus",
+      "tricycle",
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "truck_ban": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "tricycle_on_highway": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "sidewalk_driving": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1115.8431622569328,
+         1080.0
+        ],
+        [
+         1527.1405801721385,
+         1080.0
+        ],
+        [
+         1188.0235403339243,
+         97.85779938168552
+        ],
+        [
+         1120.6351691893362,
+         99.39507046268957
+        ]
+       ]
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "car",
+      "motorcycle",
+      "bus",
+      "truck",
+      "pickup",
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "double_parking": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "overtaking_on_right": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "red_light": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1027.7080012751037,
+         161.72354948805457
+        ],
+        [
+         1207.6506216130058,
+         163.5665529010239
+        ],
+        [
+         1545.5020720433536,
+         1072.1672354948807
+        ],
+        [
+         651.2974179152055,
+         1075.8532423208192
+        ]
+       ],
+       "vector": {
+        "x_dir": 605.9292317500797,
+        "y_dir": 9.215017064846315
+       },
+       "ui_vector": [
+        [
+         803.6978004462862,
+         740.4266211604096
+        ],
+        [
+         1409.627032196366,
+         749.641638225256
+        ]
+       ]
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 10.0,
+     "green": 10.0,
+     "yellow": 3.0
+    },
+    "disregarding_signs": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1440.8415683774308,
+         701.7235494880547
+        ],
+        [
+         1912.7319094676443,
+         710.9385665529012
+        ],
+        [
+         1920.0,
+         1080.0
+        ],
+        [
+         1551.010519604718,
+         1080.0
+        ]
+       ],
+       "vector": {
+        "x_dir": 271.7500796939753,
+        "y_dir": 44.23208191126274
+       },
+       "ui_vector": [
+        [
+         1556.5189671660821,
+         830.7337883959045
+        ],
+        [
+         1828.2690468600574,
+         874.9658703071673
+        ]
+       ],
+       "sign": "no_entry"
+      }
+     ],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "signal_light": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "overloading": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 1,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "passenger_outside": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_helmet": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_plate": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_seatbelt": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "missing_side_mirror": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "distracted_driving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 5,
+   "evidence_gap": 3,
+   "blur_privacy": true
+  },
+  "video_hash": "b202c20a3769221ecf9d",
+  "video_name": "15m_allviolations-2.mp4",
+  "updated": 1795215409.4588315
+ },
+ {
+  "id": "0bf33834c533",
+  "name": "15m_allviolations-2.mp4",
+  "config": {
+   "active_violations": [
+    "counterflow",
+    "restricted_lane",
+    "illegal_parking",
+    "pedestrian_lane",
+    "blocking_intersection",
+    "illegal_turn",
+    "illegal_u_turn",
+    "swerving",
+    "crossing_solid_line",
+    "illegal_loading",
+    "truck_ban",
+    "tricycle_on_highway",
+    "sidewalk_driving",
+    "double_parking",
+    "overtaking_on_right",
+    "red_light",
+    "disregarding_signs",
+    "signal_light",
+    "overloading",
+    "passenger_outside",
+    "no_helmet",
+    "no_plate",
+    "no_seatbelt",
+    "missing_side_mirror",
+    "distracted_driving"
+   ],
+   "per_violation_configs": {
+    "counterflow": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "vector": {
+        "x_dir": -594.2637889688249,
+        "y_dir": 812.8153477218224
+       },
+       "ui_vector": [
+        [
+         913.1894484412469,
+         166.81055155875308
+        ],
+        [
+         318.92565947242207,
+         979.6258992805755
+        ]
+       ],
+       "marking": "auto-1"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "vector": {
+        "x_dir": 20.872901678657172,
+        "y_dir": -924.546762589928
+       },
+       "ui_vector": [
+        [
+         1097.3621103117505,
+         1055.7505995203837
+        ],
+        [
+         1118.2350119904077,
+         131.20383693045568
+        ]
+       ],
+       "marking": "auto-2"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": true,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "restricted_lane": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1026.1486810551557,
+         0.0
+        ],
+        [
+         1057.7715895258596,
+         0.0
+        ],
+        [
+         1086.2126370282501,
+         2.3850878443460344
+        ],
+        [
+         1057.5915828960976,
+         76.18780604675149
+        ],
+        [
+         1042.8310392556166,
+         115.24924470509778
+        ],
+        [
+         935.4906279058389,
+         374.52160720403276
+        ],
+        [
+         896.3904895137857,
+         471.93726449955926
+        ],
+        [
+         820.2261048304214,
+         661.6962756325551
+        ],
+        [
+         650.4615083443448,
+         1079.0
+        ],
+        [
+         0.0,
+         1079.0
+        ],
+        [
+         0.0,
+         877.7170263788969
+        ]
+       ],
+       "marking": "auto-1",
+       "lane_type": "no_tricycles"
+      },
+      {
+       "polygon": [
+        [
+         1086.5726502877733,
+         2.3850878443460344
+        ],
+        [
+         1147.2348845175554,
+         5.0851872907755045
+        ],
+        [
+         1188.2763961032829,
+         110.13874398201209
+        ],
+        [
+         1264.3703812460221,
+         339.4411001810797
+        ],
+        [
+         1546.2673126804666,
+         1079.0
+        ],
+        [
+         652.9672588459848,
+         1078.2772965301228
+        ]
+       ],
+       "marking": "auto-2",
+       "lane_type": "bus_only"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "type": "bus_only",
+       "x": 1429.8246732547022,
+       "y": 495.3071672354949,
+       "scale": 0.4887014204007538,
+       "angle": 0.0,
+       "tilt": 0.0,
+       "road": "auto-2",
+       "stand": "post"
+      },
+      {
+       "type": "no_tricycles",
+       "x": 480.53554351291035,
+       "y": 312.8498293515359,
+       "scale": 0.4240540540540615,
+       "angle": 0.0,
+       "tilt": 0.0,
+       "road": "auto-1",
+       "stand": "post"
+      }
+     ]
+    },
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 1398.289353958144,
+       "y": 523.7824675324675,
+       "w": 420.0,
+       "h": 230.0,
+       "kind": "hydrant"
+      }
+     ]
+    },
+    "pedestrian_lane": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "crosswalks": [
+      {
+       "x": 1007.3871239117138,
+       "y": 403.92493085794825,
+       "scale": 1.0,
+       "depth": 1.0,
+       "angle": 0.0,
+       "slant": 30.0,
+       "stripes": 30,
+       "wear": 1.0,
+       "pts": [
+        [
+         -380.95118255820455,
+         -67.93801160418263
+        ],
+        [
+         251.51603172761838,
+         -48.738138759522315
+        ],
+        [
+         328.0004390366014,
+         138.8298497998514
+        ],
+        [
+         -564.8079308971064,
+         104.86084399776013
+        ]
+       ]
+      }
+     ]
+    },
+    "blocking_intersection": {
+     "rois": [],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "illegal_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 210.88938476251192,
+       "y": 662.0989761092152,
+       "w": 421.77876952502385,
+       "h": 363.0716723549489,
+       "kind": "no_left_turn",
+       "area": [
+        [
+         0.0,
+         480.5631399317407
+        ],
+        [
+         421.77876952502385,
+         498.99317406143354
+        ],
+        [
+         221.63850812878536,
+         683.2935153583618
+        ],
+        [
+         0.0,
+         843.6348122866896
+        ]
+       ],
+       "ax": 300.59292317500785,
+       "ay": 491.6211604095563
+      },
+      {
+       "x": 1677.6665604080333,
+       "y": 889.018771331058,
+       "w": 484.6668791839337,
+       "h": 381.9624573378839,
+       "kind": "no_right_turn",
+       "area": [
+        [
+         1435.3331208160664,
+         703.5665529010239
+        ],
+        [
+         1909.0596110934016,
+         698.037542662116
+        ],
+        [
+         1920.0,
+         1080.0
+        ],
+        [
+         1567.5358622888114,
+         1080.0
+        ],
+        [
+         1472.0561045584955,
+         839.9488054607509
+        ]
+       ],
+       "ax": 1663.0156200191268,
+       "ay": 725.6825938566553
+      }
+     ]
+    },
+    "illegal_u_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "swerving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "crossing_solid_line": {
+     "rois": [
+      {
+       "line": [
+        [
+         1086.032630398488,
+         5.6252071800613885
+        ],
+        [
+         1050.4774072830683,
+         97.61621715682685
+        ],
+        [
+         656.7258845984416,
+         1079.0
+        ]
+       ],
+       "marking": "auto-3"
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "auto_lines": false
+    },
+    "illegal_loading": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "bus",
+      "tricycle",
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "truck_ban": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "truck"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "tricycle_on_highway": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "sidewalk_driving": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1115.8431622569328,
+         1080.0
+        ],
+        [
+         1527.1405801721385,
+         1080.0
+        ],
+        [
+         1188.0235403339243,
+         97.85779938168552
+        ],
+        [
+         1120.6351691893362,
+         99.39507046268957
+        ]
+       ]
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [
+      "car",
+      "motorcycle",
+      "bus",
+      "truck",
+      "pickup",
+      "tricycle"
+     ],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "double_parking": {
+     "rois": [],
+     "time_limit": 8.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "overtaking_on_right": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "red_light": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1027.7080012751037,
+         161.72354948805457
+        ],
+        [
+         1207.6506216130058,
+         163.5665529010239
+        ],
+        [
+         1545.5020720433536,
+         1072.1672354948807
+        ],
+        [
+         651.2974179152055,
+         1075.8532423208192
+        ]
+       ],
+       "vector": {
+        "x_dir": 605.9292317500797,
+        "y_dir": 9.215017064846315
+       },
+       "ui_vector": [
+        [
+         803.6978004462862,
+         740.4266211604096
+        ],
+        [
+         1409.627032196366,
+         749.641638225256
+        ]
+       ]
+      }
+     ],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 10.0,
+     "green": 10.0,
+     "yellow": 3.0
+    },
+    "disregarding_signs": {
+     "rois": [
+      {
+       "polygon": [
+        [
+         1440.8415683774308,
+         701.7235494880547
+        ],
+        [
+         1912.7319094676443,
+         710.9385665529012
+        ],
+        [
+         1920.0,
+         1080.0
+        ],
+        [
+         1551.010519604718,
+         1080.0
+        ]
+       ],
+       "vector": {
+        "x_dir": 271.7500796939753,
+        "y_dir": 44.23208191126274
+       },
+       "ui_vector": [
+        [
+         1556.5189671660821,
+         830.7337883959045
+        ],
+        [
+         1828.2690468600574,
+         874.9658703071673
+        ]
+       ],
+       "sign": "no_entry"
+      }
+     ],
+     "time_limit": 5.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "signal_light": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "overloading": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 1,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "passenger_outside": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_helmet": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_plate": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_seatbelt": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "missing_side_mirror": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "distracted_driving": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 5,
+   "evidence_gap": 3,
+   "blur_privacy": true
+  },
+  "video_hash": "b202c20a3769221ecf9d",
+  "video_name": "15m_allviolations-2.mp4",
+  "updated": 1795215465.9322762
+ },
+ {
+  "id": "00c1131bae1a",
+  "name": "nohelmet_pickup.mp4",
+  "config": {
+   "active_violations": [
+    "illegal_turn",
+    "overloading",
+    "passenger_outside",
+    "no_helmet",
+    "missing_side_mirror"
+   ],
+   "per_violation_configs": {
+    "illegal_turn": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "right"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": []
+    },
+    "overloading": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 1,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "passenger_outside": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "no_helmet": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    },
+    "missing_side_mirror": {
+     "rois": [],
+     "time_limit": 180.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true
+  },
+  "video_hash": "4be3b8a8705a23e3c204",
+  "video_name": "nohelmet_pickup.mp4",
+  "updated": 1795218611.062064
+ }
+]

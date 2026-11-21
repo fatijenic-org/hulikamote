@@ -113,12 +113,18 @@ def sample_indicators(pipe, frame, detections, wanted=None) -> None:
 def blink_report(ledger, t: float, lookback_s: float) -> Blink | None:
     """Where a lamp blinks on this vehicle in the last lookback_s seconds, or None when none does (or when the samples are too few or
     too far apart to tell)."""
+    return blink_read(ledger, t, lookback_s)[1]
+
+
+def blink_read(ledger, t: float, lookback_s: float) -> tuple[bool, Blink | None]:
+    """(judged, blink): `judged` is False when the samples are too few or too far apart to tell anything yet (then blink is None);
+    True with blink None means "looked, and no lamp blinks"."""
     recent = [(ts, g) for ts, g in ledger.blink_grid if ts >= t - lookback_s]
     if len(recent) < MIN_SAMPLES:
-        return None
+        return False, None
     times = np.array([ts for ts, _g in recent], dtype=np.float64)
     if times[-1] - times[0] < MIN_SPAN_S or float(np.median(np.diff(times))) > MAX_STEP_S:
-        return None
+        return False, None
     cells = np.stack([g for _ts, g in recent]).astype(np.float32) / 255.0          # (n, rows, cols)
     # A lamp may sit across the edge of several cells: add up each 2 x 2 block (in cell areas, at most 1) so it counts whole wherever it falls.
     cells = np.minimum(1.0, cells[:, :-1, :-1] + cells[:, 1:, :-1] + cells[:, :-1, 1:] + cells[:, 1:, 1:])
@@ -127,7 +133,7 @@ def blink_report(ledger, t: float, lookback_s: float) -> Blink | None:
     swing = high - low
     candidate = (swing >= MIN_SWING) & (high >= MIN_ON)
     if not candidate.any() or candidate.mean() > GLOBAL_CELLS:
-        return None
+        return True, None
 
     # every cell: on / off with a margin (a value between the two keeps the state it had)
     upper, lower, middle = low + 0.65 * swing, low + 0.35 * swing, low + 0.5 * swing
@@ -159,9 +165,9 @@ def blink_report(ledger, t: float, lookback_s: float) -> Blink | None:
         )
     ]
     if not seen:
-        return None
+        return True, None
     middle_col = cells.shape[2] / 2
-    return Blink(left=any(a[1] < middle_col for a in seen), right=any(a[1] >= middle_col for a in seen))
+    return True, Blink(left=any(a[1] < middle_col for a in seen), right=any(a[1] >= middle_col for a in seen))
 
 
 def is_signalling(ledger, t: float, lookback_s: float) -> bool:

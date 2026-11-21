@@ -9,6 +9,7 @@ Phase B: Swap MODEL_PATH for your custom Roboflow .onnx file and
          update VIOLATION_CLASS_NAMES to match your trained classes.
 """
 import base64
+import os
 import random
 import time
 from collections import deque
@@ -136,7 +137,20 @@ WEAK_VEHICLE_CONFIDENCE = 0.25
 # also run for PEOPLE ONLY (nothing else of it is used) and its people join the traffic model's; the same cutoffs, the same NMS. Switch it
 # off with the environment variable HK_PEOPLE_HELPER=0.
 PEOPLE_HELPER_FILE = "yolov8n.onnx"
+# People searched CLOSE to a vehicle (YoloInference.people_near): the vehicle classes that can carry people outside (all but the motorcycle),
+# how many of the biggest vehicles of a picture are searched, and the lowest score kept (the cut is seen up close: scores are higher).
+PEOPLE_NEAR_CLASSES = ("bus", "jeepney", "truck", "pickup", "car", "tricycle", "kuliglig")
+PEOPLE_NEAR_VEHICLES = 6
+# The heavy people search (the 3 x 2 tiles of "small people" and the cut around each vehicle, people_near) takes about 7 + 6 extra model runs.
+# It runs on every HEAVY_EVERY-th detection only (HK_HEAVY_EVERY, 1 = every one): a person stays on a vehicle for seconds, the rule looks over
+# seconds, and the searches between are the cheap whole-picture one. This was the biggest part of the time of a picture (about 700 of 850 ms).
+HEAVY_EVERY = max(1, int(os.environ.get("HK_HEAVY_EVERY", "2")))
+PEOPLE_NEAR_CONFIDENCE = 0.20
 PEOPLE_HELPER_CONFIDENCE = 0.15
+# A vehicle that is tracked already stays on the screen down to this score (the start cutoffs above stay as they are): the live "keep" slider.
+# 0 = off (every box needs its start cutoff on every picture). Changed while running with set_keep_conf().
+KEEP_CONF = float(os.environ.get("HK_KEEP_CONF", "0.25"))
+KEEP_OVERLAP = 0.3          # a low-score box counts as "the same vehicle" when it covers a tracked box of the last picture this much (IoU)
 # "Small people" mode (the wizard's tile switch, use_sahi): the frame is also cut into 3 x 2 overlapping tiles and each is
 # searched for people only (vehicles come from the whole frame, so a car cut by a tile edge is never counted twice).
 TILE_COLS, TILE_ROWS = 3, 2
@@ -175,6 +189,13 @@ def vehicle_label(d) -> str:
     return f"{plate} - {kind}" if plate else kind
 
 
+def set_keep_conf(value) -> float:
+    """The lowest score a vehicle that is tracked already keeps its box at (0 = off, at most 0.9). Returns the value in use."""
+    global KEEP_CONF
+    KEEP_CONF = max(0.0, min(0.9, float(value)))
+    return KEEP_CONF
+
+
 def box_specs(detections) -> list[dict]:
     """Boxes to draw, as plain data (BGR colours): vehicles only. People are drawn only through the violation marks
     (riders, passengers outside, pickup bed: engine/marks.py), never as boxes of their own."""
@@ -190,8 +211,11 @@ def box_specs(detections) -> list[dict]:
         else:
             color, lines = (0, 255, 0), [who]
         plate_box = getattr(d, "plate_bbox", None)
-        specs.append({"box": [int(v) for v in d.bbox], "color": color, "lines": lines,
-                      "plate": [int(v) for v in plate_box] if plate_box else None})
+        spec = {"box": [int(v) for v in d.bbox], "color": color, "lines": lines,
+                "plate": [int(v) for v in plate_box] if plate_box else None}
+        if getattr(d, "ghost", False):                     # a predicted box (engine/box_stabilizer.py): drawn fainter
+            spec["fade"] = round(float(getattr(d, "fade", 0.6)), 2)
+        specs.append(spec)
     return specs
 
 
@@ -308,6 +332,45 @@ class YoloInference:
         except Exception as exc:
             self._people_session = None
             print(f"[YOLO] The people model could not be loaded ({exc}); the traffic model's own people are used")
+
+    def _people_in(self, img: np.ndarray, x0: int = 0, y0: int = 0):
+        """The people on one image (a crop moved back into the frame by x0, y0): the COCO people model, or - when it is not there - the
+        traffic model's own people. The same triple as _candidates."""
+        if self._people_session is not None:
+            return self._helper_candidates(img, x0, y0)
+        b, c, k = self._candidates(img, x0, y0)
+        people = np.array([self._is_person(i) for i in k], dtype=bool)
+        return b[people], c[people], k[people]
+
+    def people_near(self, frame: np.ndarray, found: list, max_vehicles: int = PEOPLE_NEAR_VEHICLES) -> list:
+        """
+        People close to each vehicle that can carry people outside (every class but the motorcycle): the picture is cut around the vehicle
+        (a little wider, and well above it for people on the roof) and the people model looks at that cut alone, so a person who is a few
+        pixels in the whole frame is big enough to be found. Returns NEW person detections (no track number), never one that `found`
+        already has. Used while "Passenger outside" is on.
+        """
+        fh, fw = frame.shape[:2]
+        have = [d.bbox for d in found if d.cls == "person"]
+        vehicles = sorted((d for d in found if d.cls in PEOPLE_NEAR_CLASSES and d.bbox[2] >= 40 and d.bbox[3] >= 40),
+                          key=lambda d: d.bbox[2] * d.bbox[3], reverse=True)[:max_vehicles]
+        added: list[YoloDetection] = []
+        for v in vehicles:
+            vx, vy, vw, vh = v.bbox
+            x0, x1 = max(0, int(vx - 0.15 * vw)), min(fw, int(vx + 1.15 * vw))
+            y0, y1 = max(0, int(vy - 0.45 * vh)), min(fh, int(vy + 1.05 * vh))
+            if x1 - x0 < 32 or y1 - y0 < 32:
+                continue
+            boxes, scores, _ = self._people_in(frame[y0:y1, x0:x1], x0, y0)
+            for (bx1, by1, bx2, by2), score in zip(boxes, scores):
+                w, h = bx2 - bx1, by2 - by1
+                if score < PEOPLE_NEAR_CONFIDENCE or w < 6 or h < 6:
+                    continue
+                bbox = [int(bx1), int(by1), int(w), int(h)]
+                if any(_covers(bbox, other) for other in have):
+                    continue                                 # that person is already in the list
+                have.append(bbox)
+                added.append(YoloDetection("person", float(score), bbox, "person"))
+        return added
 
     def _helper_candidates(self, img: np.ndarray, x0: int = 0, y0: int = 0):
         """The people the COCO model sees on one image (a tile moved back into the frame by x0, y0): the same triple as _candidates, with the
@@ -536,12 +599,14 @@ class YoloInference:
         """
         detections: list[YoloDetection] = []
         t0 = time.perf_counter()
+        self._detect_n = getattr(self, "_detect_n", 0) + 1
+        self.heavy_turn = (self._detect_n % HEAVY_EVERY) == 0     # this detection also does the heavy people search (tiles, people_near)
         boxes_xyxy, confidences, class_ids = self._candidates(frame)
         parts = [(boxes_xyxy, confidences, class_ids)]
         helper = self._people_session is not None
         if helper:
             parts.append(self._helper_candidates(frame))          # people the traffic model does not see
-        if self.small_people:
+        if self.small_people and self.heavy_turn:
             for x0, y0, x1, y1 in self._tiles(frame.shape[1], frame.shape[0]):
                 if helper:
                     parts.append(self._helper_candidates(frame[y0:y1, x0:x1], x0, y0))
@@ -567,6 +632,14 @@ class YoloInference:
             vehicles = boxes_xyxy[(mask | (confidences >= WEAK_VEHICLE_CONFIDENCE)) & ~is_person]
             weak &= np.array([on_a_vehicle(b, vehicles) for b in boxes_xyxy], dtype=bool)
         mask |= weak
+        recent = getattr(self, "_recent_boxes", None)
+        if KEEP_CONF > 0 and recent is not None and len(recent):
+            # Hysteresis: a vehicle that was tracked on the last picture keeps its box while its score is above KEEP_CONF, not only above the
+            # start cutoff. A box that flickers around the cutoff (0.46, 0.41, 0.47) then stays on the screen.
+            low = ~mask & ~is_person & (confidences >= KEEP_CONF)
+            for i in np.flatnonzero(low):
+                if _best_iou(boxes_xyxy[i], recent) >= KEEP_OVERLAP:
+                    mask[i] = True
         if not mask.any():
             return detections, False
 
@@ -644,6 +717,9 @@ class YoloInference:
                 raise
             return
         self._track_failures = 0
+        # the boxes that were tracked on this picture: the next picture may keep them at a lower score (KEEP_CONF)
+        self._recent_boxes = np.array([[d.bbox[0], d.bbox[1], d.bbox[0] + d.bbox[2], d.bbox[1] + d.bbox[3]] for d in vehicles if d.track_id != -1],
+                                      dtype=np.float32).reshape(-1, 4)
         for d in vehicles:
             if d.track_id != -1:                    # one frame of "car" on a motorcycle does not change its class
                 d.cls = d.violation_type = self._stable_class(d.track_id, d.cls, d.confidence)
@@ -692,6 +768,26 @@ class YoloInference:
 # ─── Singleton ───────────────────────────────────────────────────────────────
 
 _inference: Optional[YoloInference] = None
+
+
+def _best_iou(box, boxes) -> float:
+    """The highest IoU of one xyxy box with a list (N x 4) of xyxy boxes."""
+    ix = np.minimum(box[2], boxes[:, 2]) - np.maximum(box[0], boxes[:, 0])
+    iy = np.minimum(box[3], boxes[:, 3]) - np.maximum(box[1], boxes[:, 1])
+    inter = np.clip(ix, 0, None) * np.clip(iy, 0, None)
+    union = (box[2] - box[0]) * (box[3] - box[1]) + (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) - inter
+    return float((inter / np.maximum(union, 1e-6)).max())
+
+
+def _covers(a: list, b: list) -> bool:
+    """True when two boxes [x, y, w, h] are the same person: they overlap by 40% of their union, or one holds most of the other."""
+    ix = max(0, min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0]))
+    iy = max(0, min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    if inter <= 0:
+        return False
+    smaller = min(a[2] * a[3], b[2] * b[3])
+    return inter / (a[2] * a[3] + b[2] * b[3] - inter) >= 0.4 or (smaller > 0 and inter / smaller >= 0.7)
 
 
 def on_a_vehicle(person_xyxy, vehicles_xyxy) -> bool:

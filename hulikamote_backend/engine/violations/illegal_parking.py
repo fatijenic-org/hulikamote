@@ -35,12 +35,14 @@ from engine import loading_signs, marks, overlay_objects, parking_reasons
 from engine.parking_lock import still_run
 from engine.violations.base import Violation
 from engine.violations.geometry import STOP_SPEED, point_in_polygon
-from engine.violations.indicators import is_signalling, sample_indicators
+from engine.violations.indicators import blink_read, sample_indicators
 from engine.violations.scene import recently_flowing
 
 BLINK_LOOKBACK_S = 6.0      # how much of the recent past is read for a blinking indicator
 BLINK_MEMORY_S = 3.0        # a blink seen this recently still counts: a lamp is not read clearly in every frame
 BLINK_HOLD_MAX_S = 60.0     # a lamp that blinks this long without a break no longer holds the stopwatch
+BLINK_ON = (255, 170, 0)    # the "BLINK: YES" chip on the vehicle's box (BGR: sky blue; amber and red are the stopwatch)
+BLINK_OFF = (110, 110, 110) # "BLINK: NO" / "BLINK: checking"
 SAMPLE_SPEED = 2.5 * STOP_SPEED     # a vehicle this slow is read for blinking: it is about to stop, and the blinking is seen from then on
 
 
@@ -96,14 +98,18 @@ class IllegalParking(Violation):
         sample_indicators(pipe, frame, detections, wanted=lambda ledger: ledger.get_speed() < SAMPLE_SPEED)
 
     def signalling(self, ledger, t) -> bool:
-        """A blinking indicator or hazard light, seen in the last few seconds, and not for longer than BLINK_HOLD_MAX_S in one go."""
+        """A blinking indicator or hazard light, seen in the last few seconds, and not for longer than BLINK_HOLD_MAX_S in one go.
+        Also puts the "BLINK: YES / NO / checking" chip on the vehicle's box."""
         seen, since = f"{self.key}:blink", f"{self.key}:blink_since"
-        if is_signalling(ledger, t, BLINK_LOOKBACK_S):
+        judged, blink = blink_read(ledger, t, BLINK_LOOKBACK_S)
+        if blink is not None:
             ledger.stop_timers[seen] = t
             ledger.stop_timers.setdefault(since, t)
         if t - ledger.stop_timers.get(seen, -math.inf) > BLINK_MEMORY_S:
             ledger.stop_timers.pop(since, None)       # it stopped blinking: the next spell is counted from its own start
+            marks.set_timer(ledger, seen, "BLINK: NO" if judged else "BLINK: checking", False, t, colour=BLINK_OFF)
             return False
+        marks.set_timer(ledger, seen, "BLINK: YES", False, t, colour=BLINK_ON)
         return t - ledger.stop_timers.get(since, t) <= BLINK_HOLD_MAX_S
 
     def evaluate(self, mgr, track_id, zones):
@@ -124,6 +130,7 @@ class IllegalParking(Violation):
         if zone is None:                             # driving, crawling, or not in a zone: no lock, no time
             ledger.stationary_start_time = None
             marks.clear_timer(ledger, self.key)
+            marks.clear_timer(ledger, f"{self.key}:blink")
             if locks is not None:
                 locks.release(ledger)
             return False
@@ -131,9 +138,11 @@ class IllegalParking(Violation):
         if locks is not None:
             locks.purge(t)
             lock = locks.hold(ledger, mgr.ledgers, still)        # lock on to the spot it stands on
+            lock.limit = zone.get("time_limit", 180.0)
             if lock.ledger_id != ledger.track_id:                # the vehicle that was ticketed here, under another tracker number
                 ledger.stationary_start_time = None
                 marks.clear_timer(ledger, self.key)
+                marks.clear_timer(ledger, f"{self.key}:blink")
                 return False
         if self.signalling(ledger, t):
             if lock is not None:

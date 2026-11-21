@@ -57,29 +57,33 @@ class RoadPresets:
         tmp.replace(self.path)
 
     @staticmethod
-    def _summary(p: dict) -> dict:
-        return {"id": p["id"], "name": p.get("name", ""), "count": len(p.get("markings") or []), "updated": p.get("updated", 0)}
+    def _summary(p: dict, video_hash: str | None = None) -> dict:
+        return {"id": p["id"], "name": p.get("name", ""), "count": len(p.get("markings") or []), "updated": p.get("updated", 0),
+                "video_hash": p.get("video_hash") or "", "video_name": p.get("video_name") or "",
+                "match": bool(video_hash) and p.get("video_hash") == video_hash}
 
-    def list(self) -> list[dict]:
-        """Names only (no markings), newest change first."""
+    def list(self, video_hash: str | None = None) -> list[dict]:
+        """Names only (no markings): the roads saved for this video first, then the newest change."""
         with self._lock:
-            return sorted((self._summary(p) for p in self._read()), key=lambda s: -float(s["updated"] or 0))
+            rows = [self._summary(p, video_hash) for p in self._read()]
+        return sorted(rows, key=lambda s: (not s["match"], -float(s["updated"] or 0)))
 
     def get(self, preset_id: str) -> dict | None:
         with self._lock:
             return next((p for p in self._read() if p["id"] == preset_id), None)
 
-    def create(self, name, markings) -> dict:
+    def create(self, name, markings, video_hash: str = "", video_name: str = "") -> dict:
         name, markings = _clean_name(name), _clean_markings(markings)
         with self._lock:
             items = self._read()
             if len(items) >= MAX_PRESETS:
                 raise PresetError("Too many saved roads. Delete one first.")
-            preset = {"id": uuid.uuid4().hex[:12], "name": name, "markings": markings, "updated": time.time()}
+            preset = {"id": uuid.uuid4().hex[:12], "name": name, "markings": markings, "updated": time.time(),
+                      "video_hash": str(video_hash or ""), "video_name": str(video_name or "")[:200]}
             self._write(items + [preset])
             return preset
 
-    def update(self, preset_id: str, name=None, markings=None) -> dict | None:
+    def update(self, preset_id: str, name=None, markings=None, video_hash=None, video_name=None) -> dict | None:
         """Change the name and/or the markings of a saved road. None: there is no such road."""
         with self._lock:
             items = self._read()
@@ -90,6 +94,9 @@ class RoadPresets:
                 preset["name"] = _clean_name(name)
             if markings is not None:
                 preset["markings"] = _clean_markings(markings)
+            if video_hash is not None:
+                preset["video_hash"] = str(video_hash)
+                preset["video_name"] = str(video_name or "")[:200]
             preset["updated"] = time.time()
             self._write(items)
             return preset
@@ -103,7 +110,8 @@ class RoadPresets:
             if len(items) >= MAX_PRESETS:
                 raise PresetError("Too many saved roads. Delete one first.")
             copy = {"id": uuid.uuid4().hex[:12], "name": f"{source.get('name', 'Road')} (copy)"[:MAX_NAME],
-                    "markings": json.loads(json.dumps(source.get("markings") or [])), "updated": time.time()}
+                    "markings": json.loads(json.dumps(source.get("markings") or [])), "updated": time.time(),
+                    "video_hash": source.get("video_hash") or "", "video_name": source.get("video_name") or ""}
             self._write(items + [copy])
             return copy
 

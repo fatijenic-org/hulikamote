@@ -20,7 +20,8 @@ from engine import live_run
 from engine.playout import Playout
 from engine.stage_timer import TIMER
 from store import add_violation, MOCK_CLASSES, MOCK_USERS
-from yolo_inference import get_inference
+import yolo_inference
+from yolo_inference import get_inference, set_keep_conf
 
 router = APIRouter(prefix="/ws", tags=["stream"])
 
@@ -133,12 +134,82 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "camera_config.json"
 
 # Instantiated once at import time so reconnects do NOT wipe tracking state
 # or leak VRAM by re-loading models.
+_stabilizer_settings: dict = {}   # {"on": bool, "hold_s": float} chosen with the live switch (empty: the defaults of engine/box_stabilizer.py)
+_rules_off: set = set()      # rules of the setup that were switched off with the live switch (a new pipeline of the same setup starts the same way)
+
+
 def _build_pipeline():
     """Lazily build the pipeline to avoid import-time side-effects during tests."""
     from engine.pipeline import DecoupledPipeline
     pipeline = DecoupledPipeline(str(CONFIG_PATH))
     pipeline.show_paths = True          # live evidence photos of Crossing a solid line carry the path the vehicle drove
+    if _rules_off:
+        pipeline.set_active_rules([k for k in pipeline.setup_violations if k not in _rules_off])
+    if _stabilizer_settings:
+        pipeline.stabilizer.configure(_stabilizer_settings.get("on"), _stabilizer_settings.get("hold_s"))
+        if _stabilizer_settings.get("keep_conf") is not None:
+            set_keep_conf(_stabilizer_settings["keep_conf"])
     return pipeline
+
+
+# What each rule needs besides the detector, in words (shown on the live switch): the cost that is measured is only its own code and its model.
+RULE_MODELS = {
+    "no_helmet": "helmet model", "overloading": "helmet model", "no_plate": "plate model",
+    "no_seatbelt": "cabin model", "distracted_driving": "cabin model", "missing_side_mirror": "cabin model",
+    "passenger_outside": "people search on tiles (heavy, counted in the detector)",
+}
+
+
+def rules_state() -> dict:
+    """For the live switch: the rules of the setup, the ones that are on, the average milliseconds each takes per picture, and what each needs."""
+    pipeline = _pipeline
+    if pipeline is None:
+        return {"ready": False, "setup": [], "active": [], "cost_ms": {}, "needs": RULE_MODELS}
+    return {"ready": True, "setup": list(pipeline.setup_violations), "active": list(pipeline.registry.active_violations),
+            "cost_ms": {k: round(v, 1) for k, v in dict(pipeline.rule_cost).items()}, "needs": RULE_MODELS,
+            "stabilizer": stabilizer_state()}
+
+
+def stabilizer_state() -> dict:
+    """The box stabilizer: {on, hold_s, ghost_boxes, rescued, covered} (the numbers count from the start of this pipeline)."""
+    pipeline = _pipeline
+    stab = getattr(pipeline, "stabilizer", None)
+    if stab is None:
+        return {"on": True, "hold_s": 0.8, "keep_conf": yolo_inference.KEEP_CONF, "ghost_boxes": 0, "rescued": 0, "covered": 0}
+    return {"on": stab.enabled, "hold_s": stab.hold_s, "keep_conf": yolo_inference.KEEP_CONF, **stab.stats}
+
+
+def set_stabilizer(on=None, hold_s=None, keep_conf=None) -> dict:
+    """Switch the box stabilizer, change how long a lost box is held, or the lowest score a tracked vehicle keeps its box at
+    (the choice also holds for the pipelines built later)."""
+    if on is not None:
+        _stabilizer_settings["on"] = bool(on)
+    if hold_s is not None:
+        _stabilizer_settings["hold_s"] = max(0.0, min(5.0, float(hold_s)))
+    if keep_conf is not None:
+        _stabilizer_settings["keep_conf"] = set_keep_conf(keep_conf)
+    stab = getattr(_pipeline, "stabilizer", None)
+    if stab is not None:
+        stab.configure(on, hold_s)
+    return stabilizer_state()
+
+
+def set_rules(active_keys) -> dict:
+    """Switch the rules of the running pipeline: only `active_keys` are judged from the next picture on (blocking: loads a model when a rule
+    that needs one comes on). Raises RuntimeError when no pipeline runs."""
+    global _rules_off
+    pipeline = _pipeline
+    if pipeline is None:
+        raise RuntimeError("The monitoring is not running yet.")
+    new = pipeline.set_active_rules(active_keys)
+    _rules_off = set(pipeline.setup_violations) - set(new)
+    return rules_state()
+
+
+def reset_rules() -> None:
+    """A new setup was applied (or the live setup was emptied): every rule of it is on."""
+    global _rules_off
+    _rules_off = set()
 
 _pipeline = None
 _pipeline_source = None      # the camera the current pipeline was built for (a learned traffic flow only fits the same camera)
@@ -594,6 +665,317 @@ def _marking_arrows(pipeline, w: int, h: int, shown: list) -> list:
     return out
 
 
+async def _demo_loop(websocket: WebSocket, demo, my_ws_id: str, start_s: float = 0.0) -> None:
+    """DEMO REPLAY (engine/demo_replay.py): the Live Monitor plays a recorded run of this video - its pictures, its boxes, its tickets at the
+    moment they happened - instead of running the models. It sends the same messages as the live feed, so the screen, the timeline (pause,
+    go back, go forward) and the ticket list work as they do live; every message says "demo": True and the screen shows a DEMO REPLAY badge."""
+    import copy
+    from engine import demo_replay
+    from engine.pipeline import EVIDENCE_DIR
+    from routers import forensic as forensic_router
+
+    loop = asyncio.get_running_loop()
+    first = demo.rows[0]
+    w, h = int(first.get("w") or 1280), int(first.get("h") or 720)
+    label = (demo.meta.get("videos") or ["demo"])[0]
+    camera = {"kind": "file", "label": f"{label} (demo replay)", "state": "file", "width": w, "height": h, "source_fps": round(demo.fps, 1),
+              "input_fps": round(demo.fps, 1), "lag_ms": 0, "reconnects": 0, "dropped": 0}
+    print(f"[Stream] DEMO REPLAY of '{demo.meta.get('title')}' ({len(demo.rows)} pictures, {len(demo.tickets)} tickets)")
+
+    out = forensic_router.live_output_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    released: set = set()
+    if start_s <= 0:
+        try:
+            await forensic_router.clear_live_tickets()           # a new replay starts with no tickets, as a new live run does
+        except Exception as exc:
+            print(f"[Stream] Demo: the old live tickets could not be cleared: {exc!r}")
+    else:
+        released = {i for i, e in enumerate(demo.tickets) if e["at"] <= start_s}      # (Refresh / Resume: those were shown before)
+    cfg = forensic_router._live_run_config(demo.config)
+    text = json.dumps(cfg, indent=2, default=str)
+    cfg_path = out / "forensic_config.json"
+    if not cfg_path.exists() or cfg_path.read_text() != text:
+        cfg_path.write_text(text)
+
+    async def release(i: int) -> None:
+        ticket = copy.deepcopy(demo.tickets[i]["ticket"])
+        try:
+            await asyncio.to_thread(demo.restore_photos, ticket, EVIDENCE_DIR)
+            await forensic_router._publish_ticket(forensic_router.LIVE_TASK, ticket, cfg, out, add_violation, [], source="live",
+                                                  unread_user=forensic_router.LIVE_PENDING_USER)
+        except Exception as exc:
+            print(f"[Stream] Demo: a ticket could not be shown: {exc!r}")
+
+    state = {"pos": min(max(0.0, start_s), demo.duration), "paused": False, "seek": True}
+
+    def info() -> dict:
+        pos = state["pos"]
+        proc = min(demo.duration, pos + demo_replay.PROC_AHEAD_S)
+        return {"state": "playing", "percent": 1.0, "ahead_s": round(proc - pos, 2), "speed": 1.0, "need_s": 0.0, "live": False,
+                "paused": state["paused"], "first_s": 0.0, "play_s": round(pos, 2), "proc_s": round(proc, 2), "video_s": round(proc, 2),
+                "pos_s": round(pos, 2), "demo": True}
+
+    async def control() -> None:
+        while True:
+            try:
+                text = await websocket.receive_text()
+            except Exception:
+                return
+            try:
+                msg = json.loads(text)
+                cmd = msg.get("cmd")
+                if cmd == "pause":
+                    state["paused"] = True
+                elif cmd == "play":
+                    if state["pos"] >= demo.duration - 0.05:
+                        continue                                      # at the end: nothing to play
+                    state["paused"] = False
+                elif cmd == "seek":
+                    limit = min(demo.duration, state["pos"] + demo_replay.PROC_AHEAD_S)
+                    state["pos"] = max(0.0, min(float(msg.get("t", 0.0)), limit))
+                    state["seek"] = True
+            except Exception:
+                continue
+
+    control_task = asyncio.create_task(control())
+    shown = -1
+    last_tick = time.monotonic()
+    last_note = 0.0
+    delay = 1.0 / max(5.0, min(30.0, demo.fps))
+    try:
+        while _current_ws_id == my_ws_id:
+            now = time.monotonic()
+            if not state["paused"]:
+                state["pos"] = min(demo.duration, state["pos"] + (now - last_tick))
+                if state["pos"] >= demo.duration:
+                    state["paused"] = True                            # the end: the last picture stays, the timeline still works
+                    state["seek"] = True
+            last_tick = now
+            pos = state["pos"]
+            for i, entry in enumerate(demo.tickets):
+                if i not in released and entry["at"] <= pos:
+                    released.add(i)
+                    await release(i)
+            i = demo.index_at(pos)
+            if i != shown or state["seek"]:
+                state["seek"] = False
+                shown = i
+                row = demo.rows[i]
+                picture = await loop.run_in_executor(None, demo.picture_b64, i)
+                try:
+                    road_status = road.status()
+                except Exception:
+                    road_status = {}
+                await websocket.send_json({
+                    "type": "frame", "transport": "jpeg", "hls_url": None,
+                    "frame_width": int(row.get("w") or w), "frame_height": int(row.get("h") or h), "mock": False,
+                    "frame_base64": picture, "detections": row.get("detections") or [], "boxes": row.get("boxes") or [],
+                    "camera": camera, "road": road_status, "road_zones": [], "flow": None, "buffer": info(), "demo": True,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                last_note = time.monotonic()
+            elif time.monotonic() - last_note >= 0.5:
+                last_note = time.monotonic()
+                await websocket.send_json({"type": "buffer", **info()})   # paused: the timeline is still told where things are
+            await asyncio.sleep(delay)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        control_task.cancel()
+        if _current_ws_id == my_ws_id:
+            print("[Stream] Demo replay closed")
+
+
+async def _replay_loop(websocket: WebSocket, run, my_ws_id: str, start_s: float = 0.0) -> "float | None":
+    """REPLAY of a saved run (engine/replay_run.py): the pictures of a run that was saved in its folder are played in order, with the boxes
+    that were found then, and its tickets show at the moment they happened. No model runs and the backend does no work. The tickets are real
+    tickets: the reviewer opens them, types or reads the plate, sets photos aside, decides - and everything is saved back into the run folder
+    (tickets/), so the run can be opened again later and found as it was left. It sends the same messages as the live feed."""
+    import copy
+    from engine import replay_run
+    from engine.pipeline import EVIDENCE_DIR
+    from routers import forensic as forensic
+
+    loop = asyncio.get_running_loop()
+    w, h = run.w, run.h
+    camera = {"kind": "file", "label": f"{run.folder.name} (replay)", "state": "file", "width": w, "height": h,
+              "source_fps": round(run.fps, 1), "input_fps": round(run.fps, 1), "lag_ms": 0, "reconnects": 0, "dropped": 0}
+    print(f"[Stream] REPLAY of '{run.folder.name}' ({len(run.times)} pictures, {len(run.entries)} tickets)")
+
+    out = forensic.live_output_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    saved = run.saved_tickets()
+    states = run.states()
+    released: set = set()
+    if start_s <= 0:
+        try:
+            await forensic.clear_live_tickets()                    # a replay starts with no tickets, as a live run does
+        except Exception as exc:
+            print(f"[Stream] Replay: the old live tickets could not be cleared: {exc!r}")
+    else:
+        async with forensic._report_lock:                          # (Refresh / Resume: the tickets that are in the live report were shown before)
+            working = await asyncio.to_thread(forensic._load_tickets, out / "report.json")
+        released = {x.get("ticket_uid") for x in working}
+    config_file = run.tickets_dir / "forensic_config.json"
+    if config_file.exists():
+        try:
+            (out / "forensic_config.json").write_bytes(config_file.read_bytes())    # the plate settings the run was made with
+        except OSError:
+            pass
+    syncer = replay_run.Syncer(run.folder, keep_saved=True, saved=saved, released=released, states=states)
+    syncer.start()
+    shown_uids = set(released)
+
+    async def release(entry: dict) -> None:
+        ticket = copy.deepcopy(entry["ticket"])
+        uid = ticket.get("ticket_uid")
+        if uid in shown_uids:
+            return
+        shown_uids.add(uid)
+        released.add(uid)
+        syncer.busy = True                                         # (the saving waits while a ticket is put back)
+        try:
+            await asyncio.to_thread(replay_run.restore_photos, run.folder, ticket, EVIDENCE_DIR)
+            plate = ticket.get("plate_text", "unidentified")
+            owner = await forensic.get_user_by_plate(plate) if plate not in forensic._UNREAD else None
+            user_id = forensic._owner_id(plate, owner) if plate not in forensic._UNREAD else forensic.LIVE_PENDING_USER
+            async with forensic._report_lock:
+                report_path = out / "report.json"
+                tickets = await asyncio.to_thread(forensic._load_tickets, report_path)
+                if any(x.get("ticket_uid") == uid for x in tickets):
+                    return
+                ticket["db_ids"] = await forensic._save_rows(forensic.LIVE_TASK, ticket, ticket.get("violations", []), user_id, plate,
+                                                              add_violation, source="live")
+                tickets.append(ticket)
+                await asyncio.to_thread(forensic._write_report, report_path, tickets)
+                task = forensic.forensic_tasks.get(forensic.LIVE_TASK)
+                if task is not None:
+                    task["tickets"] = tickets
+            await replay_run.restore_states(ticket, states)
+        except Exception as exc:
+            print(f"[Stream] Replay: a ticket could not be shown: {exc!r}")
+        finally:
+            syncer.busy = False
+
+    state = {"pos": min(max(0.0, start_s), run.duration), "paused": False, "seek": True}
+    clock = {"wall": time.perf_counter(), "pos": state["pos"]}      # where the video is = pos + the time since wall (one clock, no drift)
+
+    def reanchor() -> None:
+        clock["wall"], clock["pos"] = time.perf_counter(), state["pos"]
+
+    def now_pos() -> float:
+        return min(run.duration, clock["pos"] + (time.perf_counter() - clock["wall"]))
+
+    def info() -> dict:
+        pos = state["pos"]
+        return {"state": "playing", "percent": 1.0, "ahead_s": 0.0, "speed": 1.0, "need_s": 0.0, "live": False,
+                "paused": state["paused"], "first_s": 0.0, "play_s": round(pos, 2), "proc_s": round(run.duration, 2),
+                "video_s": round(run.duration, 2), "pos_s": round(pos, 2), "replay": True, "pauses": run.pauses}
+
+    async def control() -> None:
+        while True:
+            try:
+                text = await websocket.receive_text()
+            except Exception:
+                return
+            try:
+                msg = json.loads(text)
+                cmd = msg.get("cmd")
+                if cmd == "pause":
+                    if not state["paused"]:
+                        state["pos"] = now_pos()
+                    state["paused"] = True
+                elif cmd == "play":
+                    if state["pos"] >= run.duration - 0.05:
+                        state["pos"] = 0.0                         # at the end: play again from the start (the tickets stay)
+                        state["seek"] = True
+                    state["paused"] = False
+                    reanchor()
+                elif cmd == "seek":
+                    state["pos"] = max(0.0, min(float(msg.get("t", 0.0)), run.duration))
+                    state["seek"] = True
+                    reanchor()
+            except Exception:
+                continue
+
+    def load_frame(i: int):
+        return run.row(i), run.picture_b64(i)
+
+    async def sleep_until(deadline: float) -> None:
+        """Wait for `deadline` (perf_counter) at 1 ms precision: the event loop's own sleep is 15 ms on Windows, which makes a 30 fps video judder."""
+        wait = min(deadline - time.perf_counter(), 0.05)             # (at most 50 ms: a pause or a seek is heard at once)
+        if wait > 0.002:
+            await loop.run_in_executor(None, time.sleep, wait)
+
+    # Where the real monitoring goes on after the saved part (Save and pause was pressed there): the end of this replay hands over to it.
+    handover = run.handover_pos()
+    control_task = asyncio.create_task(control())
+    shown = -1
+    prefetch: tuple | None = None                                    # (index, future): the next picture is read while this one is shown
+    last_note = 0.0
+    n = len(run.times)
+    try:
+        while _current_ws_id == my_ws_id:
+            if state["paused"]:
+                pos = state["pos"]
+            else:
+                pos = now_pos()
+                state["pos"] = pos
+                if pos >= run.duration:
+                    state["paused"] = True                         # the end: the last picture stays, the timeline still works
+                    state["seek"] = True
+                    if handover is not None:
+                        for entry in run.entries:
+                            await release(entry)                   # every ticket of the saved part is shown before the backend takes over
+                        return handover
+            for entry in run.entries:
+                if entry["at"] <= pos:
+                    await release(entry)
+            due = run.index_at(pos)
+            i = due
+            if not state["seek"] and shown >= 0 and shown < due <= shown + 3:
+                i = shown + 1                                      # a little behind: every picture is shown, none is skipped
+            if i != shown or state["seek"]:
+                state["seek"] = False
+                if prefetch is not None and prefetch[0] == i:
+                    row, picture = await prefetch[1]
+                else:
+                    row, picture = await loop.run_in_executor(None, load_frame, i)
+                prefetch = None
+                shown = i
+                try:
+                    road_status = road.status()
+                except Exception:
+                    road_status = {}
+                await websocket.send_json({
+                    "type": "frame", "transport": "jpeg", "hls_url": None,
+                    "frame_width": int(row.get("w") or w), "frame_height": int(row.get("h") or h), "mock": False,
+                    "frame_base64": picture, "detections": row.get("detections") or [], "boxes": row.get("boxes") or [],
+                    "camera": camera, "road": road_status, "road_zones": [], "flow": None, "buffer": info(), "replay": True,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                })
+                last_note = time.monotonic()
+                if not state["paused"] and i + 1 < n:
+                    prefetch = (i + 1, loop.run_in_executor(None, load_frame, i + 1))
+                continue
+            if time.monotonic() - last_note >= 0.5:
+                last_note = time.monotonic()
+                await websocket.send_json({"type": "buffer", **info()})   # paused: the timeline is still told where things are
+            if state["paused"] or shown + 1 >= n:
+                await asyncio.sleep(0.05)
+            else:
+                await sleep_until(clock["wall"] + (run.times[shown + 1] - clock["pos"]))     # the next picture is due at its own time
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        control_task.cancel()
+        await syncer.stop()                                        # the tickets are saved into the run folder one last time
+        if _current_ws_id == my_ws_id:
+            print("[Stream] Replay closed")
+    return None
+
+
 async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     global _current_ws_id, _stream_generation, _active_source, _latest_picture, _latest_picture_at, _last_size
     import uuid
@@ -605,6 +987,45 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     START.continue_or_begin("connect")                         # (the Apply that just happened, or a start of its own)
     START.mark("feed connected")
     start_loop = asyncio.get_running_loop()
+
+    # Replay: a saved run was opened as the source -> play it (no models are needed)
+    from engine import replay_run
+    replay_folder = replay_run.active()
+    if replay_folder is not None:
+        replay = None
+        try:
+            replay = await asyncio.to_thread(replay_run.Run, replay_folder)
+        except Exception as exc:
+            print(f"[Stream] The saved run could not be opened: {exc!r}")
+            replay_run.deactivate()
+        if replay is not None:
+            goes_on = await _replay_loop(websocket, replay, my_ws_id, start_s)
+            if goes_on is None:
+                return
+            # The saved part is over and it was paused there: the real monitoring goes on from that place, in the same run folder.
+            try:
+                from routers import settings as settings_router
+                await settings_router.apply_session(replay.folder, restore_tickets=False)    # (its tickets are on screen: the replay showed them)
+            except Exception as exc:
+                print(f"[Stream] The monitoring could not go on after the replay: {exc!r}")
+                return
+            start_s = goes_on
+            my_gen = _stream_generation                            # (the source was applied again: this loop is the one that goes on)
+            print(f"[Stream] Replay done: the monitoring goes on at {start_s:.1f} s")
+
+    # Demo replay: the Demo switch is on and this video file has a recorded run -> play it (no models are needed)
+    from engine import demo_replay
+    if demo_replay.is_on():
+        demo_dir = demo_replay.find(VIDEO_SOURCE)
+        demo = None
+        if demo_dir is not None:
+            try:
+                demo = await asyncio.to_thread(demo_replay.Demo, demo_dir)
+            except Exception as exc:
+                print(f"[Stream] The demo of this video could not be loaded: {exc!r}")
+        if demo is not None:
+            await _demo_loop(websocket, demo, my_ws_id, start_s)
+            return
 
     class DashboardGone(Exception):
         pass
@@ -649,6 +1070,11 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     START.mark("source open")
     _active_source = source
     source_fps = source.source_fps
+    try:
+        pipeline.stabilizer.set_fps(source_fps)               # the hold is told in seconds, the stabilizer counts pictures
+        pipeline.stabilizer.reset()                           # a new feed: no track of the old one
+    except Exception:
+        pass
     # The road learner watches the camera itself (every picture, from the reader thread), so it keeps its pace when the
     # detector is slow. A file has no reader thread: the loop below feeds it.
     source.tap = road.feed if source.live else None
@@ -777,7 +1203,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
             playout = Playout(live=True, start_s=PLAYOUT_FILE_DELAY_S, max_s=PLAYOUT_MAX_S, keep_all=True)
         else:
             gap_s = PLAYOUT_LIVE_START_S if source.live else PLAYOUT_START_S       # (start_s stays where on the video this run began)
-            playout = Playout(live=source.live, start_s=gap_s, max_s=PLAYOUT_MAX_S, history_s=REPLAY_S, hold_max_s=REPLAY_S)
+            keep_s = live_run.SAVED_REPLAY_S if live_run.will_save() else REPLAY_S      # a saved run can be gone back over for longer
+            playout = Playout(live=source.live, start_s=gap_s, max_s=PLAYOUT_MAX_S, history_s=keep_s, hold_max_s=keep_s)
         _playout_info.clear()
     print(f"[Stream] Playback buffer: {'on' if playout is not None else 'off'}{' (video file played continuously)' if continuous else ''}")
     # The pictures of this run go to disk as they are finished (engine/live_run.py): the screen may be far behind the backend (the enforcer
@@ -787,10 +1214,15 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     run_t0: list = [None]                # video time of the first finished picture: the timeline counts from there
     feed_started = time.monotonic()      # the video's own clock for the timeline: seconds since this run began
     control_task = None
+    run_syncer = None
     if playout is not None and not continuous:
         run = live_run.start()
         if run is not None:
             playout.on_drop = lambda payload: run.drop(payload.get("file"))
+            if run.keep_all:
+                run.set_meta(source=str(mask_url(str(VIDEO_SOURCE))))
+                run_syncer = replay_run.Syncer(run.folder, since=None if run.resumed else time.time() - 5)         # the tickets of a saved run are kept in its folder (tickets/)
+                run_syncer.start()
 
     def boxes_of(results: list):
         """(the detections for the dashboard, the Forensic Analyzer's box specs) of the results of one picture."""
@@ -836,17 +1268,26 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         if PICTURE_MODE != "relay":
             # ── synced: the picture rides in the same message as the boxes ──
             picture = await (encoding if encoding is not None else loop.run_in_executor(None, _picture_b64_timed, picture_frame, pipeline, last_yolo_results))
+            write = None
             if run is not None and picture:
                 preview["b64"] = picture
                 try:
-                    file = await loop.run_in_executor(None, run.store, picture)        # on disk: the picture leaves the memory
-                    picture = None
+                    file = run.reserve()                                                # its name now; the write runs beside the loop
+                    write = loop.run_in_executor(None, run.write, file, picture)
                 except Exception:
-                    file = None                                                         # the disk failed: the picture stays in memory, as before
+                    file, write = None, None                                            # the disk failed: the picture stays in memory, as before
                 if run.keep_all:
                     run.note(file, t, w, h, display_results, box_specs)
-        return {"t": t, "w": w, "h": h, "picture": picture, "file": file, "frame": picture_frame if PICTURE_MODE == "relay" else None,
-                "detections": display_results, "boxes": box_specs}
+        packet = {"t": t, "w": w, "h": h, "picture": picture, "file": file, "frame": picture_frame if PICTURE_MODE == "relay" else None,
+                  "detections": display_results, "boxes": box_specs}
+        if write is not None:
+            def written(done, packet=packet):
+                if done.exception() is None:
+                    packet["picture"] = None                                            # on disk: the picture leaves the memory
+                else:
+                    packet["file"] = None                                               # the write failed: the picture stays in memory
+            write.add_done_callback(written)
+        return packet
 
     def make_packet(picture_frame, encoding, t: float) -> dict:
         """Continuous playback: a picture goes into the buffer the moment it is read, with the boxes of the newest finished picture (its own
@@ -1092,7 +1533,10 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 continue
             if (PIPELINE_OVERLAP or continuous) and not source.live:
                 ahead = loop.run_in_executor(None, fetch)          # the next picture is decoded while this one is judged and sent
-            frame_time = item.captured_at if (source.live or continuous) else None   # live: when the camera delivered it (continuous file: when it was read)
+            # live: when the camera delivered it (continuous file: when it was read). A file played with the buffer: its time ON THE VIDEO (what the
+            # Forensic analyzer uses). With the wall clock a vehicle's speed was measured per second of WORK, so a backend slower than the video
+            # (the normal case with the heavy rules) made every vehicle look as if it stood still: no rule that needs movement could fire.
+            frame_time = item.captured_at if (source.live or continuous) else start_s + t_pic
             if start_time - _latest_picture_at >= 1.0:               # for "Set up violations": a copy, as the frame is worked on below
                 _latest_picture, _latest_picture_at = item.image.copy(), start_time
 
@@ -1176,6 +1620,8 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
             worker_task.cancel()
         if control_task is not None:
             control_task.cancel()
+        if run_syncer is not None:
+            await run_syncer.stop()
         if run is not None:
             run.close({"source": str(mask_url(str(VIDEO_SOURCE)))})
         _playout_info.clear()

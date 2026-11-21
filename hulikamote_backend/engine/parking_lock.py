@@ -38,6 +38,8 @@ MAX_HIST_DISTANCE = 0.55     # its colours against the lock's (0 = the same colo
 SAME_BOX_IOU = 0.5           # the owner of a lock is in view: only a box on top of its box is the same vehicle (a second ledger on it)
 GONE_PENDING_S = 40.0        # a lock nobody has stood on for this long is let go (the vehicle left) ...
 GONE_TICKETED_S = 120.0      # ... a lock that made a ticket is kept longer, so the vehicle that comes back under a new number is known
+GHOST_AFTER_S = 0.3          # the locked box is drawn on its own when nothing has stood on the spot for this long (the detector dropped it) ...
+GHOST_MAX_S = 25.0           # ... and for at most this long (the ledger of a lost stopped vehicle is closed after the same time)
 
 
 @dataclass
@@ -53,6 +55,7 @@ class Lock:
     since: float                        # when the vehicle came to rest here
     last_t: float                       # when a vehicle was last seen on the spot
     ticketed: bool = False
+    limit: float = 0.0                  # the zone's time limit, for the stopwatch chip of the locked box
 
 
 def _iou(a, b) -> float:
@@ -110,6 +113,18 @@ class ParkingLocks:
     # ── housekeeping ──
     def purge(self, now: float) -> None:
         self.locks = [k for k in self.locks if now - k.last_t <= (GONE_TICKETED_S if k.ticketed else GONE_PENDING_S)]
+
+    def ghosts(self, ledgers: dict, now: float) -> list[tuple]:
+        """[(lock, owner ledger)] of the locks whose vehicle the detector has dropped for now: the owner is still known (the tracker may find
+        it again) but nothing stands on the spot. The dashboard keeps drawing the locked box for them, so the box does not blink away."""
+        out = []
+        for k in self.locks:
+            owner = ledgers.get(k.ledger_id)
+            if owner is None or not owner.history or owner.missed_frames < 1:
+                continue
+            if GHOST_AFTER_S <= now - k.last_t <= GHOST_MAX_S:
+                out.append((k, owner))
+        return out
 
     def release(self, ledger) -> None:
         """The ledger moved (or left the zone): the locks it owns are let go. Its ticket, if it got one, stays with the ledger."""

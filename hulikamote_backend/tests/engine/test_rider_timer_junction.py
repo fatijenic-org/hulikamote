@@ -52,19 +52,21 @@ def test_the_parking_timer_runs_on_the_box_and_turns_red_over_the_limit():
     mgr.ledgers = {1: ledger}
     rule, zones = IllegalParking(), [{"polygon": [[0, 0], [400, 0], [400, 400], [0, 400]], "time_limit": 2.0}]
     texts = []
+    parked = lambda chips: [c for c in chips if c[0].startswith("PARKED")]          # (the "BLINK: ..." chip sits beside it)
     for i in range(0, 61):
         t = i * 0.1
         ledger.update_position([100, 100, 80, 60], t)
         rule.evaluate(mgr, 1, zones)
-        texts.append(marks.current_timers(ledger))
+        texts.append(parked(marks.current_timers(ledger)))
     assert texts[10][0][0].startswith("PARKED 0:0") and texts[10][0][1] == marks.AMBER
     assert texts[-1][0][1] == marks.RED and "/ 0:02" in texts[-1][0][0]
     assert "illegal_parking" in ledger.violations
     frame = np.zeros((300, 400, 3), np.uint8)
     marks.draw_marks(frame, ledger, [100, 100, 80, 60])
     assert frame.any()                                              # the chip is on the picture, with no mark or label needed
-    spec = marks.mark_specs(ledger, [100, 100, 80, 60])[0]
-    assert spec["timer"].startswith("PARKED") and spec["box"] == [100, 100, 80, 60]
+    spec = next(s for s in marks.mark_specs(ledger, [100, 100, 80, 60]) if s.get("timer", "").startswith("PARKED"))
+    assert spec["box"] == [100, 100, 80, 60]
+    assert any(s.get("timer", "").startswith("BLINK") for s in marks.mark_specs(ledger, [100, 100, 80, 60]))   # and the blink chip says what was read
     ledger.update_position([300, 100, 80, 60], 7.0)                 # it drives off
     rule.evaluate(mgr, 1, zones)
     assert marks.current_timers(ledger) == []
