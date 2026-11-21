@@ -136,7 +136,7 @@ class LaptopFinder {
 
   /// Find the laptop and set the phone up: the cloud when the laptop has it ready and this phone can reach it, else the laptop
   /// on this Wi-Fi. Saves what it learned in [AppConfig]. [checkCloud] is replaceable for tests.
-  Future<ConnectResult> connect({Future<void> Function(String url, String anonKey)? checkCloud}) async {
+  Future<ConnectResult> connect({Future<void> Function(String url, String anonKey)? checkCloud, bool preferCloud = true}) async {
     final last = AppConfig.address.split(':').first;
     final info = await find(lastKnownHost: last);
     if (info == null) {
@@ -147,7 +147,7 @@ class LaptopFinder {
       );
     }
     await AppConfig.save(info.address);
-    if (info.cloudReady && await AppConfig.saveCloud(info.cloudUrl, info.cloudAnonKey)) {
+    if (preferCloud && info.cloudReady && await AppConfig.saveCloud(info.cloudUrl, info.cloudAnonKey)) {
       try {
         await (checkCloud ?? CloudPortalApi.checkProject)(info.cloudUrl, info.cloudAnonKey);
         await AppConfig.setMode('online');
@@ -159,7 +159,7 @@ class LaptopFinder {
     await AppConfig.setMode('lan');
     return ConnectResult(
       ok: true,
-      message: info.cloudReady
+      message: info.cloudReady && preferCloud
           ? 'Connected to the laptop on this Wi-Fi (no internet on this phone, so not through the cloud).'
           : 'Connected to the laptop on this Wi-Fi. No internet needed.',
     );

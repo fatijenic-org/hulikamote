@@ -60,7 +60,7 @@ class _DevToolsScreenState extends State<DevToolsScreen> {
   Future<void> _connect() async {
     final address = AppConfig.normalize(_address.text);
     if (address.isEmpty) {
-      setState(() => _error = 'Type the laptop\'s address, like 192.168.68.109');
+      setState(() => _error = 'Type the laptop\'s address, like 192.168.1.20');
       return;
     }
     await AppConfig.save(address);
@@ -143,7 +143,7 @@ class _DevToolsScreenState extends State<DevToolsScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('These tools talk to the laptop even when the app is online. Start the backend with tools\\run_demo_backend.bat.', style: context.text.bodyMedium?.copyWith(color: context.muted)),
                   const SizedBox(height: Sp.x3),
-                  AppField(controller: _address, label: 'Laptop address', helper: 'For example 192.168.68.109', keyboard: TextInputType.url, action: TextInputAction.done, onSubmitted: (_) => _connect()),
+                  AppField(controller: _address, label: 'Laptop address', helper: 'For example 192.168.1.20', keyboard: TextInputType.url, action: TextInputAction.done, onSubmitted: (_) => _connect()),
                   const SizedBox(height: Sp.x3),
                   AppButton(label: _accounts == null ? 'Connect' : 'Reconnect', kind: AppButtonKind.secondary, onPressed: _connect, loading: _busy),
                 ]),

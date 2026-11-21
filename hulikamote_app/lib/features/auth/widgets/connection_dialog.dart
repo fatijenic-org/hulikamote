@@ -13,6 +13,7 @@ Future<bool> showConnectionDialog(
   PortalApi Function(String baseUrl)? lanApi,
   Future<void> Function(String url, String anonKey)? checkCloud,
   Future<ConnectResult> Function()? autoConnect,
+  Future<ConnectResult> Function()? autoConnectLocal,
 }) async {
   final saved = await showDialog<bool>(
     context: context,
@@ -20,17 +21,19 @@ Future<bool> showConnectionDialog(
       lanApi: lanApi ?? (url) => PortalApi(baseUrl: () => url),
       checkCloud: checkCloud ?? CloudPortalApi.checkProject,
       autoConnect: autoConnect ?? () => LaptopFinder().connect(),
+      autoConnectLocal: autoConnectLocal ?? () => LaptopFinder().connect(preferCloud: false),
     ),
   );
   return saved ?? false;
 }
 
 class _ConnectionDialog extends StatefulWidget {
-  const _ConnectionDialog({required this.lanApi, required this.checkCloud, required this.autoConnect});
+  const _ConnectionDialog({required this.lanApi, required this.checkCloud, required this.autoConnect, required this.autoConnectLocal});
 
   final PortalApi Function(String baseUrl) lanApi;
   final Future<void> Function(String url, String anonKey) checkCloud;
   final Future<ConnectResult> Function() autoConnect;
+  final Future<ConnectResult> Function() autoConnectLocal;
 
   @override
   State<_ConnectionDialog> createState() => _ConnectionDialogState();
@@ -69,6 +72,32 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         Navigator.of(context).pop(true);
       } else {
         setState(() => _found = result.message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _finding = false;
+        });
+      }
+    }
+  }
+
+  /// Same Wi-Fi tab: look for the laptop on this network and use it, never the cloud. The address is found, not typed (it changes
+  /// whenever the router gives the laptop a new one).
+  Future<void> _findLocal() async {
+    setState(() {
+      _busy = true;
+      _finding = true;
+      _error = null;
+    });
+    try {
+      final result = await widget.autoConnectLocal();
+      if (!mounted) return;
+      if (result.ok) {
+        Navigator.of(context).pop(true);
+      } else {
+        setState(() => _error = result.message);
       }
     } finally {
       if (mounted) {
@@ -122,7 +151,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
         await AppConfig.setMode('online');
       } else {
         final address = AppConfig.normalize(_address.text);
-        if (address.isEmpty) return _fail('Type the laptop\'s address, like 192.168.68.109');
+        if (address.isEmpty) return _fail('Type the laptop\'s address, like 192.168.1.20 (the dashboard shows it), or press "Find the laptop for me".');
         await widget.lanApi('http://$address').ping();
         await AppConfig.save(address);
         await AppConfig.setMode('lan');
@@ -195,13 +224,19 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
               decoration: InputDecoration(labelText: 'Anon key', border: const OutlineInputBorder(), errorText: _error, errorMaxLines: 4),
             ),
           ] else ...[
-            const Text('No internet needed. Put the phone on the same Wi-Fi (or the laptop\'s hotspot). The address is on the dashboard, in the Motorists tab.'),
+            const Text('No internet needed. Put the phone on the same Wi-Fi (or the laptop\'s hotspot). The dashboard (Motorists tab) shows the address; or let the phone find it.'),
             const SizedBox(height: 12),
             TextField(
               controller: _address,
               keyboardType: TextInputType.url,
               onSubmitted: (_) => _save(),
-              decoration: InputDecoration(labelText: 'Laptop address', hintText: '192.168.68.109', border: const OutlineInputBorder(), errorText: _error, errorMaxLines: 4),
+              decoration: InputDecoration(labelText: 'Laptop address', hintText: '192.168.1.20', border: const OutlineInputBorder(), errorText: _error, errorMaxLines: 4),
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              onPressed: _busy ? null : _findLocal,
+              icon: _finding ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.wifi_find, size: 18),
+              label: Text(_finding ? 'Looking...' : 'Find the laptop for me'),
             ),
           ],
         ]),
