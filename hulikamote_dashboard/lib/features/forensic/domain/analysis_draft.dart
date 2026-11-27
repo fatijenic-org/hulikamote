@@ -17,6 +17,7 @@ class PipelineSettings {
   int evidenceGap = 5; // one evidence photo every N frames of a flagged car
   bool keepInputVideo = false;
   bool blurPrivacy = true; // TEMPORARY switch: off only for the team's own training videos (saved photos then show faces)
+  bool judgeIncomingTwoWheelers = false; // DEMO switch: on judges motorcycles / tricycles / kuliglig that come toward the camera (no plate shows from the front)
 
   /// When the video started, typed by the operator ('' = find it in the video). Also the way to test a ban hour.
   String videoStart = '';
@@ -322,6 +323,7 @@ class AnalysisDraft extends ChangeNotifier {
       'evidence_gap': settings.evidenceGap,
       'keep_input_video': settings.keepInputVideo,
       'blur_privacy': settings.blurPrivacy,
+      'judge_incoming_two_wheelers': settings.judgeIncomingTwoWheelers,
       'flow_mode': learnsFlow ? 'auto' : 'zones',
       if (settings.videoStart.trim().isNotEmpty) 'video_start': settings.videoStart.trim(),
       if (videoName != null) 'video_name': videoName,

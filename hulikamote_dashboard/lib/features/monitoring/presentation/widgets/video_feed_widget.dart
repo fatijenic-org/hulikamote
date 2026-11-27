@@ -9,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../domain/models/detection.dart';
 import '../../../forensic/presentation/widgets/replay_boxes.dart';
 import 'processing_scan.dart';
+import '../../../forensic/domain/violation_catalog.dart';
 import 'road_arrow.dart';
 import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
 
@@ -275,6 +276,33 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
     _zoom.value = Matrix4.translationValues(c.dx, c.dy, 0) * Matrix4.diagonal3Values(k, k, 1) * Matrix4.translationValues(-c.dx, -c.dy, 0) * _zoom.value;
   }
 
+  /// "V7 Illegal parking": what the numbers on the boxes in the picture now mean (only those that are on screen).
+  Widget _legend() {
+    final seen = <ViolationInfo>{};
+    for (final b in _specs ?? const <BoxSpec>[]) {
+      for (final l in b.lines) {
+        final v = ViolationCatalog.byBoxLine(l);
+        if (v != null) seen.add(v);
+      }
+    }
+    if (seen.isEmpty) return const SizedBox.shrink();
+    final list = seen.toList()..sort((a, b) => ViolationCatalog.codeOf(a).compareTo(ViolationCatalog.codeOf(b)));
+    return IgnorePointer(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.7), borderRadius: BorderRadius.circular(6)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final v in list)
+              Text('V${ViolationCatalog.codeOf(v)}  ${v.label}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _zoomBar() {
     return ListenableBuilder(
       listenable: _zoom,
@@ -381,6 +409,7 @@ class _VideoFeedWidgetState extends State<VideoFeedWidget> {
                   ),
 
                   Positioned(bottom: 8, right: 8, child: _zoomBar()),
+                  Positioned(bottom: 8, left: 8, child: _legend()),
 
                   // The playback buffer: "Processing..." while it fills (also when it ran dry), and how late / how slow the picture is.
                   if (_buffer?['state'] == 'filling') const Positioned.fill(child: ProcessingScan(overPicture: true)),
@@ -478,6 +507,22 @@ class BoundingBoxPainter extends CustomPainter {
     this.specs,
     this.zoom,
   }) : super(repaint: zoom);
+
+  /// The boxes with every violation name cut to its number ("ILLEGAL PARKING" -> "V7"), so a label stays short. The legend on the
+  /// picture says what each number is; tickets keep the full name.
+  static List<BoxSpec> coded(List<BoxSpec> specs) => [
+    for (final b in specs)
+      if (b.lines.isEmpty)
+        b
+      else
+        BoxSpec(
+          box: b.box, color: b.color, plate: b.plate, note: b.note, noteAt: b.noteAt, timer: b.timer,
+          lines: [
+            for (final l in b.lines)
+              if (ViolationCatalog.byBoxLine(l) case final v?) 'V${ViolationCatalog.codeOf(v)}' else l,
+          ],
+        ),
+  ];
 
   /// The learned traffic flow: an arrow per block (teal; amber while the demo reversal is on, like the saved photos), with a dark
   /// edge so it shows on any road. Hidden by the Live Monitor's "Flow arrows" switch.
@@ -596,7 +641,7 @@ class BoundingBoxPainter extends CustomPainter {
     if (shared != null) {
       canvas.save();
       canvas.scale(scaleX, scaleY);
-      ReplayBoxesPainter.paintSpecs(canvas, shared, streamWidth, streamHeight, 1 / (scaleX * (zoom?.value.getMaxScaleOnAxis() ?? 1.0)));
+      ReplayBoxesPainter.paintSpecs(canvas, coded(shared), streamWidth, streamHeight, 1 / (scaleX * (zoom?.value.getMaxScaleOnAxis() ?? 1.0)));
       canvas.restore();
       if (flow?.reversed == true) _paintReversedBanner(canvas);
       return;

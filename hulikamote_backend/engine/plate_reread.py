@@ -15,6 +15,32 @@ CROP_MARGIN = 0.10            # a little room around the plate box, like the vid
 MIN_BOX_PIXELS = 8            # a drawn box smaller than this is a slip of the mouse
 
 
+LOWER_FROM = 0.40         # a plate sits in the lower part of its vehicle: its centre must be below this share of the vehicle's height
+SIDE_MARGIN = 0.10        # a little room left and right of the vehicle box
+
+
+def _own_plates(plates: list, image, meta: dict, key: str) -> list:
+    """The plates (best first) that sit on THIS photo's vehicle and in its lower part (the smart plate search of the forensic pass looks through
+    the vehicle's box too). In the vehicle's own crop (`car_crop`) the vehicle is the whole picture; in the wider clean picture it is the box
+    `bbox` moved by `clean_box`. Without that information the clean picture has nothing to judge by and every plate stays."""
+    height, width = image.shape[:2]
+    if key in ("car_crop", "car_crop_hi"):
+        vx, vy, vw, vh = 0, 0, width, height
+    else:
+        box, origin = meta.get("bbox"), meta.get("clean_box")
+        if not box or not origin:
+            return plates
+        scale = float(meta.get("hi_scale") or 1.0) if key == "clean_hi" else 1.0      # the sharp crops have `hi_scale` times more pixels
+        vx, vy, vw, vh = (box[0] - origin[0]) * scale, (box[1] - origin[1]) * scale, box[2] * scale, box[3] * scale
+    own = []
+    for plate in plates:
+        x, y, w, h = plate["box"]
+        cx, cy = x + w / 2, y + h / 2
+        if vx - vw * SIDE_MARGIN <= cx <= vx + vw * (1 + SIDE_MARGIN) and vy + vh * LOWER_FROM <= cy <= vy + vh * 1.1:
+            own.append(plate)
+    return own
+
+
 def reread(ticket: dict, files: list[str], *, find_plates, read_plate, load_image, save_image, plate_format: str) -> tuple[dict, dict]:
     """
     Look for the plate again in the clean vehicle picture of each chosen frame (`files`; empty = every frame).
@@ -38,12 +64,21 @@ def reread(ticket: dict, files: list[str], *, find_plates, read_plate, load_imag
     paths = out.setdefault("plate_crop_paths", [])
 
     for meta in metas:
-        source = meta.get("clean") or meta.get("car_crop")
-        image = load_image(source) if source else None
+        # The vehicle's own crop first (nothing else is in it but what overlaps the box), then the wider clean picture - in which only a
+        # plate that sits on THIS vehicle counts: that picture also shows the cars beside and behind it, and their plates are not this ticket's.
+        image, plates = None, []
+        for key in ("car_crop_hi", "clean_hi", "car_crop", "clean"):          # the sharp crops (cut from the original picture) first, when there are any
+            source = meta.get(key)
+            candidate = load_image(source) if source else None
+            if candidate is None:
+                continue
+            image = candidate
+            plates = _own_plates(find_plates(candidate), candidate, meta, key)
+            if plates:
+                break
         if image is None:
             summary["no_picture"] += 1
             continue
-        plates = find_plates(image)
         if not plates:
             summary["no_plate"] += 1
             continue

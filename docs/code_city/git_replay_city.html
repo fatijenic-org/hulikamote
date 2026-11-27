@@ -1,0 +1,578 @@
+<title>Git Replay City</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* layout: a header, the 3D city as the stage with a commit card and legend on it, and a dock with the timeline under it. Same look as Code City: chip floors, amber accent. */
+:root{
+  --bg:#0c121b; --surface:#131c28; --surface2:#1b2738; --line:#2a3b52; --fg:#e8eef7; --muted:#91a3bc;
+  --accent:#ffb62e; --accent-ink:#2a1b00; --good:#3ddc97; --bad:#ff5d6c; --info:#6df0ff;
+  --display:'Space Grotesk',system-ui,sans-serif; --body:'Inter',system-ui,sans-serif; color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --bg:#edf2f8; --surface:#ffffff; --surface2:#e4ebf4; --line:#cbd6e6; --fg:#111a27; --muted:#56698a;
+  --accent:#e08a00; --accent-ink:#ffffff; --good:#0f9d6b; --bad:#d6293e; --info:#0b8fb3; color-scheme:light; } }
+:root[data-theme="light"]{
+  --bg:#edf2f8; --surface:#ffffff; --surface2:#e4ebf4; --line:#cbd6e6; --fg:#111a27; --muted:#56698a;
+  --accent:#e08a00; --accent-ink:#ffffff; --good:#0f9d6b; --bad:#d6293e; --info:#0b8fb3; color-scheme:light; }
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--body);overflow:hidden}
+#app{height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto}
+#bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line);background:var(--surface)}
+.brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+.brand b{font:700 17px var(--display)}
+.muted{color:var(--muted)}
+.grp{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.btn{font:600 13px var(--body);padding:8px 13px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--fg);cursor:pointer}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select{font:600 13px var(--body);padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);color:var(--fg)}
+#stage{position:relative;min-height:0;overflow:hidden;background:var(--bg)}
+#cv{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#cv:active{cursor:grabbing}
+.ov{position:absolute;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+#card{left:10px;top:10px;width:min(360px,calc(100% - 20px));padding:10px 12px}
+#card .top{display:flex;gap:10px;justify-content:space-between;color:var(--muted);font-size:12px}
+#card .hash{font-family:ui-monospace,Consolas,monospace;color:var(--accent)}
+#card .msg{margin:4px 0 6px;font:600 14px/1.3 var(--display);overflow-wrap:anywhere}
+#card .meta{font-size:12px;color:var(--muted)}
+.good{color:var(--good)} .bad{color:var(--bad)}
+#legend{left:10px;bottom:10px;padding:6px 10px;font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;max-width:calc(100% - 20px)}
+#legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+#tip{pointer-events:none;padding:5px 9px;font-size:12px;max-width:340px;overflow-wrap:anywhere}
+#tip b{font-family:ui-monospace,Consolas,monospace;font-weight:500}
+#msgBox{left:50%;top:46%;transform:translate(-50%,-50%);padding:16px 18px;max-width:min(420px,calc(100% - 32px));text-align:center}
+#msgBox h2{margin:0 0 6px;font:700 16px var(--display)}
+#drop{inset:10px;border:2px dashed var(--accent);background:color-mix(in srgb,var(--bg) 80%,transparent);display:grid;place-items:center;font:700 18px var(--display);pointer-events:none}
+.pop{right:10px;top:10px;width:min(340px,calc(100% - 20px));max-height:calc(100% - 20px);overflow:auto;padding:12px 14px}
+.pop h2{margin:0 0 6px;font:700 15px var(--display)}
+.pop ol{margin:0 0 8px;padding-left:20px}
+.pop code{font-family:ui-monospace,Consolas,monospace;background:var(--surface2);padding:1px 5px;border-radius:5px;font-size:12px}
+.pop pre{margin:8px 0;padding:8px 10px;background:var(--surface2);border:1px solid var(--line);border-radius:8px;max-height:200px;overflow:auto;font:11.5px/1.45 ui-monospace,Consolas,monospace;user-select:all}
+.pop .row{display:flex;gap:6px;flex-wrap:wrap}
+.chips{display:flex;flex-direction:column;gap:2px;margin:6px 0}
+.chips label{display:flex;gap:8px;align-items:center;padding:3px 2px;cursor:pointer}
+.chips small{margin-left:auto;color:var(--muted)}
+#dock{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px 14px;align-items:center;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));border-top:1px solid var(--line);background:var(--surface)}
+.ctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sw{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:13px;cursor:pointer}
+#sparkwrap{position:relative;height:46px;min-width:0}
+#spark{width:100%;height:46px;display:block;border-radius:6px;background:var(--surface2)}
+#scrub{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.stats{display:flex;gap:6px 14px;flex-wrap:wrap;font-variant-numeric:tabular-nums;font-size:13px;color:var(--muted)}
+.stats b{color:var(--fg)}
+@media (max-width:760px){ #dock{grid-template-columns:minmax(0,1fr)} .grp{margin-left:0} }
+@media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto} }
+</style>
+
+<div id="app">
+  <header id="bar">
+    <div class="brand"><b>Git Replay City</b><span id="repoName" class="muted"></span></div>
+    <div class="grp">
+      <button id="btnOpen" class="btn">Open history file…</button>
+      <input id="file" type="file" accept=".json,application/json" hidden>
+      <button id="btnSample" class="btn">Sample: HULI-KAMOTE</button>
+      <button id="btnFolders" class="btn" hidden>Folders</button>
+      <button id="btnHelp" class="btn">Use my project</button>
+    </div>
+  </header>
+
+  <section id="stage">
+    <canvas id="cv" aria-label="3D city that grows as the git history plays"></canvas>
+    <div id="card" class="ov"><div class="top"><span class="hash" id="cHash"></span><span id="cDate"></span></div><div class="msg" id="cMsg"></div><div class="meta"><span id="cAuth"></span> · <span class="good" id="cAdd"></span> <span class="bad" id="cDel"></span> · <span id="cFiles"></span></div></div>
+    <div id="legend" class="ov"><span><i style="background:#3ddc97"></i>new file</span><span><i style="background:#ffb62e"></i>edit</span><span><i style="background:#ff5d6c"></i>removed</span><span><i style="background:#6df0ff"></i>renamed</span><span id="lpf"></span></div>
+    <div id="tip" class="ov" hidden></div>
+    <div id="msgBox" class="ov" hidden><h2 id="msgT"></h2><div id="msgB" class="muted"></div></div>
+    <div id="drop" class="ov" hidden>Drop the history file here</div>
+    <div id="folders" class="ov pop" hidden>
+      <h2>Folders in the city</h2>
+      <div class="muted">Huge folders (mostly data files) start switched off, so the code stays easy to see.</div>
+      <div class="chips" id="chips"></div>
+      <button class="btn" id="foldersClose">Close</button>
+    </div>
+    <div id="help" class="ov pop" hidden>
+      <h2>Replay your own project</h2>
+      <ol>
+        <li>Copy the script below into a file named <code>export_git_history.py</code>.</li>
+        <li>Open a terminal in your project and run <code>python export_git_history.py</code>. It writes <code>code_city_history.json</code>.</li>
+        <li>Click <b>Open history file…</b>, or drag that file onto the city.</li>
+      </ol>
+      <div class="muted">The script only reads git history. The page reads the file inside your browser and sends it nowhere.</div>
+      <pre id="exp">#!/usr/bin/env python3
+"""Export a git repo's history so the Git Replay City page can replay it.
+
+Usage:  python export_git_history.py [repo_folder] [output.json]
+Default: the current folder, written to code_city_history.json.
+Only needs Python 3 and git. It reads the history; it changes nothing."""
+import json, os, re, subprocess, sys
+
+repo = sys.argv[1] if len(sys.argv) &gt; 1 else '.'
+out = sys.argv[2] if len(sys.argv) &gt; 2 else 'code_city_history.json'
+SKIP = re.compile(r'(^|/)(node_modules|\.git|venv|\.venv|build|dist|\.dart_tool|__pycache__|\.idea|Pods)/|\.(lock|map)$|\.min\.js$|package-lock\.json$')
+
+
+def git(*a):
+    r = subprocess.run(['git', '-c', 'core.quotepath=false', '-C', repo] + list(a), capture_output=True, text=True, encoding='utf-8', errors='replace')
+    if r.returncode:
+        sys.exit(r.stderr.strip() or 'git failed')
+    return r.stdout
+
+
+def expand(p):
+    m = re.match(r'^(.*)\{(.*) =&gt; (.*)\}(.*)$', p)
+    if m:
+        a, b, c, d = m.groups()
+        return (a + b + d).replace('//', '/'), (a + c + d).replace('//', '/')
+    if ' =&gt; ' in p:
+        o, n = p.split(' =&gt; ', 1)
+        return o, n
+    return None, p
+
+
+raw = git('log', '--reverse', '--no-merges', '-M', '--numstat', '--summary', '--pretty=format:@@%h%x09%at%x09%an%x09%s')
+commits = []
+
+
+def finish(c):
+    if not c:
+        return
+    ent = []
+    for a, d, p in c['n']:
+        old, new = expand(p)
+        if a == '-' or SKIP.search(new):
+            continue
+        a, d = int(a), int(d)
+        if old is not None and not SKIP.search(old):
+            ent.append(['R', new, a, d, old])
+        elif new in c['c']:
+            ent.append(['A', new, a, d])
+        elif new in c['d']:
+            ent.append(['D', new, a, d])
+        else:
+            ent.append(['M', new, a, d])
+    if ent:
+        commits.append({'h': c['h'], 't': c['t'], 'a': c['a'], 'm': c['m'], 'f': ent})
+
+
+cur = None
+for line in raw.split('\n'):
+    if line.startswith('@@'):
+        finish(cur)
+        h, t, a, m = (line[2:].split('\t', 3) + ['', '', '', ''])[:4]
+        cur = {'h': h, 't': int(t or 0), 'a': a, 'm': m, 'n': [], 'c': set(), 'd': set()}
+    elif cur is not None:
+        mm = re.match(r'^(\d+|-)\t(\d+|-)\t(.+)$', line)
+        if mm:
+            cur['n'].append(mm.groups())
+        else:
+            s = line.strip()
+            if s.startswith('create mode'):
+                cur['c'].add(s.split(' ', 3)[3])
+            elif s.startswith('delete mode'):
+                cur['d'].add(s.split(' ', 3)[3])
+finish(cur)
+
+name = os.path.basename(os.path.abspath(repo))
+branch = git('rev-parse', '--abbrev-ref', 'HEAD').strip()
+with open(out, 'w', encoding='utf-8') as fh:
+    json.dump({'repo': name, 'branch': branch, 'commits': commits}, fh, separators=(',', ':'))
+print('Wrote %s: %d commits, %d bytes' % (out, len(commits), os.path.getsize(out)))
+</pre>
+      <div class="row"><button class="btn primary" id="btnCopy">Copy script</button><button class="btn" id="helpClose">Close</button></div>
+    </div>
+  </section>
+
+  <footer id="dock">
+    <div class="ctl">
+      <button class="btn" id="btnRestart" title="Back to the first commit" aria-label="Restart">⏮</button>
+      <button class="btn primary" id="btnPlay" style="min-width:84px">▶ Play</button>
+      <select id="rate" aria-label="Speed"><option value="0.5">0.5 commits/s</option><option value="1">1 commit/s</option><option value="2" selected>2 commits/s</option><option value="4">4 commits/s</option><option value="10">10 commits/s</option><option value="30">30 commits/s</option><option value="100">100 commits/s</option><option value="300">300 commits/s</option></select>
+      <label class="sw"><input type="checkbox" id="follow" checked> Follow the action</label>
+      <button class="btn" id="btnFit">Whole city</button>
+    </div>
+    <div id="sparkwrap"><canvas id="spark" aria-label="Lines of code over time"></canvas><input id="scrub" type="range" min="0" max="0" value="0" aria-label="Timeline"></div>
+    <div class="stats"><span>commit <b id="sCommit">0</b> / <b id="sTotal">0</b></span><span><b id="sFiles">0</b> files</span><span><b id="sLines">0</b> lines</span><span><b id="sAuth">0</b> authors</span></div>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+const $ = s => document.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const isLight = () => { const t = document.documentElement.dataset.theme; return t ? t === 'light' : matchMedia('(prefers-color-scheme: light)').matches; };
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const FLOOR_H = 0.34, CELL = 3.25, FW = 1.5, MAXF = 24;
+const KIND = { A: 1, M: 2, D: 3, R: 4 };
+const KCOL = [null, new THREE.Color(0x3ddc97), new THREE.Color(0xffb62e), new THREE.Color(0xff5d6c), new THREE.Color(0x6df0ff)];
+const topOf = p => p.indexOf('/') < 0 ? '(root files)' : p.split('/')[0];
+const hashStr = s => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+const fmt = n => n.toLocaleString();
+
+/* ---------- renderer and scene ---------- */
+const stage = $('#stage'), canvas = $('#cv');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(42, 1, 0.5, 3000);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x4a5a70, 0.95));
+const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-6, 12, 9); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: 0x1b2738 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.02; scene.add(ground);
+
+/* every floor is a tiny microchip, drawn as a texture, like in Code City */
+function makeChipTexture() {
+  const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d');
+  x.fillStyle = '#ececec'; x.fillRect(0, 0, S, S); x.fillStyle = '#8f959b';
+  for (let i = 0; i < 16; i++) { const p = 11 + i * 15; x.fillRect(p, 3, 8, 15); x.fillRect(p, S - 18, 8, 15); x.fillRect(3, p, 15, 8); x.fillRect(S - 18, p, 15, 8); }
+  x.strokeStyle = '#b4b9be'; x.lineWidth = 2;
+  for (let i = 0; i < 16; i++) {
+    const p = 15 + i * 15, q = 72 + (i % 8) * 16;
+    x.beginPath(); x.moveTo(p, 18); x.lineTo(p, 44); x.lineTo(q, 66); x.stroke(); x.beginPath(); x.moveTo(p, S - 18); x.lineTo(p, S - 44); x.lineTo(q, S - 66); x.stroke();
+    x.beginPath(); x.moveTo(18, p); x.lineTo(44, p); x.lineTo(66, q); x.stroke(); x.beginPath(); x.moveTo(S - 18, p); x.lineTo(S - 44, p); x.lineTo(S - 66, q); x.stroke();
+  }
+  x.fillStyle = '#5a6068'; x.fillRect(64, 64, 128, 128);
+  x.fillStyle = '#7a8087'; for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) x.fillRect(72 + i * 14, 72 + j * 14, 12, 12);
+  x.fillStyle = '#d9dde0'; x.fillRect(96, 96, 64, 64); x.fillStyle = '#5a6068'; x.fillRect(104, 118, 48, 4); x.fillRect(104, 128, 36, 4); x.fillRect(104, 138, 42, 4);
+  x.beginPath(); x.arc(28, 28, 6, 0, Math.PI * 2); x.fill();
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 4; return t;
+}
+const floorGeo = new THREE.BoxGeometry(FW, FLOOR_H * 0.9, FW), chipMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: makeChipTexture() });
+function makeLabel(text, h) {
+  const fs = 40, c = document.createElement('canvas'), x = c.getContext('2d'), font = '600 ' + fs + 'px "Space Grotesk",system-ui,sans-serif';
+  x.font = font; const w = Math.ceil(x.measureText(text).width) + 36; c.width = w; c.height = fs + 26; x.font = font; x.fillStyle = 'rgba(10,16,26,.86)';
+  const r = 18; x.beginPath(); x.moveTo(r, 0); x.arcTo(w, 0, w, c.height, r); x.arcTo(w, c.height, 0, c.height, r); x.arcTo(0, c.height, 0, 0, r); x.arcTo(0, 0, w, 0, r); x.fill();
+  x.fillStyle = '#e8eef7'; x.textBaseline = 'middle'; x.fillText(text, 18, c.height / 2 + 2);
+  const tex = new THREE.CanvasTexture(c); tex.minFilter = THREE.LinearFilter;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); s.scale.set(h * c.width / c.height, h, 1); return s;
+}
+function disposeTree(o) { o.traverse(n => { if (n.geometry && n.geometry !== floorGeo) n.geometry.dispose(); if (n.material && n.material !== chipMat) [].concat(n.material).forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }); }
+
+/* ---------- data: raw history -> per-commit changes with absolute line counts ---------- */
+let D = null, M = null, F = [], incl = new Set(), topCounts = new Map();
+function prepass(raw, inc) {
+  const fid = new Map(), files = [], lines = [], maxL = [], commits = [], totalL = [], alive = [], authN = [], seenA = new Set();
+  let total = 0, aliveN = 0;
+  const id = p => { let i = fid.get(p); if (i === undefined) { i = files.length; fid.set(p, i); files.push({ path: p }); lines.push(0); maxL.push(0); } return i; };
+  const setL = (i, v) => { const pv = lines[i]; if (pv === v) return; total += v - pv; if (pv === 0 && v > 0) aliveN++; if (pv > 0 && v === 0) aliveN--; lines[i] = v; if (v > maxL[i]) maxL[i] = v; };
+  raw.commits.forEach(c => {
+    const ch = []; let add = 0, del = 0;
+    c.f.forEach(e => {
+      const st = e[0], p = e[1], a = e[2], d = e[3], old = e[4];
+      if (!inc.has(topOf(p))) return;
+      if (st === 'A') { const i = id(p); setL(i, a); ch.push([i, a, 1]); add += a; }
+      else if (st === 'D') { const i = id(p); setL(i, 0); ch.push([i, 0, 3]); del += d; }
+      else if (st === 'M') { const i = id(p), v = Math.max(0, lines[i] + a - d); setL(i, v); ch.push([i, v, 2]); add += a; del += d; }
+      else if (st === 'R') {
+        if (old && inc.has(topOf(old))) { const oi = id(old), v = Math.max(0, lines[oi] + a - d); setL(oi, 0); ch.push([oi, 0, 3]); const ni = id(p); setL(ni, v); ch.push([ni, v, 4]); }
+        else { const ni = id(p); setL(ni, a); ch.push([ni, a, 1]); }
+        add += a; del += d;
+      }
+    });
+    if (!ch.length) return;
+    seenA.add(c.a); commits.push({ h: c.h, t: c.t, a: c.a, m: c.m, ch, add, del }); totalL.push(total); alive.push(aliveN); authN.push(seenA.size);
+  });
+  return { files, maxL, commits, totalL, alive, authN };
+}
+
+/* ---------- the city: districts by folder, one building per file, every floor is one instance ---------- */
+let city = null, inst = null, N = 0, LPF = 5, owner, instK, sy, ty, flash, fkind, baseCol, bounds = { x0: -20, x1: 20, z0: -20, z1: 20 };
+const active = new Set(), plates = [], dummy = new THREE.Object3D(), tmpC = new THREE.Color();
+let dirtyM = false, dirtyC = false;
+const hsl = (hue, k) => tmpC.setHSL(hue / 360, 0.52, (isLight() ? 0.58 : 0.5) + (k % 2 ? 0.06 : 0));
+function layout() {
+  const groups = new Map();
+  F.forEach((f, i) => { const q = f.path.split('/'), k = q.length > 1 ? q.slice(0, Math.min(3, q.length - 1)).join('/') : '(root files)'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+  const chunks = [];
+  [...groups.keys()].sort().forEach(k => {
+    const arr = groups.get(k).sort((a, b) => F[a].path < F[b].path ? -1 : 1), CH = 24, nCh = Math.ceil(arr.length / CH), size = Math.ceil(arr.length / nCh);
+    for (let c = 0; c < nCh; c++) { const items = arr.slice(c * size, (c + 1) * size), cols = Math.max(2, Math.ceil(items.length / 2)); chunks.push({ key: k, part: nCh > 1 ? ' ' + (c + 1) + '/' + nCh : '', items, cols, w: cols * CELL }); }
+  });
+  const GAP = 3.4, BAND_H = 2 * CELL + 3.6, total = chunks.reduce((s, c) => s + c.w + GAP, 0), maxW = chunks.length ? Math.max(...chunks.map(c => c.w + GAP)) : 10;
+  const bands = Math.max(1, Math.round(Math.sqrt(total / BAND_H) * 0.9)), limit = Math.max(maxW, total / bands * 1.06), rows = [[]]; let x = 0;
+  chunks.forEach(c => { if (x > 0 && x + c.w > limit) { rows.push([]); x = 0; } c.x0 = x; rows[rows.length - 1].push(c); x += c.w + GAP; });
+  const dists = [];
+  rows.forEach((row, ri) => {
+    if (!row.length) return; const last = row[row.length - 1], wRow = last.x0 + last.w;
+    row.forEach(c => {
+      const top = c.key.split('/')[0], hue = (hashStr(top) % 360 + (hashStr(c.key) % 50) - 25 + 360) % 360, segs = c.key.split('/');
+      const d = { label: segs.slice(-2).join('/') + c.part, x: c.x0 + c.w / 2 - wRow / 2, z: (ri - (rows.length - 1) / 2) * BAND_H, w: c.w, cols: c.cols, hue };
+      dists.push(d);
+      c.items.forEach((fi, cell) => { const f = F[fi]; f.x = d.x + ((cell % d.cols) - (d.cols - 1) / 2) * CELL; f.z = d.z + (Math.floor(cell / d.cols) - 0.5) * CELL; f.hue = hue; });
+    });
+  });
+  return dists;
+}
+function buildCity() {
+  if (city) { scene.remove(city); disposeTree(city); }
+  city = new THREE.Group(); scene.add(city); plates.length = 0; active.clear();
+  F = M.files; const ml = M.maxL.filter(v => v > 0).sort((a, b) => a - b), p95 = ml.length ? ml[Math.floor(ml.length * 0.95)] : 5;
+  const STEPS = [5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 150, 200, 300, 500, 1000]; LPF = STEPS.find(s => s * MAXF >= p95) || 1000;
+  N = 0; F.forEach((f, i) => { f.maxF = Math.max(1, Math.min(MAXF, Math.ceil(M.maxL[i] / LPF))); f.base = N; N += f.maxF; f.f = 0; f.lines = 0; });
+  $('#lpf').textContent = '1 floor = ' + LPF + ' line' + (LPF > 1 ? 's' : '');
+  const dists = layout();
+  dists.forEach(d => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(d.w + 0.6, 0.12, 2 * CELL + 0.7), new THREE.MeshLambertMaterial({ color: 0x333333 })); m.position.set(d.x, 0.04, d.z); city.add(m); plates.push({ m, hue: d.hue });
+    const l = makeLabel(d.label, 0.7); l.position.set(d.x, 0.45, d.z + CELL + 0.62); city.add(l);
+  });
+  bounds = dists.length ? { x0: Math.min(...dists.map(d => d.x - d.w / 2)), x1: Math.max(...dists.map(d => d.x + d.w / 2)), z0: Math.min(...dists.map(d => d.z)) - CELL, z1: Math.max(...dists.map(d => d.z)) + CELL } : { x0: -20, x1: 20, z0: -20, z1: 20 };
+  inst = new THREE.InstancedMesh(floorGeo, chipMat, Math.max(1, N)); inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage); inst.frustumCulled = false; city.add(inst);
+  owner = new Int32Array(N); instK = new Uint8Array(N); sy = new Float32Array(N); ty = new Float32Array(N); flash = new Float32Array(N); fkind = new Uint8Array(N); baseCol = new Float32Array(3 * N);
+  F.forEach((f, i) => { for (let k = 0; k < f.maxF; k++) { owner[f.base + k] = i; instK[f.base + k] = k; } });
+  dummy.scale.set(0, 0, 0); dummy.updateMatrix(); for (let i = 0; i < N; i++) inst.setMatrixAt(i, dummy.matrix);
+  setBaseColors(); retheme();
+  dirtyM = true; PAD_V.set(0, 0, bounds.z1 + 9); desk.position.copy(PAD_V); city.add(desk);
+}
+function colorFor(i) { tmpC.setRGB(baseCol[3 * i], baseCol[3 * i + 1], baseCol[3 * i + 2]); if (flash[i] > 0) tmpC.lerp(KCOL[fkind[i]], flash[i] * 0.85); inst.setColorAt(i, tmpC); }
+function setBaseColors() { for (let i = 0; i < N; i++) { hsl(F[owner[i]].hue, instK[i]); baseCol[3 * i] = tmpC.r; baseCol[3 * i + 1] = tmpC.g; baseCol[3 * i + 2] = tmpC.b; colorFor(i); } if (inst.instanceColor) inst.instanceColor.needsUpdate = true; }
+function setMat(i) {
+  const f = F[owner[i]], s = sy[i];
+  if (s < 0.003) dummy.scale.set(0, 0, 0); else { dummy.position.set(f.x, instK[i] * FLOOR_H + s * FLOOR_H * 0.5, f.z); dummy.scale.set(1, s, 1); }
+  dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+}
+function retheme() {
+  const bg = css('--bg'); scene.background = new THREE.Color(bg); scene.fog = new THREE.Fog(bg, 500, 1600);
+  ground.material.color.set(css('--surface2'));
+  plates.forEach(p => p.m.material.color.setHSL(p.hue / 360, 0.3, isLight() ? 0.8 : 0.22));
+  if (inst) setBaseColors();
+}
+try { matchMedia('(prefers-color-scheme: light)').addEventListener('change', retheme); } catch (e) {}
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+/* ---------- changing a building ---------- */
+function setLines(fid, v, kind, animate) {
+  const f = F[fid], prev = f.f, want = v > 0 ? Math.min(f.maxF, Math.max(1, Math.ceil(v / LPF))) : 0; f.lines = v;
+  const lo = Math.min(prev, want), hi = Math.max(prev, want);
+  if (animate) {
+    if (hi > lo) for (let k = lo; k < hi; k++) { const i = f.base + k; ty[i] = want > prev ? 1 : 0; flash[i] = 1; fkind[i] = kind; active.add(i); }
+    else if (want > 0) { const i = f.base + want - 1; flash[i] = 1; fkind[i] = kind; active.add(i); }
+  } else {
+    for (let k = lo; k < hi; k++) { const i = f.base + k; ty[i] = sy[i] = want > prev ? 1 : 0; flash[i] = 0; active.delete(i); setMat(i); colorFor(i); }
+    dirtyM = dirtyC = true;
+  }
+  f.f = want;
+}
+function resetCity() {
+  active.clear(); sy.fill(0); ty.fill(0); flash.fill(0); F.forEach(f => { f.f = 0; f.lines = 0; });
+  dummy.scale.set(0, 0, 0); dummy.updateMatrix(); for (let i = 0; i < N; i++) { inst.setMatrixAt(i, dummy.matrix); colorFor(i); } dirtyM = dirtyC = true;
+}
+
+/* ---------- builder bots: a few fly from the commit desk to the buildings a commit changes ---------- */
+const PAD_V = V3(0, 0, 0), desk = new THREE.Group(), drones = [];
+{ const r = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.12, 8, 40), new THREE.MeshBasicMaterial({ color: 0xffb62e })); r.rotation.x = Math.PI / 2; r.position.y = 0.2; desk.add(r);
+  const l = makeLabel('commit desk', 0.7); l.position.set(0, 1.6, 0); desk.add(l); }
+function newDrone() {
+  const g = new THREE.Group(), body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffb62e })); g.add(body);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.05, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffe08a })); ring.rotation.x = Math.PI / 2; g.add(ring);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffb62e, transparent: true, opacity: 0.22, depthWrite: false }))); g.visible = false; scene.add(g);
+  const lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const line = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xffb62e, transparent: true, opacity: 0.85 })); line.frustumCulled = false; line.visible = false; scene.add(line);
+  return { g, body, ring, line, job: null };
+}
+const ease = u => u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+function spawn(fid, v, kind, dur) {
+  let d = drones.find(x => !x.job); if (!d && drones.length < 6) { d = newDrone(); drones.push(d); }
+  if (!d) { setLines(fid, v, kind, true); return; }
+  const f = F[fid]; d.job = { fid, v, kind, to: V3(f.x, Math.max(f.f, Math.ceil(v / LPF)) * FLOOR_H + 1.4, f.z), t: 0, dur, hold: 0, applied: false };
+  d.g.visible = true; d.g.position.copy(PAD_V); d.body.material.color.copy(KCOL[kind]);
+}
+function cancelDrones() { drones.forEach(d => { d.job = null; d.g.visible = false; d.line.visible = false; }); }
+function tickDrones(dt, sec) {
+  drones.forEach(d => {
+    const j = d.job; if (!j) return; d.ring.rotation.z += dt * 6; d.g.scale.setScalar(Math.max(1.4, cam.r / 28));        // bots grow with the zoom, so they can be seen from far away
+    if (!j.applied) {
+      j.t += dt; const u = Math.min(1, j.t / j.dur), e = ease(u), dist = PAD_V.distanceTo(j.to);
+      d.g.position.set(PAD_V.x + (j.to.x - PAD_V.x) * e, PAD_V.y + (j.to.y - PAD_V.y) * e + Math.sin(Math.PI * u) * (4 + dist * 0.08), PAD_V.z + (j.to.z - PAD_V.z) * e);
+      if (u >= 1) { setLines(j.fid, j.v, j.kind, true); j.applied = true; j.hold = 0.4; d.line.visible = true; }
+    } else {
+      j.hold -= dt; const p = d.line.geometry.attributes.position, f = F[j.fid];
+      p.setXYZ(0, d.g.position.x, d.g.position.y, d.g.position.z); p.setXYZ(1, f.x, f.f * FLOOR_H, f.z); p.needsUpdate = true;
+      if (j.hold <= 0) { d.job = null; d.g.visible = false; d.line.visible = false; }
+    }
+  });
+}
+
+/* ---------- playback ---------- */
+let pos = 0, acc = 0, playing = false, rate = 2, follow = true, lastFocus = null;
+function startCommit(i) {
+  const c = M.commits[i], animate = rate <= 4; let sx = 0, sz = 0, n = 0;
+  const list = c.ch.map(e => ({ e, dl: Math.abs(e[1] - F[e[0]].lines) })).sort((a, b) => b.dl - a.dl);
+  list.forEach((o, k) => {
+    const e = o.e, f = F[e[0]]; sx += f.x; sz += f.z; n++;
+    if (animate && k < 4) spawn(e[0], e[1], e[2], Math.max(0.35, Math.min(1, 0.5 / rate)));
+    else setLines(e[0], e[1], e[2], true);
+  });
+  lastFocus = n ? V3(sx / n, 0, sz / n) : null;
+}
+function applyInstant(a, b) { for (let i = a; i < b; i++) M.commits[i].ch.forEach(e => setLines(e[0], e[1], e[2], false)); }
+function seek(j) {
+  j = Math.max(0, Math.min(M.commits.length, j)); const busy = drones.some(d => d.job); cancelDrones();
+  if (j < pos || busy) { resetCity(); pos = 0; }                 // going back, or a bot was cancelled mid-flight: rebuild from the first commit
+  applyInstant(pos, j); pos = j; acc = 0; hud();
+}
+function seekTime(t) { let j = 0; while (j < M.commits.length && M.commits[j].t <= t) j++; seek(j); }
+function setPlaying(p) { playing = p && M && M.commits.length > 0; if (playing && follow && rate <= 4) goal.r = Math.min(goal.r, 90);        // slow replay with Follow: come close so the bots show
+$('#btnPlay').textContent = playing ? '❚❚ Pause' : (pos >= M.commits.length && M.commits.length ? '↻ Replay' : '▶ Play'); }
+
+/* ---------- hud, timeline chart ---------- */
+const spark = $('#spark'), sctx = spark.getContext('2d'), scrub = $('#scrub');
+let sparkBg = null;
+function drawSpark() {
+  const w = spark.clientWidth, h = spark.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2); if (!w) return;
+  spark.width = Math.round(w * dpr); spark.height = Math.round(h * dpr); sparkBg = document.createElement('canvas'); sparkBg.width = spark.width; sparkBg.height = spark.height;
+  const x = sparkBg.getContext('2d'); x.scale(dpr, dpr);
+  if (M && M.commits.length > 1) {
+    const T = M.totalL, mx = Math.max(...T, 1), n = T.length; x.beginPath(); x.moveTo(0, h);
+    for (let i = 0; i < n; i++) x.lineTo(i / (n - 1) * w, h - 3 - (T[i] / mx) * (h - 8));
+    x.lineTo(w, h); x.closePath(); x.fillStyle = css('--accent'); x.globalAlpha = 0.28; x.fill(); x.globalAlpha = 1;
+    x.beginPath(); for (let i = 0; i < n; i++) { const px = i / (n - 1) * w, py = h - 3 - (T[i] / mx) * (h - 8); i ? x.lineTo(px, py) : x.moveTo(px, py); } x.strokeStyle = css('--accent'); x.lineWidth = 1.5; x.stroke();
+  }
+  drawMarker();
+}
+function drawMarker() {
+  if (!sparkBg) return; const dpr = spark.width / (spark.clientWidth || 1); sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.clearRect(0, 0, spark.width, spark.height); sctx.drawImage(sparkBg, 0, 0);
+  const n = M ? M.commits.length : 0; if (n < 1) return; const px = (pos / n) * spark.width;
+  sctx.fillStyle = css('--fg'); sctx.fillRect(Math.min(spark.width - 2 * dpr, px), 0, 2 * dpr, spark.height);
+}
+function hud() {
+  const n = M.commits.length, c = pos > 0 ? M.commits[pos - 1] : null;
+  $('#sCommit').textContent = fmt(pos); $('#sTotal').textContent = fmt(n); scrub.max = n; scrub.value = pos;
+  $('#sFiles').textContent = fmt(pos ? M.alive[pos - 1] : 0); $('#sLines').textContent = fmt(pos ? M.totalL[pos - 1] : 0); $('#sAuth').textContent = fmt(pos ? M.authN[pos - 1] : 0);
+  if (c) {
+    $('#cHash').textContent = c.h; $('#cDate').textContent = new Date(c.t * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    $('#cMsg').textContent = c.m || '(no message)'; $('#cAuth').textContent = c.a; $('#cAdd').textContent = '+' + fmt(c.add); $('#cDel').textContent = '−' + fmt(c.del); $('#cFiles').textContent = c.ch.length + ' file' + (c.ch.length === 1 ? '' : 's');
+  } else {
+    const f = D && D.commits[0]; $('#cHash').textContent = ''; $('#cDate').textContent = ''; $('#cMsg').textContent = 'Empty folder. Press Play to start from the first commit.'; $('#cAuth').textContent = D ? D.repo + (D.branch ? ' · ' + D.branch : '') : ''; $('#cAdd').textContent = ''; $('#cDel').textContent = ''; $('#cFiles').textContent = fmt(n) + ' commits';
+  }
+  drawMarker();
+}
+
+/* ---------- loading a history ---------- */
+function showMsg(t, b) { $('#msgT').textContent = t; $('#msgB').textContent = b; $('#msgBox').hidden = !t; }
+function load(raw) {
+  if (!raw || !Array.isArray(raw.commits)) { showMsg('That file is not a history file', 'Make a new one with export_git_history.py (see "Use my project").'); return; }
+  D = raw; topCounts = new Map(); const seen = new Set();
+  raw.commits.forEach(c => c.f.forEach(e => { [e[1], e[4]].forEach(p => { if (p && !seen.has(p)) { seen.add(p); const t = topOf(p); topCounts.set(t, (topCounts.get(t) || 0) + 1); } }); }));
+  const all = seen.size; incl = new Set(); topCounts.forEach((cnt, t) => { if (!(cnt > 500 && cnt / all > 0.5)) incl.add(t); });
+  if (!incl.size) topCounts.forEach((c, t) => incl.add(t));
+  $('#repoName').textContent = raw.repo + (raw.branch ? ' · ' + raw.branch : '');
+  buildChips(); $('#btnFolders').hidden = false; rebuild(0);
+}
+function rebuild(t) {
+  showMsg('', ''); cancelDrones(); M = prepass(D, incl);
+  if (!M.commits.length) { showMsg('Nothing to show', 'No commits touch the selected folders.'); }
+  pos = 0; acc = 0; buildCity(); fit(true); drawSpark(); seekTime(t || 0); setPlaying(false);
+  if (!t) setTimeout(() => { if (M && pos === 0) setPlaying(true); }, 500);
+}
+function buildChips() {
+  const box = $('#chips'); box.innerHTML = '';
+  [...topCounts.entries()].sort((a, b) => b[1] - a[1]).forEach(([t, cnt]) => {
+    const l = document.createElement('label'), cb = document.createElement('input'), s = document.createElement('span'), sm = document.createElement('small');
+    cb.type = 'checkbox'; cb.checked = incl.has(t); s.textContent = t; sm.textContent = fmt(cnt) + ' files';
+    cb.onchange = () => { if (cb.checked) incl.add(t); else incl.delete(t); const t0 = pos > 0 ? M.commits[pos - 1].t : 0, was = playing; rebuild(t0); setPlaying(was); };
+    l.append(cb, s, sm); box.appendChild(l);
+  });
+}
+function readFile(file) {
+  const r = new FileReader(); r.onload = () => { try { load(JSON.parse(r.result)); } catch (e) { showMsg('Could not read that file', 'It must be the JSON file made by export_git_history.py.'); } };
+  r.readAsText(file);
+}
+
+/* ---------- camera: drag to turn, right-drag to move, wheel to zoom ---------- */
+const cam = { th: 0.35, ph: 0.98, r: 120, tx: 0, tz: 0 }, goal = { th: 0.35, ph: 0.98, r: 120, tx: 0, tz: 0 };
+function fit(snap) {
+  const W = bounds.x1 - bounds.x0, H = bounds.z1 - bounds.z0 + 16, asp = (stage.clientWidth || 800) / (stage.clientHeight || 500), t = Math.tan(21 * Math.PI / 180);
+  goal.tx = (bounds.x0 + bounds.x1) / 2; goal.tz = (bounds.z0 + bounds.z1) / 2 + 6; goal.r = Math.max(40, Math.max(W * 1.05 / (2 * t * asp), H * 0.62 / (2 * t)));
+  if (snap) Object.assign(cam, goal);
+}
+const ptrs = new Map(); let tipT = 0;
+function panView(dx, dy) { const k = cam.r * 0.0016, fx = -Math.sin(goal.th), fz = -Math.cos(goal.th), rx = Math.cos(goal.th), rz = -Math.sin(goal.th); goal.tx += (-rx * dx + fx * dy) * k; goal.tz += (-rz * dx + fz * dy) * k; }
+function userMoved() { if (follow) { follow = false; $('#follow').checked = false; } }
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('dblclick', () => fit(false));
+canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, move: e.button === 2 || e.button === 1 || e.shiftKey }); });
+canvas.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId);
+  if (!p) { hover(e); return; }
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  if (ptrs.size === 1) { userMoved(); if (p.move) panView(dx, dy); else { goal.th -= dx * 0.006; goal.ph = Math.max(0.3, Math.min(1.4, goal.ph - dy * 0.005)); } }
+  else if (ptrs.size === 2) { const o = [...ptrs.entries()].find(([id]) => id !== e.pointerId)[1], b = Math.hypot(p.x - o.x, p.y - o.y), a = Math.hypot(e.clientX - o.x, e.clientY - o.y); userMoved(); goal.r = Math.max(8, Math.min(1500, goal.r * b / Math.max(a, 1))); panView(dx / 2, dy / 2); }
+  p.x = e.clientX; p.y = e.clientY;
+});
+['pointerup', 'pointercancel'].forEach(t => canvas.addEventListener(t, e => ptrs.delete(e.pointerId)));
+canvas.addEventListener('pointerleave', () => { $('#tip').hidden = true; });
+canvas.addEventListener('wheel', e => { e.preventDefault(); userMoved(); goal.r = Math.max(8, Math.min(1500, goal.r * (1 + e.deltaY * 0.001))); }, { passive: false });
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function hover(e) {
+  const now = performance.now(); if (now - tipT < 70 || !inst || !N) return; tipT = now;
+  const r = canvas.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const h = ray.intersectObject(inst)[0], tip = $('#tip');
+  if (!h || h.instanceId === undefined) { tip.hidden = true; return; }
+  const f = F[owner[h.instanceId]]; tip.hidden = false; tip.innerHTML = '<b></b><br><span class="muted"></span>'; tip.firstChild.textContent = f.path; tip.lastChild.textContent = fmt(f.lines) + ' lines · ' + f.f + ' floor' + (f.f === 1 ? '' : 's');
+  tip.style.left = Math.min(r.width - 220, Math.max(8, e.clientX - r.left + 14)) + 'px'; tip.style.top = Math.max(8, e.clientY - r.top + 14) + 'px';
+}
+
+/* ---------- loop ---------- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; const sec = now / 1000;
+  if (M) {
+    if (playing) {
+      acc += dt * rate;
+      while (acc >= 1 && pos < M.commits.length) { acc -= 1; startCommit(pos); pos++; hud(); }
+      if (pos >= M.commits.length) { setPlaying(false); }
+    }
+    tickDrones(dt, sec);
+    if (follow && playing && rate <= 10 && lastFocus) { const f = 1 - Math.exp(-dt * 1.6); goal.tx += (lastFocus.x - goal.tx) * f; goal.tz += (lastFocus.z - goal.tz) * f; }
+    const k = Math.min(1, dt * 10);
+    if (active.size) {
+      active.forEach(i => {
+        const d = ty[i] - sy[i]; if (Math.abs(d) > 0.004) sy[i] += d * k; else sy[i] = ty[i];
+        setMat(i); dirtyM = true;
+        if (flash[i] > 0) { flash[i] = Math.max(0, flash[i] - dt * 1.2); colorFor(i); dirtyC = true; }
+        if (sy[i] === ty[i] && flash[i] === 0) active.delete(i);
+      });
+    }
+    if (dirtyM) { inst.instanceMatrix.needsUpdate = true; dirtyM = false; }
+    if (dirtyC && inst.instanceColor) { inst.instanceColor.needsUpdate = true; dirtyC = false; }
+  }
+  desk.scale.setScalar(Math.max(1, cam.r / 70));
+  const sm = 1 - Math.pow(0.001, dt);
+  ['th', 'ph', 'r', 'tx', 'tz'].forEach(p => { cam[p] += (goal[p] - cam[p]) * sm; });
+  camera.position.set(cam.tx + cam.r * Math.sin(cam.ph) * Math.sin(cam.th), cam.r * Math.cos(cam.ph), cam.tz + cam.r * Math.sin(cam.ph) * Math.cos(cam.th)); camera.lookAt(cam.tx, 0.6, cam.tz);
+  renderer.render(scene, camera); requestAnimationFrame(frame);
+}
+function resize() { const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); drawSpark(); }
+new ResizeObserver(resize).observe(stage); new ResizeObserver(drawSpark).observe(spark);
+
+/* ---------- buttons ---------- */
+$('#btnPlay').onclick = () => { if (!M || !M.commits.length) return; if (pos >= M.commits.length) seek(0); setPlaying(!playing); };
+$('#btnRestart').onclick = () => { if (!M) return; seek(0); setPlaying(false); };
+$('#rate').onchange = e => { rate = +e.target.value; };
+$('#follow').onchange = e => { follow = e.target.checked; };
+$('#btnFit').onclick = () => { fit(false); };
+scrub.oninput = () => { if (M) { seek(+scrub.value); if (!playing) setPlaying(false); } };
+$('#btnOpen').onclick = () => $('#file').click();
+$('#file').onchange = e => { if (e.target.files[0]) readFile(e.target.files[0]); e.target.value = ''; };
+$('#btnSample').onclick = loadSample;
+$('#btnHelp').onclick = () => { $('#help').hidden = !$('#help').hidden; $('#folders').hidden = true; };
+$('#helpClose').onclick = () => { $('#help').hidden = true; };
+$('#btnFolders').onclick = () => { $('#folders').hidden = !$('#folders').hidden; $('#help').hidden = true; };
+$('#foldersClose').onclick = () => { $('#folders').hidden = true; };
+$('#btnCopy').onclick = () => {
+  const el = $('#exp'), done = () => { $('#btnCopy').textContent = 'Copied'; setTimeout(() => { $('#btnCopy').textContent = 'Copy script'; }, 1500); };
+  const sel = () => { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); $('#btnCopy').textContent = 'Selected: press Ctrl+C'; };
+  try { navigator.clipboard.writeText(el.textContent).then(done, sel); } catch (e) { sel(); }
+};
+addEventListener('keydown', e => { if (e.code === 'Space' && !e.target.matches('input,select,button,textarea')) { e.preventDefault(); $('#btnPlay').click(); } });
+stage.addEventListener('dragover', e => { e.preventDefault(); $('#drop').hidden = false; });
+stage.addEventListener('dragleave', e => { if (e.target === stage || e.target === canvas) $('#drop').hidden = true; });
+stage.addEventListener('drop', e => { e.preventDefault(); $('#drop').hidden = true; const f = e.dataTransfer.files[0]; if (f) readFile(f); });
+function loadSample() {
+  showMsg('Loading the sample…', 'The history of this thesis project.');
+  fetch('sample_history.json').then(r => { if (!r.ok) throw new Error('missing'); return r.json(); }).then(load).catch(() => showMsg('The sample did not load', 'Use "Use my project" to make your own history file, then open it.'));
+}
+resize(); requestAnimationFrame(frame); hud0();
+function hud0() { $('#cMsg').textContent = 'No history loaded yet.'; }
+loadSample();
+})();
+</script>

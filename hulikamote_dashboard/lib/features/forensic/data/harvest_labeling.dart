@@ -113,8 +113,8 @@ class LocalHarvestLabeling implements FolderLabelling {
 
   static const _idleMinutes = 30;
 
-  /// What the helper must know: 6 = send each picture right away, 5 = the Labeller (folders), 4 = "the rest are fine" (3 = the cars one by one, 2 = the "same car?" questions and the clip's own pictures).
-  static const _apiNeeded = 6;
+  /// What the helper must know: 7 = Labeller-only targets (side mirror), 6 = send each picture right away, 5 = the Labeller (folders), 4 = "the rest are fine" (3 = the cars one by one, 2 = the "same car?" questions and the clip's own pictures).
+  static const _apiNeeded = 7;
 
   String _labDir() {
     try {

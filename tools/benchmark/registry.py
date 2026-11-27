@@ -20,6 +20,9 @@ from .violations import KEYS
 
 ROOT = Path(__file__).resolve().parents[2]
 BENCH = ROOT / "benchmarks"
+# The benchmark reads videos ONLY from here (the dashboard's labeller exports into it). A clip in the registry file whose video is
+# anywhere else is ignored: it is not listed, scored or counted. (Tests and `--registry` use their own files and no folder filter.)
+CLIP_FOLDER = Path("A:/huli-kamote/benchmark-videos")
 DEFAULTS = {"tolerance_s": 3.0, "min_events": 10, "pass": {"precision": 0.80, "recall": 0.80}}
 
 
@@ -87,7 +90,14 @@ def _event(raw: dict, clip_id: str) -> Event:
                  float(raw["tol"]) if raw.get("tol") is not None else None, str(raw.get("note", "")))
 
 
-def load(path: Path | None = None) -> Registry:
+def in_folder(file, folder) -> bool:
+    """Whether a video lies inside [folder] (slashes and capitals do not matter)."""
+    norm = lambda p: str(p).replace("\\", "/").rstrip("/").lower()
+    return norm(file).startswith(norm(folder) + "/")
+
+
+def load(path: Path | None = None, only_folder: Path | str | None = None) -> Registry:
+    """The registry. With [only_folder] a clip whose video is not inside it is left out (the file keeps it)."""
     path = path or BENCH / "registry.yaml"
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     defaults = {**DEFAULTS, **(raw.get("defaults") or {})}
@@ -101,6 +111,8 @@ def load(path: Path | None = None) -> Registry:
         events = [_event(e, cid) for e in c.get("events") or []]
         if c.get("clean") and events:
             raise RegistryError(f"clip {cid}: 'clean: true' cannot have events")
+        if only_folder is not None and not in_folder(path.parent / c["file"], only_folder):
+            continue
         settings_file = (path.parent / c["settings"]) if c.get("settings") else None
         clip = Clip(cid, path.parent / c["file"], settings_file, events, bool(c.get("clean")), str(c.get("note", "")))
         if settings_file and settings_file.exists():

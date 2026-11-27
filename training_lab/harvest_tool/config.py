@@ -78,8 +78,37 @@ MODELS = {
     },
 }
 
+# Labelling targets that teach ONE class of a bigger model. They live only in the Labeller (never in the Harvest tab): pictures are boxed
+# with that class alone, and the saved labels carry the BIG model's class number, so the folder drops straight into that dataset.
+FOCUS_MODELS = {
+    "side_mirror": {
+        "title": "Side mirror (motorcycles)",
+        "does": "finds the side mirrors of a motorcycle",
+        "base": "cabin_specialist",
+        "classes": ["side_mirror"],
+    },
+}
+
+
+def known_model(model: str) -> bool:
+    return model in MODELS or model in FOCUS_MODELS
+
+
+def base_model(model: str) -> str:
+    """The model whose dataset and detector a labelling target uses (itself, unless it is a focus target)."""
+    return FOCUS_MODELS.get(model, {}).get("base", model)
+
+
+def model_spec(model: str) -> dict:
+    return MODELS.get(model) or FOCUS_MODELS[model]
+
+
 # What to draw, in plain words (shown next to the class buttons in the labelling page).
 CLASS_HELP = {
+    "side_mirror": {
+        "side_mirror": "A side mirror of a MOTORCYCLE: box the mirror (glass and housing), not the stalk. "
+                       "Not a motorcycle? Press Not a motorcycle: skip. A motorcycle with no mirror: press No mirror.",
+    },
     "plate_specialist": {
         "license_plate": "The number plate. Draw the box tight around it.",
     },
@@ -119,7 +148,9 @@ AUTOMATIC = [
 
 
 def class_names(paths: Paths, model: str) -> list[str]:
-    """Class names of a model, in training order, from datasets/<model>/data.yaml."""
+    """Class names of a model, in training order, from datasets/<model>/data.yaml (a focus target: just its own class)."""
+    if model in FOCUS_MODELS:
+        return list(FOCUS_MODELS[model]["classes"])
     cfg = yaml.safe_load((paths.datasets / model / "data.yaml").read_text(encoding="utf-8"))
     names = cfg["names"]
     items = names.items() if isinstance(names, dict) else enumerate(names)
@@ -130,6 +161,7 @@ def active_onnx(paths: Paths, model: str) -> Path | None:
     """The ONNX file the app currently uses for this model (manifest first, then the default name)."""
     if model == "primary_anchor":
         return active_vehicle_onnx(paths)                  # the app's vehicle finder, whatever it was trained on
+    model = base_model(model)                              # a focus target uses its big model's detector
     spec = MODELS[model]
     try:
         active = json.loads((paths.models / "model_manifest.json").read_text()).get("active_models", {})
@@ -154,3 +186,17 @@ def active_vehicle_onnx(paths: Paths) -> Path | None:
         return paths.models / name
     found = list(paths.models.rglob(name))
     return found[0] if found else None
+
+
+def dataset_class_names(paths: Paths, model: str) -> list[str]:
+    """The class list of the dataset the labels belong to (the big model's, for a focus target)."""
+    return class_names(paths, base_model(model))
+
+
+def dataset_class_ids(paths: Paths, model: str) -> list[int]:
+    """Labelling class number -> the dataset's class number. Same numbers for a normal model; a focus target maps its own class
+    to the big model's number (side_mirror -> 4 in the cabin dataset)."""
+    if model not in FOCUS_MODELS:
+        return list(range(len(class_names(paths, model))))
+    big = class_names(paths, base_model(model))
+    return [big.index(c) for c in FOCUS_MODELS[model]["classes"]]

@@ -275,6 +275,7 @@ def apply_detected_road(counterflow: bool = False):
 LIVE_SETUP_KEYS = (
     "active_violations", "per_violation_configs", "tracker", "plate_model", "plate_method", "plate_format",
     "ocr_engine", "enhancement", "primary_model", "use_sahi", "flag_sensitivity", "evidence_gap", "blur_privacy", "road_markings",
+    "quality_mode", "judge_incoming_two_wheelers",
 )
 
 

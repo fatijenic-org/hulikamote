@@ -874,7 +874,7 @@ def test_session_pairs_and_answers_over_the_helper(server):
     from harvest_tool.pairs import build_pairs
     app, base, paths = server
     status, body, _ = call(base, "/api/ping")
-    assert json.loads(body) == {"ok": True, "api": 6}
+    assert json.loads(body) == {"ok": True, "api": 7}
     s = json.loads(call(base, "/api/session?task=task1")[1])
     assert s["has_video"] is False and s["pairs"] == {"open": 0, "same": 0, "different": 0, "skipped": 0}
     assert [m["key"] for m in s["models"]][-1] == "primary_anchor"

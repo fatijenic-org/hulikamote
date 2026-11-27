@@ -34,6 +34,29 @@ from engine.violations.overloading import DEFAULT_MAX_RIDERS
 log = logging.getLogger(__name__)
 
 
+def _hires_crop(big: np.ndarray, scale: float, box, blur, keep) -> "np.ndarray | None":
+    """The part `box` (x, y, w, h in the shrunk picture) of the ORIGINAL picture `big`, a copy: the heads and the other plates in `blur` (boxes of
+    the shrunk picture) blurred, the violator's plate `keep` left as it is."""
+    bh, bw = big.shape[:2]
+    x, y, w, h = box
+    x1, y1 = max(0, int(x * scale)), max(0, int(y * scale))
+    x2, y2 = min(bw, int((x + w) * scale)), min(bh, int((y + h) * scale))
+    if x2 <= x1 or y2 <= y1:
+        return None
+    crop = big[y1:y2, x1:x2].copy()
+    kept = None
+    if keep:
+        kx1, ky1 = max(0, int(keep[0] * scale) - x1), max(0, int(keep[1] * scale) - y1)
+        kx2, ky2 = min(crop.shape[1], int((keep[0] + keep[2]) * scale) - x1), min(crop.shape[0], int((keep[1] + keep[3]) * scale) - y1)
+        if kx2 > kx1 and ky2 > ky1:
+            kept = (kx1, ky1, kx2, ky2, crop[ky1:ky2, kx1:kx2].copy())
+    if blur:
+        privacy.blur_boxes(crop, [(bx * scale - x1, by * scale - y1, bw_ * scale, bh_ * scale) for bx, by, bw_, bh_ in blur])
+    if kept:
+        crop[kept[1]:kept[3], kept[0]:kept[2]] = kept[4]
+    return crop
+
+
 @dataclass
 class FrameJob:
     """One picture between stage A (DecoupledPipeline.detect_stage) and stage B (judge_stage)."""
@@ -42,6 +65,7 @@ class FrameJob:
     timestamp: float | None
     scaled_rois: dict
     detections: list
+    big: "np.ndarray | None" = None      # the original picture when the models work on a shrunk one and the sharp quality mode is on
 
 # Interval at which specialist models run (every N frames of inference).
 # Lower value = more frequent plate/helmet checks per vehicle.
@@ -99,6 +123,10 @@ class DecoupledPipeline:
     # Off only for the team's own training videos: the saved photos then show faces, so never confirm or send those tickets.
     blur_privacy = True
 
+    # A motorcycle, tricycle or kuliglig that comes TOWARD the camera shows no plate: it is left out (no box, no rule, no ticket; engine/incoming.py).
+    # Wizard demo switch "Judge incoming motorcycles and tricycles too": On judges them like every other vehicle.
+    judge_incoming_two_wheelers = False
+
     def __init__(self, config_path: str):
         self.registry = ModelRegistry(config_path)
         from engine.box_stabilizer import BoxStabilizer
@@ -147,6 +175,9 @@ class DecoupledPipeline:
             self.blur_privacy = True
         if not self.blur_privacy:
             log.warning("PRIVACY BLUR IS OFF for this run: saved photos show faces and every plate.")
+        self.judge_incoming_two_wheelers = bool(self.config.get("judge_incoming_two_wheelers", False))
+        if self.judge_incoming_two_wheelers:
+            log.warning("Incoming motorcycles, tricycles and kuliglig are judged too (demo switch): their plates cannot be read from the front.")
 
         # Overloading: most people allowed on one motorcycle
         self.max_riders = DEFAULT_MAX_RIDERS
@@ -208,7 +239,8 @@ class DecoupledPipeline:
         return new
 
     def _cost_add(self, key: str, seconds: float) -> None:
-        self._cost_acc[key] = self._cost_acc.get(key, 0.0) + seconds
+        acc = self.__dict__.setdefault("_cost_acc", {})            # (setdefault: a pipeline made without __init__, as the tests do, works too)
+        acc[key] = acc.get(key, 0.0) + seconds
 
     def _cost_job(self, job_name: str, active: list, seconds: float) -> None:
         """A specialist model's look is shared by the rules that read it: each of them is shown the whole cost."""
@@ -218,10 +250,12 @@ class DecoupledPipeline:
 
     def _cost_flush(self, active: list) -> None:
         """Once a picture: the time each rule took in it goes into its average (so a model that runs every few pictures shows its mean)."""
+        acc = self.__dict__.setdefault("_cost_acc", {})
+        cost = self.__dict__.setdefault("rule_cost", {})
         for key in active:
-            now = self._cost_acc.get(key, 0.0) * 1000.0
-            before = self.rule_cost.get(key)
-            self.rule_cost[key] = now if before is None else before * 0.97 + now * 0.03
+            now = acc.get(key, 0.0) * 1000.0
+            before = cost.get(key)
+            cost[key] = now if before is None else before * 0.97 + now * 0.03
         self._cost_acc = {}
 
     @staticmethod
@@ -404,6 +438,8 @@ class DecoupledPipeline:
         ledger = self.ledger_manager.ledgers.get(track_id)
         if ledger is None or len(ledger.evidence_paths) >= ledger.MAX_EVIDENCE_FRAMES:
             return
+        if ledger.violations and ledger.violations <= ledger.released:
+            return                                           # every violation of it is ticketed already: no more photos for nobody
 
         ledger._evidence_counter = getattr(ledger, "_evidence_counter", 0) + 1
         # Throttle: Always save on Frame 1 (guaranteed evidence), then 1 out of every `evidence_gap` frames
@@ -419,6 +455,17 @@ class DecoupledPipeline:
         except Exception:
             log.exception("Blurring failed for track %s: its evidence photo was not saved", track_id)
             return
+
+        # Sharp quality mode: the vehicle crops are ALSO cut from the original picture (heads and other plates blurred the same way), under
+        # their own names (car_crop_hi, clean_hi): the plate is read from them first (engine/plate_reread.py). The ordinary crops stay as they were.
+        big = getattr(self, "_big_frame", None)
+        hires = big is not None and big.shape[0] > frame.shape[0]
+        scale = big.shape[0] / float(frame.shape[0]) if hires else 1.0
+        blur, keep_plate = [], None
+        if hires:
+            if self.blur_privacy:
+                blur = privacy.head_boxes(detections) + privacy.other_plate_boxes(detections, self.ledger_manager.ledgers, track_id)
+            keep_plate = getattr(ledger, "plate_bbox", None)
 
         # Burn ALL active ROIs onto the frame first so the evidence shows the full crime scene context
         self._draw_dets = detections                 # rules that paint on the road (overlay crosswalk) keep vehicles on top
@@ -457,9 +504,26 @@ class DecoupledPipeline:
         except Exception:
             pass
 
+        car_crop_hi = clean_hi = None
+        if hires:
+            try:
+                cx, cy, cw, ch = (int(v) for v in det.bbox)
+                crop_hi = _hires_crop(big, scale, (max(0, cx), max(0, cy), cw, ch), blur, keep_plate)
+                if crop_hi is not None:
+                    car_crop_hi = Path(YoloInference.save_snapshot(crop_hi, EVIDENCE_DIR)).name
+                if clean_box:
+                    wide_hi = _hires_crop(big, scale, tuple(clean_box), blur, keep_plate)
+                    if wide_hi is not None:
+                        clean_hi = Path(YoloInference.save_snapshot(wide_hi, EVIDENCE_DIR)).name
+            except Exception:
+                log.exception("The sharp crops of track %s were not saved", track_id)
+
         ledger.add_evidence_frame(path, bbox=det.bbox, t=ledger.history[-1][0] if ledger.history else None,
                                   car_crop=car_crop)
         ledger.evidence_meta[-1].update({
+            "car_crop_hi": car_crop_hi,
+            "clean_hi": clean_hi,
+            "hi_scale": round(scale, 4) if hires else None,      # how many times bigger than the ordinary crops they are
             "clean": clean,
             "clean_box": clean_box,
             "vclass": ledger.vclass,
@@ -646,11 +710,11 @@ class DecoupledPipeline:
 
     # ── Frame processing ─────────────────────────────────────────────────────
 
-    def process_frame(self, frame: np.ndarray, frame_count: int, timestamp: float | None = None) -> tuple[np.ndarray, list]:
+    def process_frame(self, frame: np.ndarray, frame_count: int, timestamp: float | None = None, big: "np.ndarray | None" = None) -> tuple[np.ndarray, list]:
         """One picture, both stages one after the other (the Forensic Analyzer, the flow pre-scan and the tests use this)."""
-        return self.judge_stage(self.detect_stage(frame, frame_count, timestamp))
+        return self.judge_stage(self.detect_stage(frame, frame_count, timestamp, big))
 
-    def detect_stage(self, frame: np.ndarray, frame_count: int, timestamp: float | None = None) -> "FrameJob":
+    def detect_stage(self, frame: np.ndarray, frame_count: int, timestamp: float | None = None, big: "np.ndarray | None" = None) -> "FrameJob":
         """
         Stage A of a picture: find the vehicles and people and give them track ids (the detector and the trackers).
         It touches no ledger, so the live feed can run it on the next picture while stage B (judge_stage) still works on the one
@@ -672,7 +736,7 @@ class DecoupledPipeline:
         detections = self._filter_to_roi(found, scaled_rois)
         TIMER.add("roi", time.perf_counter() - t1)
         TIMER.add("A", time.perf_counter() - t0)
-        return FrameJob(frame, frame_count, timestamp, scaled_rois, detections)
+        return FrameJob(frame, frame_count, timestamp, scaled_rois, detections, big)
 
     def judge_stage(self, job: "FrameJob") -> tuple[np.ndarray, list]:
         """
@@ -681,6 +745,7 @@ class DecoupledPipeline:
         """
         t0 = time.perf_counter()
         frame, frame_count, timestamp, scaled_rois, detections = job.frame, job.frame_count, job.timestamp, job.scaled_rois, job.detections
+        self._big_frame = getattr(job, "big", None)        # what _capture_evidence_frame cuts the sharp crops from
         fh, fw = frame.shape[:2]
         with TIMER.time("history"):
             self.ledger_manager.update(detections, timestamp, frame)
@@ -690,6 +755,8 @@ class DecoupledPipeline:
                 if self.learn_only:                  # pre-scan: learn the flow, judge nothing, keep no evidence
                     return frame, detections
 
+        if not self.judge_incoming_two_wheelers:
+            detections = self._without_incoming_two_wheelers(detections)
         active = self.registry.active_violations
         with TIMER.time("models"):
             self._run_specialists(frame, frame_count, detections, active)
@@ -711,6 +778,9 @@ class DecoupledPipeline:
                 if getattr(det, "is_violator", False):
                     self._capture_evidence_frame(frame, det, tid, detections)
 
+        if getattr(self, "release_early", False):             # the live feed: a parked vehicle's ticket goes out while it still stands there
+            self.ledger_manager.release_early(timestamp if timestamp is not None else time.time())
+
         # ── Attach cached plate identification ───────────────────────────────
         # The plate specialist only runs every SPECIALIST_INTERVAL frames, so
         # pull its last known result off the ledger for every frame in between.
@@ -729,13 +799,35 @@ class DecoupledPipeline:
         TIMER.mark("judged")
         # The clean frame goes back to the streamer: boxes and zones are drawn from the JSON overlay by the dashboard.
         # Boxes the detector lost for a moment come back as ghosts (engine/box_stabilizer.py): for the screen only, after everything above.
-        try:
-            ghosts = self.stabilizer.step(detections, frame_count, (fw, fh))
-        except Exception:
-            log.exception("The box stabilizer failed")
-            ghosts = []
+        ghosts = []
+        stabilizer = getattr(self, "stabilizer", None)
+        if stabilizer is not None:
+            try:
+                ghosts = stabilizer.step(detections, frame_count, (fw, fh))
+            except Exception:
+                log.exception("The box stabilizer failed")
         return frame, (detections + ghosts if ghosts else detections)
 
+
+    def _without_incoming_two_wheelers(self, detections: list) -> list:
+        """The detections without the motorcycles, tricycles and kuliglig that come toward the camera (no plate to read from the front).
+        Such a vehicle's ledger is marked: the zone rules skip it and it never makes a ticket. Once it is seen coming, it stays marked
+        (it does not turn around); a vehicle whose direction is not clear yet is still judged."""
+        from engine.incoming import FRONT_UNPLATED, is_incoming
+
+        kept = []
+        for det in detections:
+            ledger = self.ledger_manager.ledgers.get(getattr(det, "track_id", -1))
+            if ledger is None or getattr(det, "cls", None) not in FRONT_UNPLATED:
+                kept.append(det)
+                continue
+            if not ledger.unticketable and is_incoming(ledger.path) is True:
+                ledger.unticketable = True
+                ledger.violations.clear()
+                ledger.pending.clear()
+            if not ledger.unticketable:
+                kept.append(det)
+        return kept
 
     def reset_tracking(self) -> None:
         """Forget every tracked vehicle and restart the tracker, but keep the learned flow (after a pre-scan)."""
@@ -822,6 +914,8 @@ class DecoupledPipeline:
                 rules.append((violation, zones))
         for tid, ledger in list(self.ledger_manager.ledgers.items()):
             if "person" in (ledger.vclass, ledger.latest_class):   # latest_class: a new track has no settled class yet
+                continue
+            if ledger.unticketable:                                # a two-wheeler coming toward the camera: not judged (engine/incoming.py)
                 continue
             for violation, zones in rules:
                 t_rule = time.perf_counter()

@@ -26,7 +26,7 @@ EVIDENCE = service.EVIDENCE_DIR
 
 
 def cmd_status(args) -> int:
-    reg = registry.load(args.registry)
+    reg = registry.load(args.registry, only_folder=None if args.registry else registry.CLIP_FOLDER)
     print(f"{len(reg.clips)} clips in the registry. Needed: {reg.defaults['min_events']} real events per violation.\n")
     print(f"{'violation':24} {'events':>7} {'clips':>6}  state")
     for r in service.coverage(reg):
@@ -36,7 +36,7 @@ def cmd_status(args) -> int:
 
 
 def cmd_validate(args) -> int:
-    probs = registry.problems(registry.load(args.registry))
+    probs = registry.problems(registry.load(args.registry, only_folder=None if args.registry else registry.CLIP_FOLDER))
     print("\n".join(probs) if probs else "registry is fine")
     return 1 if probs else 0
 
@@ -70,9 +70,9 @@ def cmd_adopt(args) -> int:
 
 def cmd_run(args) -> int:
     import requests
-    reg = registry.load(args.registry)
+    reg = registry.load(args.registry, only_folder=None if args.registry else registry.CLIP_FOLDER)
     probs = [p for p in registry.problems(reg) if "no events and not marked clean" not in p]
-    clips = [c for c in reg.clips if not args.clip or c.id in args.clip]
+    clips = [c for c in reg.clips if (not args.clip or c.id in args.clip) and (not args.folder or service.in_folder(c.file, args.folder))]
     if not clips:
         print("No clips to run. Add clips to benchmarks/registry.yaml (see benchmarks/README.md).")
         return 1
@@ -113,7 +113,7 @@ def cmd_compare(args) -> int:
 
 
 def cmd_checklist(args) -> int:
-    reg = registry.load() if (BENCH / "registry.yaml").exists() else None
+    reg = registry.load(only_folder=registry.CLIP_FOLDER) if (BENCH / "registry.yaml").exists() else None
     out = BENCH / "CLIP_CHECKLIST.md"
     out.write_text(checklist.markdown(reg.defaults["min_events"] if reg else 10), encoding="utf-8")
     print(f"wrote {out}")
@@ -136,6 +136,7 @@ def main(argv=None) -> int:
     r = sub.add_parser("run")
     r.add_argument("--label", default="run")
     r.add_argument("--clip", action="append", help="only this clip id (repeatable)")
+    r.add_argument("--folder", help="only the clips whose video is in this folder, e.g. A:/huli-kamote/benchmark-videos")
     r.add_argument("--url", default=runner.DEFAULT_URL)
     r.add_argument("--set", action="append", help="override a setting, e.g. --set primary_model=yolo11_primary.onnx")
     r.add_argument("--out", help="folder for the report (default benchmarks/reports)")

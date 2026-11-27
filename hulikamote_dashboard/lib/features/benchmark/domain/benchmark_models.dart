@@ -141,7 +141,13 @@ class RunProgress {
     required this.error,
     required this.report,
     required this.results,
+    this.preview = false,
+    this.taskId,
   });
+
+  /// The run was started with the live view on, and the analysis task whose picture to show.
+  final bool preview;
+  final String? taskId;
 
   final String id;
   final String status; // running | done | failed | cancelled
@@ -168,6 +174,8 @@ class RunProgress {
         error: j['error'] as String?,
         report: j['report'] as String?,
         results: [for (final r in (j['results'] as List? ?? const [])) Map<String, dynamic>.from(r as Map)],
+        preview: j['preview'] == true,
+        taskId: j['task_id'] as String?,
       );
 }
 

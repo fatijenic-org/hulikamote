@@ -146,6 +146,7 @@ PEOPLE_NEAR_VEHICLES = 6
 # seconds, and the searches between are the cheap whole-picture one. This was the biggest part of the time of a picture (about 700 of 850 ms).
 HEAVY_EVERY = max(1, int(os.environ.get("HK_HEAVY_EVERY", "2")))
 PEOPLE_NEAR_CONFIDENCE = 0.20
+PEOPLE_NEAR_BIKE_CONFIDENCE = 0.15
 PEOPLE_HELPER_CONFIDENCE = 0.15
 # A vehicle that is tracked already stays on the screen down to this score (the start cutoffs above stay as they are): the live "keep" slider.
 # 0 = off (every box needs its start cutoff on every picture). Changed while running with set_keep_conf().
@@ -239,9 +240,10 @@ def draw_specs(out: np.ndarray, specs: list[dict]) -> None:
 
 
 class YoloDetection:
-    __slots__ = ("cls", "confidence", "bbox", "violation_type", "track_id", "is_violator", "assigned_user_id", "assigned_user_name", "plate_text", "plate_bbox", "marks")
+    __slots__ = ("cls", "confidence", "bbox", "violation_type", "track_id", "is_violator", "assigned_user_id", "assigned_user_name", "plate_text", "plate_bbox", "marks", "on_bike")
 
     def __init__(self, cls: str, confidence: float, bbox: list[int], violation_type: str, track_id: int = -1, is_violator: bool = False):
+        self.on_bike = False                  # a person the people search saw ON a motorcycle or bicycle (see YoloInference.people_near): never a passenger outside
         self.cls = cls
         self.confidence = confidence
         self.bbox = bbox  # [x, y, w, h] in original image coords
@@ -354,13 +356,20 @@ class YoloInference:
         vehicles = sorted((d for d in found if d.cls in PEOPLE_NEAR_CLASSES and d.bbox[2] >= 40 and d.bbox[3] >= 40),
                           key=lambda d: d.bbox[2] * d.bbox[3], reverse=True)[:max_vehicles]
         added: list[YoloDetection] = []
+        bikes: list = []                                     # motorcycles and bicycles seen in the cuts (x1y1x2y2)
         for v in vehicles:
             vx, vy, vw, vh = v.bbox
             x0, x1 = max(0, int(vx - 0.15 * vw)), min(fw, int(vx + 1.15 * vw))
             y0, y1 = max(0, int(vy - 0.45 * vh)), min(fh, int(vy + 1.05 * vh))
             if x1 - x0 < 32 or y1 - y0 < 32:
                 continue
-            boxes, scores, _ = self._people_in(frame[y0:y1, x0:x1], x0, y0)
+            if self._people_session is not None:
+                all_boxes, all_scores, ids = self._helper_decode(frame[y0:y1, x0:x1], x0, y0)
+                bikes.extend(b for b, i, s in zip(all_boxes, ids, all_scores) if i in (1, 3) and s >= PEOPLE_NEAR_BIKE_CONFIDENCE)
+                people = ids == 0
+                boxes, scores = all_boxes[people], all_scores[people]
+            else:
+                boxes, scores, _ = self._people_in(frame[y0:y1, x0:x1], x0, y0)
             for (bx1, by1, bx2, by2), score in zip(boxes, scores):
                 w, h = bx2 - bx1, by2 - by1
                 if score < PEOPLE_NEAR_CONFIDENCE or w < 6 or h < 6:
@@ -370,11 +379,19 @@ class YoloInference:
                     continue                                 # that person is already in the list
                 have.append(bbox)
                 added.append(YoloDetection("person", float(score), bbox, "person"))
+        if bikes:                                            # a person ON a bike (a rider behind or ahead of the vehicle) is no passenger
+            known = [d for d in found if d.cls == "motorcycle"]
+            for person in [d for d in found if d.cls == "person"] + added:
+                px, py, pw, ph = person.bbox
+                for bx1, by1, bx2, by2 in bikes:
+                    if _on_bike(person.bbox, [bx1, by1, bx2 - bx1, by2 - by1]):
+                        person.on_bike = True
+                        break
         return added
 
-    def _helper_candidates(self, img: np.ndarray, x0: int = 0, y0: int = 0):
-        """The people the COCO model sees on one image (a tile moved back into the frame by x0, y0): the same triple as _candidates, with the
-        traffic model's person class id. People only."""
+    def _helper_decode(self, img: np.ndarray, x0: int = 0, y0: int = 0):
+        """What the COCO model sees on one image (a crop moved back into the frame by x0, y0): boxes (x1y1x2y2), scores and COCO class ids,
+        for the people (0), bicycles (1) and motorcycles (3) above PEOPLE_HELPER_CONFIDENCE."""
         h, w = img.shape[:2]
         blob, sx, sy, pad_x, pad_y = self.preprocess(img)
         preds = self._people_session.run(None, {self._people_input: blob})[0][0]
@@ -384,13 +401,22 @@ class YoloInference:
         if preds.shape[0] == 0 or preds.shape[1] < 5:
             return empty
         scores = preds[:, 4:]
-        keep = (scores.argmax(axis=1) == 0) & (scores[:, 0] >= PEOPLE_HELPER_CONFIDENCE)       # COCO class 0 = person
+        ids = scores.argmax(axis=1)
+        best = scores[np.arange(len(ids)), ids]
+        keep = np.isin(ids, (0, 1, 3)) & (best >= PEOPLE_HELPER_CONFIDENCE)
         if not keep.any():
             return empty
         cx, cy, bw, bh = preds[keep, 0], preds[keep, 1], preds[keep, 2], preds[keep, 3]
         boxes = np.stack([((cx - bw / 2 - pad_x) / sx).clip(0, w) + x0, ((cy - bh / 2 - pad_y) / sy).clip(0, h) + y0,
                           ((cx + bw / 2 - pad_x) / sx).clip(0, w) + x0, ((cy + bh / 2 - pad_y) / sy).clip(0, h) + y0], axis=1)
-        return boxes, scores[keep, 0], np.full(int(keep.sum()), self._person_index, dtype=int)
+        return boxes, best[keep], ids[keep]
+
+    def _helper_candidates(self, img: np.ndarray, x0: int = 0, y0: int = 0):
+        """The people the COCO model sees on one image (a tile moved back into the frame by x0, y0): the same triple as _candidates, with the
+        traffic model's person class id. People only."""
+        boxes, scores, ids = self._helper_decode(img, x0, y0)
+        people = ids == 0
+        return boxes[people], scores[people], np.full(int(people.sum()), self._person_index, dtype=int)
 
     def _new_tracker(self, replaces=None):
         """A new tracker with nothing tracked. `replaces` = the tracker it takes the place of: DeepSORT keeps that one's loaded ReID network."""
@@ -788,6 +814,21 @@ def _covers(a: list, b: list) -> bool:
         return False
     smaller = min(a[2] * a[3], b[2] * b[3])
     return inter / (a[2] * a[3] + b[2] * b[3] - inter) >= 0.4 or (smaller > 0 and inter / smaller >= 0.7)
+
+
+def _on_bike(person: list, bike: list) -> bool:
+    """A person [x, y, w, h] sits on a motorcycle / bicycle [x, y, w, h]: the middle of the person is over the bike's width and most of the bike's
+    top half lies under the person, or the person's box covers a good part of the bike's box."""
+    px, py, pw, ph = person
+    bx, by, bw, bh = bike
+    if pw <= 0 or ph <= 0 or bw <= 0 or bh <= 0:
+        return False
+    ix = max(0.0, min(px + pw, bx + bw) - max(px, bx))
+    iy = max(0.0, min(py + ph, by + bh) - max(py, by))
+    if ix * iy <= 0:
+        return False
+    centre = px + pw / 2
+    return bx - 0.1 * bw <= centre <= bx + 1.1 * bw and (ix * iy / (pw * ph) >= 0.25 or ix * iy / (bw * bh) >= 0.4)
 
 
 def on_a_vehicle(person_xyxy, vehicles_xyxy) -> bool:

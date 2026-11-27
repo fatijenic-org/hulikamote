@@ -30,6 +30,7 @@ PII_ALLOWED = {
     "helmet_specialist": {"plates"},
     "cabin_specialist": {"heads", "plates"},
     "primary_anchor": {"heads", "plates"},
+    "side_mirror": {"plates"},         # mirrors sit next to the rider's head: heads stay
 }
 
 

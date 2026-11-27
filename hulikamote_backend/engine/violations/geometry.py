@@ -260,7 +260,8 @@ def line_cut(points, line, tol: float = 0.0):
                 continue                                              # parallel: it never meets this piece
             along_trip = ((ax - px) * sy - (ay - py) * sx) / denom
             along_line = ((ax - px) * ry - (ay - py) * rx) / denom
-            if 0.0 <= along_trip <= 1.0 and 0.0 <= along_line <= 1.0:
+            if -0.05 <= along_trip <= 1.0 and 0.0 <= along_line <= 1.0:      # (a trip that starts on the line itself still cuts it)
+                along_trip = max(0.0, along_trip)
                 length = math.hypot(sx, sy)
                 return Cut((px + along_trip * rx, py + along_trip * ry), (sx / length, sy / length), step, along_trip)
     return None

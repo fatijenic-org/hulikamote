@@ -191,6 +191,20 @@ def _smooth(points: list) -> list:
     return out
 
 
+def foot_lines(run: list, kind) -> list:
+    """The smoothed line(s) a vehicle left on the road from its path samples (t, x, y, w): ONE line under the middle of a motorcycle or bicycle
+    (its footprint is its bottom centre), TWO for every other vehicle (car, tricycle, jeepney, bus, truck): its lower left and lower right corner.
+    The last point of each line is exact."""
+    two_wheeler = kind in ("motorcycle", "bicycle")
+    offsets = (0.0,) if two_wheeler else (-0.5, 0.5)
+    lines = []
+    for k in offsets:
+        points = _smooth([(p[1] + k * p[3], p[2]) for p in run])
+        points[-1] = (run[-1][1] + k * run[-1][3], run[-1][2])
+        lines.append(points)
+    return lines
+
+
 def draw_path(frame: np.ndarray, ledger, seconds: float = PATH_SECONDS) -> np.ndarray:
     """The way the vehicle drove, as a light line from where it was `seconds` ago to where it is now (its ground point, in frame pixels),
     in place. Only the part that is ONE vehicle is drawn: the ledger of a tracker number can hold another vehicle before a jump or a long
@@ -204,14 +218,13 @@ def draw_path(frame: np.ndarray, ledger, seconds: float = PATH_SECONDS) -> np.nd
     run = [p for p in run if now - p[0] <= seconds]
     if len(run) < 2:
         return frame
-    points = _smooth([(p[1], p[2]) for p in run])
-    points[-1] = (run[-1][1], run[-1][2])                         # the end is the vehicle's own ground point
+    lines = foot_lines(run, getattr(ledger, "latest_class", None))   # one line for a motorcycle, the two lower corners for any other vehicle
     rings = [(x, y) for t, x, y in getattr(ledger, "cross_points", ()) if run[0][0] <= t <= now]
     thick = max(3, frame.shape[0] // 240)
     pad = 6 * thick + 4
     fh, fw = frame.shape[:2]
-    xs = [p[0] for p in points] + [r[0] for r in rings]
-    ys = [p[1] for p in points] + [r[1] for r in rings]
+    xs = [p[0] for points in lines for p in points] + [r[0] for r in rings]
+    ys = [p[1] for points in lines for p in points] + [r[1] for r in rings]
     x0, x1 = max(0, int(min(xs)) - pad), min(fw, int(max(xs)) + pad + 1)      # work on the part of the picture the trail is in
     y0, y1 = max(0, int(min(ys)) - pad), min(fh, int(max(ys)) + pad + 1)
     if x1 <= x0 or y1 <= y0:
@@ -223,15 +236,16 @@ def draw_path(frame: np.ndarray, ledger, seconds: float = PATH_SECONDS) -> np.nd
     def at(p):
         return int(round(p[0])) - x0, int(round(p[1])) - y0
 
-    n = len(points)
-    for i in range(1, n):
-        fade = 0.35 + 0.65 * i / n                                # older = fainter
-        cv2.line(layer, at(points[i - 1]), at(points[i]), tuple(int(c * fade) for c in PATH_LIGHT), thick, cv2.LINE_AA)
-        cv2.line(mask, at(points[i - 1]), at(points[i]), 255, thick + 2, cv2.LINE_AA)
-    cv2.circle(layer, at(points[0]), thick + 1, PATH_LIGHT, -1, cv2.LINE_AA)
-    cv2.circle(layer, at(points[-1]), thick + 3, PATH_LIGHT, -1, cv2.LINE_AA)
-    cv2.circle(mask, at(points[0]), thick + 3, 255, -1, cv2.LINE_AA)
-    cv2.circle(mask, at(points[-1]), thick + 5, 255, -1, cv2.LINE_AA)
+    for points in lines:
+        n = len(points)
+        for i in range(1, n):
+            fade = 0.35 + 0.65 * i / n                            # older = fainter
+            cv2.line(layer, at(points[i - 1]), at(points[i]), tuple(int(c * fade) for c in PATH_LIGHT), thick, cv2.LINE_AA)
+            cv2.line(mask, at(points[i - 1]), at(points[i]), 255, thick + 2, cv2.LINE_AA)
+        cv2.circle(layer, at(points[0]), thick + 1, PATH_LIGHT, -1, cv2.LINE_AA)
+        cv2.circle(layer, at(points[-1]), thick + 3, PATH_LIGHT, -1, cv2.LINE_AA)
+        cv2.circle(mask, at(points[0]), thick + 3, 255, -1, cv2.LINE_AA)
+        cv2.circle(mask, at(points[-1]), thick + 5, 255, -1, cv2.LINE_AA)
     for r in rings:
         cv2.circle(mask, at(r), 4 * thick + 2, 255, thick + 3, cv2.LINE_AA)
         cv2.circle(layer, at(r), 4 * thick, PATH_RING, max(1, thick - 1), cv2.LINE_AA)
@@ -269,13 +283,12 @@ def trail_specs(mgr, detections, seconds: float = TRAIL_SECONDS) -> list[dict]:
         run.reverse()
         if len(run) < 3:
             continue
-        points = _smooth([(p[1], p[2]) for p in run])
-        points[-1] = (run[-1][1], run[-1][2])
-        step = max(1, math.ceil(len(points) / TRAIL_POINTS))
-        thin = points[::step]
-        if thin[-1] != points[-1]:
-            thin.append(points[-1])
-        out.append({"trail": [[round(x, 1), round(y, 1)] for x, y in thin], "color": list(PATH_LIGHT)})
+        for points in foot_lines(run, getattr(det, "cls", None)):     # a motorcycle: one line (bottom centre); others: lower left + lower right corner
+            step = max(1, math.ceil(len(points) / TRAIL_POINTS))
+            thin = points[::step]
+            if thin[-1] != points[-1]:
+                thin.append(points[-1])
+            out.append({"trail": [[round(x, 1), round(y, 1)] for x, y in thin], "color": list(PATH_LIGHT)})
     return out
 
 

@@ -31,8 +31,11 @@ class LabelModelInfo {
     required this.classes,
     required this.help,
     required this.counts,
+    this.labellerOnly = false,
   });
 
+  /// A target that exists only in the Labeller (one class of a bigger model, like the motorcycle side mirror).
+  final bool labellerOnly;
   final String key;
   final String title;
   final List<String> classes;
@@ -47,6 +50,7 @@ class LabelModelInfo {
         'helmet_specialist' => 'Helmets',
         'cabin_specialist' => 'Cabin',
         'primary_anchor' => 'Vehicles',
+        'side_mirror' => 'Mirrors',
         _ => title,
       };
 
@@ -56,6 +60,7 @@ class LabelModelInfo {
         'helmet_specialist' => 'Box each rider: helmet on, or no helmet.',
         'cabin_specialist' => 'Box what you can see.',
         'primary_anchor' => 'Box every vehicle and rider. Fix the guess.',
+        'side_mirror' => 'Box each side mirror of the motorcycle. Not a motorcycle? Press Not a motorcycle.',
         _ => 'Check the boxes.',
       };
 
@@ -65,6 +70,7 @@ class LabelModelInfo {
         classes: [for (final c in ((j['classes'] as List?) ?? const [])) '$c'],
         help: {for (final e in ((j['help'] as Map?) ?? const {}).entries) '${e.key}': '${e.value}'},
         counts: HarvestCounts.fromJson((j['counts'] as Map?)?.cast<String, dynamic>()),
+        labellerOnly: j['labeller_only'] == true,
       );
 }
 
@@ -103,7 +109,7 @@ class LabelSession {
   final List<LabelModelInfo> models;
 
   /// The categories that have any picture for this analysis.
-  List<LabelModelInfo> get categories => [for (final m in models) if (m.counts.total > 0) m];
+  List<LabelModelInfo> get categories => [for (final m in models) if (m.counts.total > 0 && !m.labellerOnly) m];
 
   factory LabelSession.fromJson(Map<String, dynamic> j) {
     final collect = Map<String, dynamic>.from((j['collect'] as Map?) ?? const {});

@@ -86,13 +86,16 @@ class BenchmarkApi {
   }
 
   /// Starts scoring in the background; returns the run id.
-  Future<String> startRun({required String label, List<String>? clips}) async {
+  Future<String> startRun({required String label, List<String>? clips, bool preview = false}) async {
     final r = await _client
-        .post(_u('/run'), headers: _json, body: jsonEncode({'label': label, 'clips': clips}))
+        .post(_u('/run'), headers: _json, body: jsonEncode({'label': label, 'clips': clips, 'preview': preview}))
         .timeout(_timeout);
     if (r.statusCode != 202 && r.statusCode != 200) _fail(r, 'Starting the benchmark');
     return '${_map(r)['run_id']}';
   }
+
+  /// Where the newest live picture of an analysis is served; [tick] makes the picture load again.
+  String previewUrl(String taskId, int tick) => '$baseUrl/api/forensic/preview/$taskId?t=$tick';
 
   Future<RunProgress> runProgress(String runId) async {
     final r = await _client.get(_u('/run/$runId')).timeout(_timeout);

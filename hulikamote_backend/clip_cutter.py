@@ -109,6 +109,80 @@ def filmstrip(path: Path, count: int, cache_dir: Path, run=subprocess.run) -> Pa
     return target
 
 
+# ─── smooth preview (a light copy to play while labelling a heavy video) ────
+
+PREVIEW_ABOVE_HEIGHT = 1080          # taller videos get a light copy to play (a 4K file at 48 Mbps stalls the player)
+PREVIEW_WIDTH = 960
+
+
+def preview_command(source: Path, output: Path, encoder: str, ffmpeg: str = "ffmpeg", hwdecode: bool = False) -> list[str]:
+    """A small copy with a keyframe every 15 frames (scrubbing is instant) and no sound. Same length as the source.
+    hwdecode: the graphics card decodes the big picture (measured: 15x real time for 4K, against 3x on the processor)."""
+    head = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
+            *(["-hwaccel", "d3d11va"] if hwdecode else []), "-i", str(source),
+            "-map", "0:v:0", "-an", "-vf", f"scale={PREVIEW_WIDTH}:-2", "-g", "15"]
+    if encoder == "nvenc":
+        return head + ["-c:v", "h264_nvenc", "-preset", "p1", "-cq", "32", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output)]
+    return head + ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(output)]
+
+
+class PreviewManager:
+    """One light copy per heavy video, made once in the background and kept (a cache folder). State per video:
+    {"state": "ready" | "working" | "failed", "path": file to play, "progress": 0..1, "error": text}."""
+
+    def __init__(self, cache_dir: Path, popen=subprocess.Popen, ffmpeg: str = "ffmpeg"):
+        self._dir, self._popen, self._ffmpeg = cache_dir, popen, ffmpeg
+        self._lock = threading.Lock()
+        self._state: dict[str, dict] = {}
+
+    def _key(self, source: Path) -> str:
+        stat = source.stat()
+        return hashlib.sha1(f"{source.resolve()}|{stat.st_mtime_ns}|{stat.st_size}".encode()).hexdigest()[:16]
+
+    def status(self, source: Path, info: dict) -> dict:
+        """Starts the copy when the video is heavy and none exists. A light video plays as it is."""
+        if info["height"] <= PREVIEW_ABOVE_HEIGHT:
+            return {"state": "ready", "path": str(source), "progress": 1.0, "error": "", "copy": False}
+        key = self._key(source)
+        target = self._dir / f"{key}.mp4"
+        with self._lock:
+            known = self._state.get(key)
+            if known and known["state"] in ("working", "failed"):
+                return dict(known)
+            if target.exists():
+                return {"state": "ready", "path": str(target), "progress": 1.0, "error": "", "copy": True}
+            self._state[key] = {"state": "working", "path": str(source), "progress": 0.0, "error": "", "copy": True}
+            threading.Thread(target=self._make, args=(key, source, target, info["duration"]), daemon=True, name="preview").start()
+            return dict(self._state[key])
+
+    def _set(self, key: str, **changes) -> None:
+        with self._lock:
+            self._state[key].update(changes)
+
+    def _make(self, key: str, source: Path, target: Path, duration: float) -> None:
+        self._dir.mkdir(parents=True, exist_ok=True)
+        partial = target.with_suffix(".part.mp4")
+        error = ""
+        for encoder, hwdecode in (("nvenc", True), ("nvenc", False), ("x264", False)):     # the graphics card first; the processor when it refuses
+            partial.unlink(missing_ok=True)
+            try:
+                proc = self._popen(preview_command(source, partial, encoder, self._ffmpeg, hwdecode), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                for line in proc.stdout:
+                    fraction = progress_from_line(line, duration)
+                    if fraction is not None:
+                        self._set(key, progress=min(0.99, fraction))
+                error = (proc.stderr.read() or "").strip()
+                code = proc.wait()
+            except OSError as exc:
+                error, code = f"Could not start ffmpeg: {exc}", 1
+            if code == 0 and partial.exists():
+                partial.replace(target)
+                self._set(key, state="ready", path=str(target), progress=1.0, error="")
+                return
+        partial.unlink(missing_ok=True)
+        self._set(key, state="failed", error=error[-300:] or "The preview could not be made.")
+
+
 # ─── jobs ────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -134,18 +208,29 @@ class JobManager:
         self._lock = threading.Lock()
         self._jobs: dict[str, Job] = {}
         self._procs: dict[str, object] = {}
+        self._after: dict[str, object] = {}              # job id -> function(job_dict) called once when that job is done
 
     def submit(self, source: Path, clips: list[dict], exact: bool, out_dir: Path | None) -> list[Job]:
         """One job per clip ({start, end, label}). Returns them at once; they run in the background."""
         made: list[Job] = []
         reserved: set[Path] = set()
         for clip in clips:
-            out = output_path(source, out_dir, clip.get("label", ""), clip["start"], clip["end"], taken=lambda p: p.exists() or p in reserved)
+            if clip.get("name"):                               # the caller chose the file name (the benchmark labeller)
+                folder = Path(clip["folder"]) if clip.get("folder") else (out_dir or source.parent)
+                base, n = folder / f"{clip['name']}.mp4", 2
+                while base.exists() or base in reserved:
+                    base = folder / f"{clip['name']}-{n}.mp4"
+                    n += 1
+                out = base
+            else:
+                out = output_path(source, out_dir, clip.get("label", ""), clip["start"], clip["end"], taken=lambda p: p.exists() or p in reserved)
             reserved.add(out)
             job = Job(id=uuid.uuid4().hex[:10], source=str(source), output=str(out), start=clip["start"], end=clip["end"],
                       label=clip.get("label", ""), exact=exact)
             with self._lock:
                 self._jobs[job.id] = job
+                if clip.get("after"):
+                    self._after[job.id] = clip["after"]
             made.append(job)
             self._pool.submit(self._run, job)
         return made
@@ -226,3 +311,10 @@ class JobManager:
         if progress is not None:
             changes["progress"] = progress
         self._set(job, **changes)
+        with self._lock:
+            after = self._after.pop(job.id, None)
+        if after is not None and status == "done":
+            try:
+                after(asdict(job))
+            except Exception as exc:                        # the cut worked; only the follow-up failed: say so
+                self._set(job, error=f"Cut, but the follow-up failed: {exc}")

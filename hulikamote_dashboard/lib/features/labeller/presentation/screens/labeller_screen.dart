@@ -22,6 +22,7 @@ String? defaultEvidenceFolder() {
       'plate_specialist' => (heads: true, plates: false, note: 'Plates stay readable: this model learns plates.'),
       'helmet_specialist' => (heads: false, plates: true, note: 'Heads stay visible: this model learns from the rider\'s head.'),
       'cabin_specialist' => (heads: true, plates: true, note: 'Check pictures where a driver holds a phone: a blurred head can hide it.'),
+      'side_mirror' => (heads: false, plates: true, note: 'Heads stay visible: a mirror sits next to the rider\'s head.'),
       _ => (heads: true, plates: true, note: null),
     };
 

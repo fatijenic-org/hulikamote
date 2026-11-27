@@ -1,3 +1,4 @@
+import copy
 import time
 import math
 from pathlib import Path
@@ -43,6 +44,13 @@ def carried_by(person, vehicles, ) -> bool:
     return False
 
 
+# A vehicle that parks illegally stays: waiting for it to LEAVE before its ticket is made (the way every other rule works) means a ticket
+# an hour late, or none when the video or the feed ends first. In the live feed Illegal parking is therefore released this long after the
+# vehicle was flagged, while it still stands there (ActiveLedgerManager.release_early). By then the evidence photos are taken.
+EARLY_RELEASE_KEYS = ("illegal_parking",)
+EARLY_RELEASE_S = 3.0
+
+
 class TrackLedger:
     # Cap on saved evidence frames per violation — bounds disk usage while still
     # giving reviewers a multi-second timeline instead of a single frame.
@@ -60,6 +68,8 @@ class TrackLedger:
         # deque is O(1) append/pop vs O(n) for list.pop(0)
         self.history: deque = deque(maxlen=30)  # (timestamp, cx, cy, bbox)
         self.violations: set = set()
+        self.released: set = set()        # violations whose ticket was already sent while the vehicle was still there (release_early)
+        self.flagged_at: dict = {}        # violation -> when it was first flagged (release_early waits EARLY_RELEASE_S after it)
         self.snapshot_bbox: list | None = None  # best bbox for evidence crop
         self.plate_text: str = "unidentified"   # filled by Plate Specialist via EasyOCR
         self.plate_bbox: list | None = None     # [x, y, w, h] of the plate crop, global coords
@@ -83,6 +93,7 @@ class TrackLedger:
         self.marks: dict = {}             # violation -> boxes showing why (see engine/marks.py)
         self.timers: dict = {}            # violation -> stopwatch drawn on the vehicle's box (see engine/marks.py set_timer)
         self.rides: bool = False          # a "person" that moves like a vehicle: judged as a motorcycle from now on
+        self.unticketable: bool = False   # a two-wheeler coming toward the camera (no plate to read): never judged, never ticketed (engine/incoming.py)
         self.onboard: dict = {}           # Passengers outside: where people sat on this vehicle in the last looks, and when they counted (violations/onboard.py)
         self._fast_since: float | None = None
         self.blink: deque = deque(maxlen=200)   # (t, left amber, right amber) indicator samples
@@ -421,6 +432,24 @@ class ActiveLedgerManager:
             why = track_guard.colour_clash(ledger.appearance, compute_signature(frame, det.bbox))
         return why
 
+    def release_early(self, now: float, keys=EARLY_RELEASE_KEYS, after_s: float = EARLY_RELEASE_S) -> None:
+        """The live feed: send the ticket of a vehicle that was flagged `after_s` seconds ago and is still there, for the rules in `keys`
+        (a parked vehicle does not leave; see EARLY_RELEASE_S). The ticket holds only those violations and the photos taken so far. The
+        ledger remembers them in `released`, so the vehicle's last ticket (when it leaves) does not repeat them, and takes no more photos
+        for them. Call it once per judged picture."""
+        for tid, ledger in list(self.ledgers.items()):
+            if ledger.unticketable:
+                continue
+            for key in keys:
+                if key not in ledger.violations or key in ledger.released:
+                    continue
+                since = ledger.flagged_at.setdefault(key, now)
+                if now - since < after_s or not ledger.evidence_paths:
+                    continue                                     # not long enough yet, or no photo yet: look again next picture
+                self.pending_tickets.append(self._ticket(tid, ledger, [key]))
+                ledger.released.add(key)
+                self._log_event("released", now, id=tid, violation=key, photos=len(ledger.evidence_paths))
+
     def drain_tickets(self) -> list[dict]:
         """
         Pop and return all pending tickets accumulated since the last drain.
@@ -491,6 +520,23 @@ class ActiveLedgerManager:
 
     # ─── Internal ────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _ticket(track_id: int, ledger: "TrackLedger", violations: list) -> dict:
+        """The ticket dict of a ledger for these violations. The lists are copies when the vehicle is still on screen (more photos may follow)."""
+        return {
+            "track_id": track_id,
+            "merged_track_ids": sorted(ledger.merged_ids),
+            "violations": list(violations),
+            "snapshot_bbox": ledger.snapshot_bbox,
+            "plate_bbox": ledger.plate_bbox,
+            "plate_text": ledger.plate_text,
+            "plate_status": plate_status(ledger),       # no_plate | not_read | unclear | not_checked ("read" is set after the OCR)
+            "plate_evidence": plate_evidence(ledger),
+            "plate_crops": list(ledger.plate_crops),
+            "evidence_paths": list(ledger.evidence_paths),
+            "evidence_meta": copy.deepcopy(ledger.evidence_meta),
+        }
+
     def _finalize_ticket(self, track_id: int) -> None:
         """
         Called when a tracked vehicle leaves the frame.
@@ -499,23 +545,14 @@ class ActiveLedgerManager:
         Does NOT call async code directly — this method is sync.
         """
         ledger = self.ledgers[track_id]
+        if ledger.unticketable:                                  # a two-wheeler that came toward the camera: no plate to read, no ticket
+            ledger.violations.clear()
         self.decide_end_of_track(ledger)
-        if not ledger.violations:
+        left = ledger.violations - ledger.released               # what was released while the vehicle stood there is not sent twice
+        if not left:
             return
 
-        ticket = {
-            "track_id": track_id,
-            "merged_track_ids": sorted(ledger.merged_ids),
-            "violations": list(ledger.violations),
-            "snapshot_bbox": ledger.snapshot_bbox,
-            "plate_bbox": ledger.plate_bbox,
-            "plate_text": ledger.plate_text,
-            "plate_status": plate_status(ledger),       # no_plate | not_read | unclear | not_checked ("read" is set after the OCR)
-            "plate_evidence": plate_evidence(ledger),
-            "plate_crops": ledger.plate_crops,
-            "evidence_paths": ledger.evidence_paths,
-            "evidence_meta": ledger.evidence_meta,
-        }
+        ticket = self._ticket(track_id, ledger, sorted(left))
         self.pending_tickets.append(ticket)
         print(
             f"[Ledger] Queued ticket — Track {track_id} | "

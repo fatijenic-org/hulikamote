@@ -696,12 +696,12 @@ class _HarvestLabelerState extends State<HarvestLabeler> {
               TextButton(
                 key: const Key('not-sure'),
                 onPressed: _busy ? null : _notSure,
-                child: const Text('Not sure  (S)'),
+                child: Text(widget.model.key == 'side_mirror' ? 'Not a motorcycle: skip  (S)' : 'Not sure  (S)'),
               ),
               OutlinedButton(
                 key: const Key('nothing-here'),
                 onPressed: _busy ? null : _nothingHere,
-                child: const Text('Nothing here  (N)'),
+                child: Text(widget.model.key == 'side_mirror' ? 'No mirror  (N)' : 'Nothing here  (N)'),
               ),
               FilledButton.icon(
                 key: const Key('looks-right'),

@@ -3797,5 +3797,469 @@
   "video_hash": "4be3b8a8705a23e3c204",
   "video_name": "nohelmet_pickup.mp4",
   "updated": 1795218611.062064
+ },
+ {
+  "id": "c9212e9537b6",
+  "name": "illegalparking_swerving_doubleparking.mp4",
+  "config": {
+   "active_violations": [
+    "illegal_parking"
+   ],
+   "per_violation_configs": {
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 1618.9235880398671,
+       "y": 785.5813953488372,
+       "w": 593.6478405315613,
+       "h": 588.8372093023255,
+       "kind": "hydrant",
+       "area": [
+        [
+         1390.139534883721,
+         911.3089700996678
+        ],
+        [
+         1354.418604651163,
+         700.3853820598007
+        ],
+        [
+         1322.0996677740864,
+         491.16279069767444
+        ],
+        [
+         1601.063122923588,
+         496.26578073089695
+        ],
+        [
+         1808.5847176079733,
+         892.5980066445181
+        ],
+        [
+         1915.7475083056477,
+         1080.0
+        ],
+        [
+         1403.747508305648,
+         1080.0
+        ]
+       ],
+       "ax": 1743.9468438538206,
+       "ay": 962.3388704318937
+      },
+      {
+       "x": 787.986710963455,
+       "y": 186.68438538205982,
+       "w": 319.7873754152823,
+       "h": 234.73754152823915,
+       "kind": "sign",
+       "scale": 0.7159459459459534,
+       "area": [
+        [
+         628.0930232558139,
+         253.0232558139535
+        ],
+        [
+         820.3056478405315,
+         69.31561461794024
+        ],
+        [
+         947.8803986710963,
+         82.92358803986711
+        ],
+        [
+         839.0166112956811,
+         304.0531561461794
+        ],
+        [
+         742.0598006644518,
+         283.641196013289
+        ]
+       ],
+       "ax": 742.0598006644518,
+       "ay": 207.09634551495012
+      }
+     ]
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true
+  },
+  "video_hash": "fbecd2a32e40d1180dae",
+  "video_name": "illegalparking_swerving_doubleparking.mp4",
+  "updated": 1795249717.123604
+ },
+ {
+  "id": "58690af1133e",
+  "name": "illegalparking_swerving_doubleparking.mp4",
+  "config": {
+   "active_violations": [
+    "illegal_parking"
+   ],
+   "per_violation_configs": {
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 1618.9235880398671,
+       "y": 785.5813953488372,
+       "w": 593.6478405315613,
+       "h": 588.8372093023255,
+       "kind": "hydrant",
+       "area": [
+        [
+         1390.139534883721,
+         911.3089700996678
+        ],
+        [
+         1354.418604651163,
+         700.3853820598007
+        ],
+        [
+         1322.0996677740864,
+         491.16279069767444
+        ],
+        [
+         1601.063122923588,
+         496.26578073089695
+        ],
+        [
+         1808.5847176079733,
+         892.5980066445181
+        ],
+        [
+         1915.7475083056477,
+         1080.0
+        ],
+        [
+         1403.747508305648,
+         1080.0
+        ]
+       ],
+       "ax": 1743.9468438538206,
+       "ay": 962.3388704318937
+      },
+      {
+       "x": 787.986710963455,
+       "y": 186.68438538205982,
+       "w": 319.7873754152823,
+       "h": 234.73754152823915,
+       "kind": "sign",
+       "scale": 0.7159459459459534,
+       "area": [
+        [
+         628.0930232558139,
+         253.0232558139535
+        ],
+        [
+         820.3056478405315,
+         69.31561461794024
+        ],
+        [
+         947.8803986710963,
+         82.92358803986711
+        ],
+        [
+         839.0166112956811,
+         304.0531561461794
+        ],
+        [
+         742.0598006644518,
+         283.641196013289
+        ]
+       ],
+       "ax": 742.0598006644518,
+       "ay": 207.09634551495012
+      }
+     ]
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true
+  },
+  "video_hash": "fbecd2a32e40d1180dae",
+  "video_name": "illegalparking_swerving_doubleparking.mp4",
+  "updated": 1795249732.404745
+ },
+ {
+  "id": "268385fb3f93",
+  "name": "illegalparking_swerving_doubleparking.mp4",
+  "config": {
+   "active_violations": [
+    "illegal_parking"
+   ],
+   "per_violation_configs": {
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 3.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 1618.9235880398671,
+       "y": 785.5813953488372,
+       "w": 593.6478405315613,
+       "h": 588.8372093023255,
+       "kind": "hydrant",
+       "area": [
+        [
+         1390.139534883721,
+         911.3089700996678
+        ],
+        [
+         1354.418604651163,
+         700.3853820598007
+        ],
+        [
+         1322.0996677740864,
+         491.16279069767444
+        ],
+        [
+         1601.063122923588,
+         496.26578073089695
+        ],
+        [
+         1808.5847176079733,
+         892.5980066445181
+        ],
+        [
+         1915.7475083056477,
+         1080.0
+        ],
+        [
+         1403.747508305648,
+         1080.0
+        ]
+       ],
+       "ax": 1743.9468438538206,
+       "ay": 962.3388704318937
+      },
+      {
+       "x": 787.986710963455,
+       "y": 186.68438538205982,
+       "w": 319.7873754152823,
+       "h": 234.73754152823915,
+       "kind": "sign",
+       "scale": 0.7159459459459534,
+       "area": [
+        [
+         628.0930232558139,
+         253.0232558139535
+        ],
+        [
+         820.3056478405315,
+         69.31561461794024
+        ],
+        [
+         947.8803986710963,
+         82.92358803986711
+        ],
+        [
+         839.0166112956811,
+         304.0531561461794
+        ],
+        [
+         742.0598006644518,
+         283.641196013289
+        ]
+       ],
+       "ax": 742.0598006644518,
+       "ay": 207.09634551495012
+      }
+     ]
+    }
+   },
+   "tracker": "deepsort",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true
+  },
+  "video_hash": "fbecd2a32e40d1180dae",
+  "video_name": "illegalparking_swerving_doubleparking.mp4",
+  "updated": 1795249739.0037274
+ },
+ {
+  "id": "e40e62fa0ba5",
+  "name": "15m_allviolations-3 setup",
+  "config": {
+   "active_violations": [
+    "illegal_parking"
+   ],
+   "per_violation_configs": {
+    "illegal_parking": {
+     "rois": [],
+     "time_limit": 10.0,
+     "allowed_classes": [
+      "bus"
+     ],
+     "banned_classes": [],
+     "banned_turns": [
+      "left"
+     ],
+     "max_riders": 2,
+     "show_flow": true,
+     "invert_flow": false,
+     "light_mode": "timer",
+     "red_start": 0.0,
+     "red": 30.0,
+     "green": 30.0,
+     "yellow": 3.0,
+     "signs": [
+      {
+       "x": 1206.4285746387918,
+       "y": 221.44043760479985,
+       "w": 214.33724480020132,
+       "h": 159.6128418724904,
+       "kind": "sign",
+       "area": [
+        [
+         1099.259952238691,
+         149.8426771077113
+        ],
+        [
+         1201.4121710370848,
+         141.63401666855464
+        ],
+        [
+         1313.5971970388925,
+         280.2691707520892
+        ],
+        [
+         1178.610336483872,
+         301.246858541045
+        ],
+        [
+         1132.0945939953178,
+         224.63269444224966
+        ]
+       ],
+       "ax": 1230.5985192651972,
+       "ay": 205.4791534175508
+      },
+      {
+       "x": 350.2361787373503,
+       "y": 539.0737783918701,
+       "w": 380.3346003475914,
+       "h": 329.25849094839447,
+       "kind": "hydrant",
+       "area": [
+        [
+         254.01243692279184,
+         552.2988424327336
+        ],
+        [
+         388.99929747781215,
+         374.44453291767286
+        ],
+        [
+         540.403478911146,
+         379.916973210444
+        ],
+        [
+         471.9979752515072,
+         543.1781086114484
+        ],
+        [
+         405.4166183561256,
+         695.4943634269106
+        ],
+        [
+         160.06887856355462,
+         703.7030238660674
+        ]
+       ],
+       "ax": 336.0990413143583,
+       "ay": 536.7935949365489
+      }
+     ]
+    }
+   },
+   "tracker": "bytetrack",
+   "plate_model": "plate_specialist_train2_20260924.onnx",
+   "plate_method": "smart",
+   "plate_format": "ph_standard",
+   "ocr_engine": "easyocr",
+   "enhancement": "realesrgan",
+   "primary_model": "",
+   "use_sahi": false,
+   "flag_sensitivity": 4,
+   "evidence_gap": 5,
+   "blur_privacy": true,
+   "judge_incoming_two_wheelers": false
+  },
+  "video_hash": "",
+  "video_name": "15m_allviolations-3.mp4",
+  "updated": 1795673791.9317925
  }
 ]

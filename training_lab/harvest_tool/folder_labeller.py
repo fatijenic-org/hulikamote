@@ -27,8 +27,8 @@ import yaml
 from PIL import Image
 
 from .accept import VAL_SHARE, is_training, pick_split
-from .collect import Detectors, suggest
-from .config import MODELS, Paths, class_names
+from .collect import SUGGEST_CONF, Detectors, suggest
+from .config import FOCUS_MODELS, MODELS, Paths, base_model, class_names, dataset_class_ids, dataset_class_names, known_model, model_spec
 from . import ledger, pii_blur
 from .frames import FRAME_CONF, anchor_boxes, anchor_names
 from .store import FOLDER_SOURCE, Item, Store, make_id, yolo_text
@@ -54,7 +54,7 @@ def picture_group(name: str) -> str:
 def scan(paths: Paths, store: Store, model: str, folder, batch: int = 2000) -> dict:
     """Queue every picture under [folder] for [model]. Safe to repeat: known pictures are not added twice.
     A picture the ledger says is already labelled for this model (matched by content, so a rename does not fool it) is left out."""
-    if model not in MODELS:
+    if not known_model(model):
         raise KeyError(model)
     root = Path(folder)
     if not root.is_dir():
@@ -148,6 +148,9 @@ def suggest_batch(paths: Paths, store: Store, model: str, task: str, n: int = 40
         h, w = img.shape[:2]
         if det is None or item.state != "label" or item.suggested:
             boxes = []
+        elif model in FOCUS_MODELS:                          # the big model's guess, kept to this class only (renumbered)
+            ids = dataset_class_ids(paths, model)
+            boxes = [[ids.index(d.cls), *d.yolo(w, h)[1:]] for d in det.detect(img, conf=SUGGEST_CONF) if d.cls in ids]
         elif model == "primary_anchor":
             boxes = anchor_boxes(det.detect(img, conf=FRAME_CONF), det.names, anchor_names(paths), w, h)
         else:
@@ -196,15 +199,17 @@ class Exporter:
 
     def __init__(self, paths: Paths, store: Store, model: str, task: str, dest, move: bool = True,
                  val_share: float = VAL_SHARE, keep_view: bool = False):
-        if model not in MODELS:
+        if not known_model(model):
             raise KeyError(model)
         self.paths, self.store, self.model, self.task = paths, store, model, task
         self.move, self.val_share = bool(move), val_share
         self.keep_view = keep_view          # leave the inbox link, so the labelling screen can still show a picture it just sent
-        self.names = class_names(paths, model)
+        self.names = dataset_class_names(paths, model)       # the dataset's own class list (a focus target: its big model's)
+        self.ids = dataset_class_ids(paths, model)            # labelling class number -> dataset class number
         self.out = Path(dest) / model
-        if _inside(self.out, paths.datasets / model) and is_training(model):
-            raise RuntimeError(f"{MODELS[model]['title']} is training right now, and that folder is its dataset.")
+        big = base_model(model)
+        if _inside(self.out, paths.datasets / big) and is_training(big):
+            raise RuntimeError(f"{model_spec(big)['title']} is training right now, and that folder is its dataset.")
         for folder in {Path(i.src_path).parent for i in store.items(model, ("label", "check", "ready", "skipped"), task=task) if i.src_path}:
             if _inside(self.out, folder):
                 raise ValueError("the destination is inside the folder being labelled: choose another folder")
@@ -240,7 +245,8 @@ class Exporter:
             r["unreadable"] += 1
             return "unreadable"
         src_size = src.stat().st_size
-        label_boxes = item.boxes                                          # labels and blur areas are kept apart: blur is never a label
+        label_boxes = [(self.ids[int(b[0])] if 0 <= int(b[0]) < len(self.ids) else int(b[0]), *b[1:]) for b in item.boxes]   # dataset class numbers
+        # (labels and blur areas are kept apart: blur is never a label)
         blur_boxes = item.blur
         digest = _digest(src)
         if digest in self.seen:
@@ -304,7 +310,7 @@ def export(paths: Paths, store: Store, model: str, task: str, dest, move: bool =
            val_share: float = VAL_SHARE) -> dict:
     """Write the finished pictures of one folder as a clean dataset under <dest>/<model>/ and move them there.
     (A picture with no box is a real "nothing here" example; see [Exporter] for the rules.)"""
-    if model not in MODELS:
+    if not known_model(model):
         raise KeyError(model)
     ready = store.items(model, ("ready",), task=task)
     if not ready:                                          # nothing to write: leave the destination alone

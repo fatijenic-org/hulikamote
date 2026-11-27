@@ -27,6 +27,10 @@ The FOOTPRINT is where the vehicle touches the road: for a motorcycle (or bicycl
 vehicle (car, tricycle, jeepney, bus, truck ...) the whole bottom edge, from its lower left to its lower right corner. "Overlap" is the share of
 the footprint that lies past the line, like an IoU of the footprint with the far side of the line: 0 = all on its own side, 1 = all across.
 
+WEAVING: a vehicle that drives along the line and goes over it and back again (two side changes within WEAVE_SECONDS, each side with at
+least `min_overlap` of its footprint over the line at some time) is flagged too, even when it was never clearly on one side long enough to be
+armed: that is a vehicle riding on the line, which no wobble of a box or skew of the drawn line can look like (those change side once).
+
 A picture that is not new (the vehicle was not seen this frame, the rule is only asked again) is ignored: nothing is counted twice.
 """
 import math
@@ -62,12 +66,17 @@ COURSE_FROM_S, COURSE_TO_S = 6.0, 1.0   # its own course: how it drove from 6 s 
 COURSE_MIN_SPAN_S = 1.0        # ... over at least this much time,
 COURSE_MIN_SAMPLES = 6         # ... in at least this many pictures,
 COURSE_MIN_WIDTHS = 1.0        # ... and travelling at least this many box widths (a vehicle that stood or crept has no course)
-MIN_HEADING_WIDTHS = 0.3       # the heading at the line is only believed over a trip of at least this many box widths
+MIN_HEADING_WIDTHS = 0.2       # the heading at the line is only believed over a trip of at least this many box widths
+TRIP_HEADING_WIDTHS = 0.3      # (a crawling vehicle: its trip across the line must be at least this long, so a shaking box on a standing vehicle is not a crossing)
 SIG_MAX_DISTANCE = 0.6     # colour histogram distance above which it is another vehicle (the stitcher accepts up to 0.5 as the same one)
 SIG_REFRESH = 5            # refresh its colours every this many pictures on its own side
 RUN_KEEP = 12              # samples of the current run that are remembered
 HIST_KEEP = 200            # ... and, for its own course before the line (up to 6 s), this many
 TRAIL_KEEP = 30            # points of its trip since it was last clearly on its own side
+WEAVE_SECONDS = 6.0        # a weave: it changes side twice (over and back) within this time
+WEAVE_SIDE_WIDTHS = 0.15   # ... a side counts when its ground point is this many box widths from the line (so jitter is not a change)
+WEAVE_MIN_TRAVEL_WIDTHS = 2.0   # ... and it drove at least this many box widths in that time (a parked vehicle whose box shakes is not weaving)
+WEAVE_MIN_SAMPLES = 8
 
 
 def footprint(x: float, y: float, w: float, two_wheeler: bool):
@@ -113,6 +122,7 @@ class LineWatch:
         self.last_own = None          # (x, y, t) of its last picture clearly on its own side
         self.trail: list = []         # (x, y, t) of every picture since
         self.hist: list = []          # (t, x, y, w, h): every picture of the current run (longer than `run`)
+        self.swing: list = []         # (t, signed distance in box widths, share of the footprint on the positive side, x, y): for the weave check
         self.arm_sig = None           # the colours it had on its own side
         self.own_n = 0
         self.family = None            # 2: a two-wheeler, 4: any other vehicle (what the current run is)
@@ -155,6 +165,12 @@ class LineWatch:
         self.hist.append(new[:5])
         del self.hist[:-HIST_KEEP]
 
+        self.swing.append((t, s / max(w, 1.0), q, x, y))
+        del self.swing[:-HIST_KEEP]
+        weave = self._weave(line, w, t, min_overlap, signature)
+        if weave is not None:
+            return weave
+
         now = 1 if q >= OWN_SHARE else (-1 if q <= 1.0 - OWN_SHARE else 0)
 
         if self.side == 0:                          # not armed: which side does it keep to?
@@ -194,6 +210,56 @@ class LineWatch:
         if self.cross_n < HOLD_SAMPLES or t - self.cross_t0 < HOLD_MIN_SPAN_S:
             return None
         return self._confirm(line, w, t, signature)
+
+    def _weave(self, line, w, t, min_overlap, signature):
+        """Has the vehicle driven along the line and over it and back (or back and over) within the last WEAVE_SECONDS? A Crossing or None."""
+        win = [p for p in self.swing if t - p[0] <= WEAVE_SECONDS]
+        if len(win) < WEAVE_MIN_SAMPLES:
+            return None
+        state, changes, at = 0, 0, None
+        for p in win:
+            st = 1 if p[1] >= WEAVE_SIDE_WIDTHS else (-1 if p[1] <= -WEAVE_SIDE_WIDTHS else 0)
+            if st == 0:
+                continue
+            if state and st != state:
+                changes, at = changes + 1, p
+            state = st
+        if changes < 2:
+            return None
+        need = max(min_overlap, 0.05)
+        if max(p[2] for p in win) < need or max(1.0 - p[2] for p in win) < need:      # each side must have had a real share of the footprint
+            return None
+        dx, dy = win[-1][3] - win[0][3], win[-1][4] - win[0][4]
+        travelled = math.hypot(dx, dy)
+        if travelled < WEAVE_MIN_TRAVEL_WIDTHS * w:
+            return None
+        tangent = self._tangent_near(line, at[3], at[4])
+        angle = self._angle((dx / travelled, dy / travelled), tangent) if tangent else 0.0
+        if angle > MAX_CROSS_ANGLE_DEG:                                               # it went across the road, it did not ride along the line
+            return None
+        if signature and self.arm_sig is not None:
+            colours = signature()
+            if colours is not None and hist_distance(self.arm_sig, colours) > SIG_MAX_DISTANCE:
+                self._forget()
+                return None
+        self.last_angle, self.last_check = angle, {"ok": True, "before": None, "at": angle, "shift": None, "weave": changes}
+        self.done = True
+        return Crossing((at[3], at[4]), t, angle)
+
+    @staticmethod
+    def _tangent_near(line, x, y):
+        """The unit direction of the piece of the line nearest to (x, y), or None."""
+        best, tan = None, None
+        for (ax, ay), (bx, by) in zip(line, line[1:]):
+            ex, ey = bx - ax, by - ay
+            L2 = ex * ex + ey * ey
+            if L2 <= 0:
+                continue
+            f = max(0.0, min(1.0, ((x - ax) * ex + (y - ay) * ey) / L2))
+            d = math.hypot(x - (ax + f * ex), y - (ay + f * ey))
+            if best is None or d < best:
+                best, tan = d, (ex / math.sqrt(L2), ey / math.sqrt(L2))
+        return tan
 
     @staticmethod
     def _lead(a, b, sa, sb, side):
@@ -274,7 +340,9 @@ class LineWatch:
         hist = self.hist
         out = {"ok": False, "before": None, "at": None, "shift": None}
         k = max((j for j, p in enumerate(hist) if p[0] <= t_cut), default=0)                      # the last picture before the cut
-        h_at = self._heading([(p[1], p[2]) for p in hist[max(0, k - 1):k + 4]], w, MIN_HEADING_WIDTHS)   # the pictures around the crossing
+        h_at = self._heading([(p[1], p[2]) for p in hist[max(0, k - 3):k + 7]], w, MIN_HEADING_WIDTHS)   # the pictures around the crossing (about a second)
+        if h_at is None:                            # slow traffic: the trip itself (from clear on its own side to over the line) says where it went
+            h_at = self._heading([(p[0], p[1]) for p in trip], w, TRIP_HEADING_WIDTHS)
         if h_at is None:                            # it was not driving there: standing or creeping on the line is not a crossing
             return out
         out["at"] = self._angle(h_at, cut.tangent)

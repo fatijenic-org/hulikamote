@@ -84,3 +84,99 @@ class ClipRequest {
 
   Map<String, dynamic> toJson() => {'start': start, 'end': end, 'label': label};
 }
+
+/// What the backend answered when a benchmark export started.
+class BenchStart {
+  const BenchStart({required this.jobs, this.skipped = const [], this.folder = '', this.needsZone = const [], this.clipIds = const []});
+
+  final List<TrimJob> jobs;
+
+  /// The names the new clips get in the benchmark registry (what scoring is asked for).
+  final List<String> clipIds;
+  final List<String> skipped;
+  final String folder;
+
+  /// Violations in these clips that judge a drawn zone: the clip needs its zone drawn in the Forensic Analyzer before it is scored.
+  final List<String> needsZone;
+}
+
+/// One row of the benchmark folder statistics: what the folder of one violation holds.
+class BenchStat {
+  const BenchStat({required this.violation, this.clips = 0, this.events = 0, this.seconds = 0, this.plates = 0, this.cleanClips = 0, this.need = 10});
+
+  final String violation;
+  final int clips;
+  final int events;
+  final double seconds;
+
+  /// Events that have a typed true plate.
+  final int plates;
+
+  /// Clean clips judged for this violation.
+  final int cleanClips;
+
+  /// Events a verdict needs.
+  final int need;
+
+  factory BenchStat.fromJson(Map<String, dynamic> j) => BenchStat(
+        violation: '${j['violation']}',
+        clips: (j['clips'] as num?)?.toInt() ?? 0,
+        events: (j['events'] as num?)?.toInt() ?? 0,
+        seconds: (j['seconds'] as num?)?.toDouble() ?? 0,
+        plates: (j['plates'] as num?)?.toInt() ?? 0,
+        cleanClips: (j['clean_clips'] as num?)?.toInt() ?? 0,
+        need: (j['need'] as num?)?.toInt() ?? 10,
+      );
+}
+
+/// The whole benchmark folder: a row per violation, and the totals.
+class BenchStats {
+  const BenchStats({this.rows = const [], this.clips = 0, this.seconds = 0, this.missing = 0});
+
+  final List<BenchStat> rows;
+  final int clips;
+  final double seconds;
+
+  /// Clips in the list whose video file is not on the disk.
+  final int missing;
+
+  factory BenchStats.fromJson(Map<String, dynamic> j) {
+    final t = Map<String, dynamic>.from((j['total'] as Map?) ?? const {});
+    return BenchStats(
+      rows: [for (final r in (j['rows'] as List? ?? const [])) BenchStat.fromJson(Map<String, dynamic>.from(r as Map))],
+      clips: (t['clips'] as num?)?.toInt() ?? 0,
+      seconds: (t['seconds'] as num?)?.toDouble() ?? 0,
+      missing: (t['missing'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// The file the player should open for a video (see [TrimmerApi.preview]).
+class TrimPreview {
+  const TrimPreview({required this.state, required this.path, this.progress = 0, this.error = '', this.copy = false});
+
+  final String state; // ready | working | failed
+  final String path;
+  final double progress;
+  final String error;
+
+  /// True when [path] is a small copy, not the video itself.
+  final bool copy;
+}
+
+/// A saved setup of the Live Monitor / Forensic Analyzer: the zones, signs and settings drawn for one camera view.
+class SavedSetup {
+  const SavedSetup({required this.id, required this.name, required this.violations, this.updated = 0});
+
+  final String id;
+  final String name;
+  final List<String> violations;
+  final double updated;
+
+  factory SavedSetup.fromJson(Map<String, dynamic> j) => SavedSetup(
+        id: '${j['id']}',
+        name: '${j['name'] ?? ''}',
+        violations: [for (final v in (j['violations'] as List? ?? const [])) '$v'],
+        updated: (j['updated'] as num?)?.toDouble() ?? 0,
+      );
+}

@@ -178,6 +178,11 @@ want ALL of them labelled for one model, not only the ones a ticket points at.
    **Copy or move.** Step 4 has a switch, off by default = COPY: the folder keeps its pictures, so another model can still label them,
    tickets keep their photos, and the original keeps its faces. The ledger stops THIS model from asking for a picture twice either way.
    Move = the folder loses the pictures (asks first).
+   **Side mirrors (motorcycles).** The model chips of the Labeller also offer *Mirrors*: it boxes ONE class, `side_mirror`, of the cabin model
+   (`config.FOCUS_MODELS`; it never shows in the Harvest tab). The guess is the deployed cabin model's side_mirror boxes only. **Not a motorcycle:
+   skip (S)** sets a picture aside (it is not exported); **No mirror (N)** is a motorcycle with no visible mirror, saved as an empty label (a
+   true negative). The export writes `<destination>/side_mirror/` with the cabin dataset's own class list and number (`side_mirror` = 4,
+   `nc: 5`), so the pictures drop straight into `datasets/cabin_specialist`. Heads are never blurred for this target (a mirror sits by the head).
 3. **Move the finished pictures.** Choose any destination folder (an external drive works) and press the last button. It asks first, then
    writes `<destination>/<model>/images/{train,val}`, `labels/{train,val}`, `data.yaml` and `report.json`, and MOVES the finished
    pictures there (copy, check the size, then remove the original, also between drives).
