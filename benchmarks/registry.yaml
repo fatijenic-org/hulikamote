@@ -11,7 +11,7 @@ defaults:
     recall: 0.8
 clips:
 - id: mandalay_2_127
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_127.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_127.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_127_truth.txt
@@ -137,7 +137,7 @@ clips:
     start: 8.0
     end: 9.0
 - id: mandalay_2_175
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_175.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_175.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_175_truth.txt
@@ -275,7 +275,7 @@ clips:
     start: 9.7
     end: 10.0
 - id: mandalay_2_110
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_110.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_110.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_110_truth.txt
@@ -407,7 +407,7 @@ clips:
     start: 9.4
     end: 10.0
 - id: mandalay_2_43
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_43.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_43.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_43_truth.txt
@@ -524,7 +524,7 @@ clips:
     start: 9.4
     end: 10.0
 - id: mandalay_2_23
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_23.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_23.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_23_truth.txt
@@ -635,7 +635,7 @@ clips:
     start: 9.3
     end: 10.0
 - id: mandalay_2_50
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_50.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_50.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_50_truth.txt
@@ -758,7 +758,7 @@ clips:
     start: 10.0
     end: 10.0
 - id: mandalay_2_40
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_40.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_40.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_40_truth.txt
@@ -860,7 +860,7 @@ clips:
     start: 10.0
     end: 10.0
 - id: mandalay_2_117
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_117.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_117.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_117_truth.txt
@@ -953,7 +953,7 @@ clips:
     start: 8.9
     end: 9.6
 - id: mandalay_2_163
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_163.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_163.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_163_truth.txt
@@ -1040,7 +1040,7 @@ clips:
     start: 8.9
     end: 10.0
 - id: mandalay_2_37
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_37.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_37.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_37_truth.txt
@@ -1145,7 +1145,7 @@ clips:
     start: 9.6
     end: 10.0
 - id: mandalay_2_8
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_8.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_8.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_8_truth.txt
@@ -1241,7 +1241,7 @@ clips:
     start: 7.7
     end: 8.5
 - id: mandalay_2_122
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_122.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_122.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_122_truth.txt
@@ -1322,7 +1322,7 @@ clips:
     start: 9.4
     end: 10.0
 - id: mandalay_2_176
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_176.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_176.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_176_truth.txt
@@ -1403,7 +1403,7 @@ clips:
     start: 9.8
     end: 10.0
 - id: mandalay_2_58
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_58.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_58.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_58_truth.txt
@@ -1481,7 +1481,7 @@ clips:
     start: 7.6
     end: 8.6
 - id: mandalay_2_180
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_180.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_180.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_180_truth.txt
@@ -1556,7 +1556,7 @@ clips:
     start: 9.6
     end: 10.0
 - id: mandalay_2_177
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_177.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_177.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_177_truth.txt
@@ -1649,7 +1649,7 @@ clips:
     start: 9.7
     end: 10.0
 - id: mandalay_2_2
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_2.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_2.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_2_truth.txt
@@ -1739,7 +1739,7 @@ clips:
     start: 8.6
     end: 9.5
 - id: mandalay_2_10
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_10.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_10.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_10_truth.txt
@@ -1814,7 +1814,7 @@ clips:
     start: 8.1
     end: 9.2
 - id: mandalay_2_108
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_108.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_108.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_108_truth.txt
@@ -1880,7 +1880,7 @@ clips:
     start: 9.2
     end: 10.0
 - id: mandalay_2_174
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_174.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_174.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_174_truth.txt
@@ -1946,7 +1946,7 @@ clips:
     start: 9.9
     end: 10.0
 - id: mandalay_2_116
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_116.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_116.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_116_truth.txt
@@ -2033,7 +2033,7 @@ clips:
     start: 10.0
     end: 10.0
 - id: mandalay_2_170
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_170.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_170.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_170_truth.txt
@@ -2099,7 +2099,7 @@ clips:
     start: 9.9
     end: 10.0
 - id: mandalay_2_33
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_33.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_33.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_33_truth.txt
@@ -2165,7 +2165,7 @@ clips:
     start: 9.4
     end: 10.0
 - id: mandalay_2_70
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_70.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_70.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_70_truth.txt
@@ -2231,7 +2231,7 @@ clips:
     start: 9.5
     end: 10.0
 - id: mandalay_2_67
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_67.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_67.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_67_truth.txt
@@ -2288,7 +2288,7 @@ clips:
     start: 9.6
     end: 10.0
 - id: mandalay_2_143
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_143.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_143.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_143_truth.txt
@@ -2342,7 +2342,7 @@ clips:
     start: 10.0
     end: 10.0
 - id: mandalay_2_20
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_20.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_20.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_20_truth.txt
@@ -2426,7 +2426,7 @@ clips:
     start: 8.5
     end: 10.0
 - id: mandalay_1_135
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_1_135.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_1_135.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_1_135_truth.txt
@@ -2489,7 +2489,7 @@ clips:
     start: 6.6
     end: 8.7
 - id: mandalay_2_161
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_161.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_161.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_161_truth.txt
@@ -2540,7 +2540,7 @@ clips:
     start: 6.7
     end: 7.9
 - id: mandalay_2_172
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_172.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_172.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_172_truth.txt
@@ -2591,7 +2591,7 @@ clips:
     start: 6.5
     end: 10.0
 - id: mandalay_2_75
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_75.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_75.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_75_truth.txt
@@ -2642,7 +2642,7 @@ clips:
     start: 9.3
     end: 10.0
 - id: mandalay_1_50
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_1_50.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_1_50.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_1_50_truth.txt
@@ -2684,7 +2684,7 @@ clips:
     start: 5.7
     end: 10.0
 - id: mandalay_2_166
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_166.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_166.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_166_truth.txt
@@ -2750,7 +2750,7 @@ clips:
     start: 10.0
     end: 10.0
 - id: mandalay_2_118
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_118.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_118.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_118_truth.txt
@@ -2813,7 +2813,7 @@ clips:
     start: 9.9
     end: 10.0
 - id: mandalay_2_120
-  file: A:/huli-kamote/evaluation-testing-videos/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_120.mp4
+  file: A:/huli-kamote/to-evaluate/helmet-myanmar__no-helmet_overloading/Mandalay_2_120.mp4
   settings: settings/public_helmet.json
   clean: false
   note: HELMET dataset, Myanmar, 10 fps; truth from Mandalay_2_120_truth.txt
@@ -2867,7 +2867,7 @@ clips:
     start: 7.8
     end: 9.0
 - id: dhaka_2026_07_03_dhaka_university_area_01
-  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_01.mp4
+  file: A:/huli-kamote/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_01.mp4
   settings: settings/public_helmet.json
   clean: false
   note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
@@ -3702,7 +3702,7 @@ clips:
     start: 216.2
     end: 217.7
 - id: dhaka_2026_07_03_dhaka_university_area_03
-  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_03.mp4
+  file: A:/huli-kamote/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_03.mp4
   settings: settings/public_helmet.json
   clean: false
   note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
@@ -4537,7 +4537,7 @@ clips:
     start: 214.7
     end: 216.2
 - id: dhaka_2026_07_03_dhaka_university_area_02
-  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_02.mp4
+  file: A:/huli-kamote/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-07-03_dhaka_university_area_02.mp4
   settings: settings/public_helmet.json
   clean: false
   note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
@@ -5369,7 +5369,7 @@ clips:
     start: 216.2
     end: 217.7
 - id: dhaka_2026_04_09_shahid_minar_02
-  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-04-09_shahid_minar_02.mp4
+  file: A:/huli-kamote/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-04-09_shahid_minar_02.mp4
   settings: settings/public_helmet.json
   clean: false
   note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
@@ -5568,7 +5568,7 @@ clips:
     start: 214.7
     end: 216.2
 - id: dhaka_2026_04_09_shahid_minar_01
-  file: A:/huli-kamote/evaluation-testing-videos/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-04-09_shahid_minar_01.mp4
+  file: A:/huli-kamote/to-train/dhaka-univ__no-helmet_overloading/dhaka_2026-04-09_shahid_minar_01.mp4
   settings: settings/public_helmet.json
   clean: false
   note: 'Dhaka photo slideshow (no motion between photos): spot check only; truth
@@ -5727,3 +5727,964 @@ clips:
   - violation: no_helmet
     start: 223.9
     end: 225.4
+- id: 15m-allviolations_00m12s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_00m12s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_00m41s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_00m41s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_01m06s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_01m06s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_01m52s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_01m52s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_02m35s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_02m35s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_03m30s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_03m30s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_04m55s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_04m55s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_05m38s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_05m38s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_06m44s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_06m44s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations_07m43s_counterflow
+  file: A:/huli-kamote/benchmark-videos/counterflow/15m-allviolations_07m43s_counterflow.mp4
+  settings: settings/labeled_b7b395ea.json
+  clean: false
+  note: 'Labelled in the dashboard''s video labeller. Counterflow is SIMULATED: the
+    legal direction was reversed.'
+  events:
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+  - violation: counterflow
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations-2_00m34s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_00m34s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: passenger_outside
+    start: 18.0
+    end: 28.0
+- id: 15m-allviolations-2_01m16s_crossingsolidline-nohelmet
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations-2_01m16s_crossingsolidline-nohelmet.mp4
+  settings: settings/labeled_294ebbab.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0
+  - violation: crossing_solid_line
+    start: 16.73
+    end: 26.73
+  - violation: passenger_outside
+    start: 30.05
+    end: 40.05
+- id: 15m-allviolations-2_02m59s_overloading
+  file: A:/huli-kamote/benchmark-videos/overloading/15m-allviolations-2_02m59s_overloading.mp4
+  settings: settings/labeled_6c4b86b9.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: overloading
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations-2_03m38s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_03m38s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations-2_04m13s_overloading-passengeroutside
+  file: A:/huli-kamote/benchmark-videos/overloading/15m-allviolations-2_04m13s_overloading-passengeroutside.mp4
+  settings: settings/labeled_41e67e2e.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: overloading
+    start: 3.0
+    end: 13.0
+  - violation: overloading
+    start: 3.0
+    end: 13.0
+  - violation: overloading
+    start: 3.0
+    end: 13.0
+  - violation: overloading
+    start: 3.0
+    end: 13.0
+  - violation: passenger_outside
+    start: 11.76
+    end: 21.76
+- id: 15m-allviolations-2_04m46s_crossingsolidline-overloading
+  file: A:/huli-kamote/benchmark-videos/crossing_solid_line/15m-allviolations-2_04m46s_crossingsolidline-overloading.mp4
+  settings: settings/labeled_3a8c66ea.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: crossing_solid_line
+    start: 5.0
+    end: 15.0
+  - violation: crossing_solid_line
+    start: 18.29
+    end: 28.29
+  - violation: passenger_outside
+    start: 24.65
+    end: 34.65
+  - violation: overloading
+    start: 38.74
+    end: 48.74
+  - violation: overloading
+    start: 38.74
+    end: 48.74
+- id: 15m-allviolations-2_07m17s_nohelmet-overloading
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations-2_07m17s_nohelmet-overloading.mp4
+  settings: settings/labeled_76df0297.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0
+  - violation: overloading
+    start: 6.03
+    end: 16.03
+- id: 15m-allviolations-2_05m46s_crossingsolidline-overloading
+  file: A:/huli-kamote/benchmark-videos/overloading/15m-allviolations-2_05m46s_crossingsolidline-overloading.mp4
+  settings: settings/labeled_3a8c66ea.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: overloading
+    start: 3.0
+    end: 13.0
+  - violation: crossing_solid_line
+    start: 18.62
+    end: 28.62
+  - violation: passenger_outside
+    start: 20.29
+    end: 30.29
+  - violation: overloading
+    start: 33.86
+    end: 43.86
+  - violation: overloading
+    start: 33.86
+    end: 43.86
+  - violation: overloading
+    start: 33.86
+    end: 43.86
+  - violation: crossing_solid_line
+    start: 38.34
+    end: 48.34
+  - violation: passenger_outside
+    start: 46.9
+    end: 56.9
+- id: 15m-allviolations-2_09m11s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_09m11s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations-2_07m37s_overloading-passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_07m37s_overloading-passengeroutside.mp4
+  settings: settings/labeled_41e67e2e.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+  - violation: overloading
+    start: 14.46
+    end: 24.46
+- id: 15m-allviolations-2_09m35s_crossingsolidline
+  file: A:/huli-kamote/benchmark-videos/crossing_solid_line/15m-allviolations-2_09m35s_crossingsolidline.mp4
+  settings: settings/labeled_08619aaf.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: crossing_solid_line
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations-2_10m48s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_10m48s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations-2_10m00s_crossingsolidline-nohelmet
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations-2_10m00s_crossingsolidline-nohelmet.mp4
+  settings: settings/labeled_294ebbab.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0
+  - violation: crossing_solid_line
+    start: 5.37
+    end: 15.37
+  - violation: passenger_outside
+    start: 21.32
+    end: 31.32
+- id: 15m-allviolations-2_12m23s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_12m23s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations-2_11m38s_crossingsolidline
+  file: A:/huli-kamote/benchmark-videos/crossing_solid_line/15m-allviolations-2_11m38s_crossingsolidline.mp4
+  settings: settings/labeled_08619aaf.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: crossing_solid_line
+    start: 5.0
+    end: 15.0
+- id: 15m-allviolations-2_14m22s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations-2_14m22s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_02m03s_nohelmet-tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_02m03s_nohelmet-tricycleonhighway.mp4
+  settings: settings/labeled_4ec42b77.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: no_helmet
+    start: 10.16
+    end: 20.16
+- id: 15m-allviolations_02m30s_tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_02m30s_tricycleonhighway.mp4
+  settings: settings/labeled_a252ef9c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_00m20s_passengeroutside-tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_00m20s_passengeroutside-tricycleonhighway.mp4
+  settings: settings/labeled_88adbe4e.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: passenger_outside
+    start: 14.73
+    end: 24.73
+  - violation: truck_ban
+    start: 25.33
+    end: 35.33
+  - violation: truck_ban
+    start: 25.33
+    end: 35.33
+  - violation: passenger_outside
+    start: 34.43
+    end: 44.43
+- id: 15m-allviolations_03m46s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_03m46s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_04m17s_tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_04m17s_tricycleonhighway.mp4
+  settings: settings/labeled_a252ef9c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_02m51s_counterflow-passengeroutside
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_02m51s_counterflow-passengeroutside.mp4
+  settings: settings/labeled_144d458f.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: counterflow
+    start: 20.92
+    end: 30.92
+  - violation: passenger_outside
+    start: 35.51
+    end: 45.51
+- id: 15m-allviolations_04m46s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_04m46s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_06m54s_nohelmet
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations_06m54s_nohelmet.mp4
+  settings: settings/labeled_4aac8f4c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_05m40s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_05m40s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: passenger_outside
+    start: 17.49
+    end: 27.49
+- id: 15m-allviolations_08m43s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_08m43s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_07m14s_passengeroutside-tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_07m14s_passengeroutside-tricycleonhighway.mp4
+  settings: settings/labeled_3433c3dd.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 13.03
+    end: 23.03
+- id: 15m-allviolations_09m55s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_09m55s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_10m17s_passengeroutside
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_10m17s_passengeroutside.mp4
+  settings: settings/labeled_84e508b3.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_09m06s_nohelmet-tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations_09m06s_nohelmet-tricycleonhighway.mp4
+  settings: settings/labeled_4ec42b77.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 17.49
+    end: 27.49
+  - violation: no_helmet
+    start: 21.06
+    end: 31.06
+  - violation: no_helmet
+    start: 32.42
+    end: 42.42
+- id: 15m-allviolations_11m12s_nohelmet
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations_11m12s_nohelmet.mp4
+  settings: settings/labeled_4aac8f4c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_11m28s_passengeroutside-tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/passenger_outside/15m-allviolations_11m28s_passengeroutside-tricycleonhighway.mp4
+  settings: settings/labeled_3433c3dd.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: passenger_outside
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_12m00s_tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_12m00s_tricycleonhighway.mp4
+  settings: settings/labeled_a252ef9c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_12m19s_tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_12m19s_tricycleonhighway.mp4
+  settings: settings/labeled_a252ef9c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_12m53s_tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_12m53s_tricycleonhighway.mp4
+  settings: settings/labeled_a252ef9c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_13m28s_tricycleonhighway
+  file: A:/huli-kamote/benchmark-videos/tricycle_on_highway/15m-allviolations_13m28s_tricycleonhighway.mp4
+  settings: settings/labeled_a252ef9c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+  - violation: tricycle_on_highway
+    start: 3.0
+    end: 13.0
+- id: 15m-allviolations_14m15s_nohelmet
+  file: A:/huli-kamote/benchmark-videos/no_helmet/15m-allviolations_14m15s_nohelmet.mp4
+  settings: settings/labeled_4aac8f4c.json
+  clean: false
+  note: Labelled in the dashboard's video labeller.
+  events:
+  - violation: no_helmet
+    start: 3.0
+    end: 13.0

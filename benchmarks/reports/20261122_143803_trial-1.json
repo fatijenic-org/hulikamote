@@ -1,0 +1,307 @@
+{
+  "label": "trial-1",
+  "created": "2026-11-22T14:38:03",
+  "meta": {
+    "overrides": {},
+    "backend": "http://127.0.0.1:8000",
+    "via": "dashboard"
+  },
+  "defaults": {
+    "tolerance_s": 3.0,
+    "min_events": 10,
+    "pass": {
+      "precision": 0.8,
+      "recall": 0.8
+    }
+  },
+  "summary": {
+    "no_helmet": {
+      "clips": 1,
+      "events": 1,
+      "caught": 1,
+      "false_alarms": 1,
+      "missed": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6666666666666666,
+      "false_alarms_per_min": 2.8616852146263914,
+      "plates": {
+        "checked": 0,
+        "loar_n": 0,
+        "loar_correct": 0,
+        "dist_sum": 0,
+        "len_sum": 0,
+        "wrong": 0,
+        "loar": null,
+        "cer": null,
+        "wer": null
+      },
+      "logging": {
+        "checked": 1,
+        "all_correct": 1,
+        "rate": 1.0,
+        "plate_wrong": 0,
+        "no_evidence": 0,
+        "wrong_vehicle": 0
+      },
+      "status": "too few events (1 of 10)"
+    },
+    "passenger_outside": {
+      "clips": 2,
+      "events": 2,
+      "caught": 2,
+      "false_alarms": 1,
+      "missed": 0,
+      "precision": 0.6666666666666666,
+      "recall": 1.0,
+      "f1": 0.8,
+      "false_alarms_per_min": 1.6187050359712227,
+      "plates": {
+        "checked": 0,
+        "loar_n": 0,
+        "loar_correct": 0,
+        "dist_sum": 0,
+        "len_sum": 0,
+        "wrong": 0,
+        "loar": null,
+        "cer": null,
+        "wer": null
+      },
+      "logging": {
+        "checked": 2,
+        "all_correct": 2,
+        "rate": 1.0,
+        "plate_wrong": 0,
+        "no_evidence": 0,
+        "wrong_vehicle": 0
+      },
+      "status": "too few events (2 of 10)"
+    },
+    "tricycle_on_highway": {
+      "clips": 1,
+      "events": 1,
+      "caught": 1,
+      "false_alarms": 2,
+      "missed": 0,
+      "precision": 0.3333333333333333,
+      "recall": 1.0,
+      "f1": 0.5,
+      "false_alarms_per_min": 5.4961832061068705,
+      "plates": {
+        "checked": 0,
+        "loar_n": 0,
+        "loar_correct": 0,
+        "dist_sum": 0,
+        "len_sum": 0,
+        "wrong": 0,
+        "loar": null,
+        "cer": null,
+        "wer": null
+      },
+      "logging": {
+        "checked": 1,
+        "all_correct": 1,
+        "rate": 1.0,
+        "plate_wrong": 0,
+        "no_evidence": 0,
+        "wrong_vehicle": 0
+      },
+      "status": "too few events (1 of 10)"
+    }
+  },
+  "overall": {
+    "caught": 4,
+    "false_alarms": 4,
+    "missed": 0,
+    "precision": 0.5,
+    "recall": 1.0,
+    "false_alarm_share": 0.5,
+    "miss_rate": 0.0,
+    "logging_rate": 1.0,
+    "plates_checked": 0,
+    "loar": null,
+    "cer": null,
+    "wer": null
+  },
+  "not_benchmarked": [
+    "counterflow",
+    "illegal_parking",
+    "restricted_lane",
+    "pedestrian_lane",
+    "illegal_turn",
+    "illegal_u_turn",
+    "swerving",
+    "red_light",
+    "disregarding_signs",
+    "signal_light",
+    "blocking_intersection",
+    "crossing_solid_line",
+    "illegal_loading",
+    "truck_ban",
+    "sidewalk_driving",
+    "double_parking",
+    "overtaking_on_right",
+    "overloading",
+    "no_plate",
+    "no_seatbelt",
+    "distracted_driving",
+    "missing_side_mirror"
+  ],
+  "clips": [
+    {
+      "clip_id": "15m-allviolations-2_01m17s_nohelmet",
+      "seconds": 20.966666666666665,
+      "enabled": [
+        "no_helmet"
+      ],
+      "caught": [
+        {
+          "violation": "no_helmet",
+          "start": 3.0,
+          "end": 18.0,
+          "track": 25,
+          "ticket_start": 2.9,
+          "ticket_end": 10.5,
+          "plate": "",
+          "note": "",
+          "checks": {
+            "plate": null,
+            "plate_dist": null,
+            "plate_len": null,
+            "evidence": true,
+            "vehicle": null,
+            "loar": null,
+            "ok": true
+          }
+        }
+      ],
+      "false_alarms": [
+        {
+          "violation": "no_helmet",
+          "track": 1000036,
+          "ticket_start": 11.5,
+          "ticket_end": 16.233333333333334,
+          "plate": ""
+        }
+      ],
+      "missed": [],
+      "skipped": []
+    },
+    {
+      "clip_id": "15m-allviolations-2_00m25s_tricycleonhighway",
+      "seconds": 21.833333333333332,
+      "enabled": [
+        "tricycle_on_highway"
+      ],
+      "caught": [
+        {
+          "violation": "tricycle_on_highway",
+          "start": 3.0,
+          "end": 18.82,
+          "track": 16,
+          "ticket_start": 10.766666666666667,
+          "ticket_end": 11.866666666666667,
+          "plate": "",
+          "note": "",
+          "checks": {
+            "plate": null,
+            "plate_dist": null,
+            "plate_len": null,
+            "evidence": true,
+            "vehicle": null,
+            "loar": null,
+            "ok": true
+          }
+        }
+      ],
+      "false_alarms": [
+        {
+          "violation": "tricycle_on_highway",
+          "track": 1000027,
+          "ticket_start": 9.333333333333334,
+          "ticket_end": 12.533333333333333,
+          "plate": ""
+        },
+        {
+          "violation": "tricycle_on_highway",
+          "track": 26,
+          "ticket_start": 10.966666666666667,
+          "ticket_end": 13.766666666666667,
+          "plate": ""
+        }
+      ],
+      "missed": [],
+      "skipped": []
+    },
+    {
+      "clip_id": "15m-allviolations-2_05m08s_passengeroutside",
+      "seconds": 11.466666666666667,
+      "enabled": [
+        "passenger_outside"
+      ],
+      "caught": [
+        {
+          "violation": "passenger_outside",
+          "start": 3.0,
+          "end": 8.46,
+          "track": 1000051,
+          "ticket_start": 11.433333333333334,
+          "ticket_end": 11.433333333333334,
+          "plate": "",
+          "note": "",
+          "checks": {
+            "plate": null,
+            "plate_dist": null,
+            "plate_len": null,
+            "evidence": true,
+            "vehicle": null,
+            "loar": null,
+            "ok": true
+          }
+        }
+      ],
+      "false_alarms": [],
+      "missed": [],
+      "skipped": []
+    },
+    {
+      "clip_id": "15m-allviolations-2_04m20s_passengeroutside",
+      "seconds": 25.6,
+      "enabled": [
+        "passenger_outside"
+      ],
+      "caught": [
+        {
+          "violation": "passenger_outside",
+          "start": 3.0,
+          "end": 22.59,
+          "track": 20,
+          "ticket_start": 8.0,
+          "ticket_end": 10.966666666666667,
+          "plate": "GAA5017",
+          "note": "",
+          "checks": {
+            "plate": null,
+            "plate_dist": null,
+            "plate_len": null,
+            "evidence": true,
+            "vehicle": null,
+            "loar": null,
+            "ok": true
+          }
+        }
+      ],
+      "false_alarms": [
+        {
+          "violation": "passenger_outside",
+          "track": 1000068,
+          "ticket_start": 18.866666666666667,
+          "ticket_end": 24.0,
+          "plate": "DAS5466"
+        }
+      ],
+      "missed": [],
+      "skipped": []
+    }
+  ]
+}

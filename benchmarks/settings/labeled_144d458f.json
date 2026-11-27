@@ -1,0 +1,25 @@
+{
+  "tracker": "deepsort",
+  "plate_method": "smart",
+  "plate_format": "ph_standard",
+  "ocr_engine": "easyocr",
+  "enhancement": "lanczos",
+  "primary_model": "",
+  "use_sahi": false,
+  "flag_sensitivity": 5,
+  "evidence_gap": 5,
+  "keep_input_video": false,
+  "blur_privacy": true,
+  "flow_mode": "auto",
+  "per_violation_configs": {
+    "overloading": {
+      "max_riders": 2
+    }
+  },
+  "regions_of_interest": {},
+  "active_violations": [
+    "counterflow",
+    "passenger_outside",
+    "tricycle_on_highway"
+  ]
+}
