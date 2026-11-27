@@ -19,13 +19,13 @@ from . import folder_labeller as folders
 from .accept import TrainingBusy, accept, training_models
 from .cars import car_counts, car_detail, car_list, check_car, fill_cars
 from .collect import COLLECT_VERSION, collect, refresh_suggestions
-from .config import AUTOMATIC, CLASS_COLORS, CLASS_HELP, MODELS, Paths, active_onnx, class_names
+from .config import AUTOMATIC, CLASS_COLORS, CLASS_HELP, FOCUS_MODELS, MODELS, Paths, active_onnx, class_names, known_model
 from .frames import task_video
 from .pairs import answer_pair
 from .sources import load_protected, review_counts
 from .store import FOLDER_SOURCE, Store, clean_boxes
 
-API_VERSION = 6        # 6 = send each picture right away; 5 = the Labeller (folder scan, export); the dashboard asks /api/ping and restarts a helper that is older than it needs
+API_VERSION = 7        # 7 = Labeller-only targets (side mirror); 6 = send each picture right away; 5 = the Labeller (folder scan, export); the dashboard asks /api/ping and restarts a helper that is older than it needs
 
 PAGE = Path(__file__).with_name("page.html")
 ID_RE = re.compile(r"^[0-9a-f]{16}$")
@@ -135,7 +135,7 @@ class HarvestApp:
 
     def queue(self, model: str, limit: int = 200, task: str | None = None) -> dict:
         """The pictures waiting for a human, most likely wrong first. `task` = only that one analysis."""
-        if model not in MODELS:
+        if not known_model(model):
             raise KeyError(model)
         task = self._task(task)
         items = self.store.queue(model, limit, task)
@@ -157,6 +157,9 @@ class HarvestApp:
         for key, spec in MODELS.items():
             models.append({"key": key, "title": spec["title"], "does": spec["does"], "counts": self.store.counts(key, task),
                            "classes": safe_classes(self.paths, key), "help": CLASS_HELP.get(key, {})})
+        for key, spec in FOCUS_MODELS.items():              # Labeller-only targets: never a tile in the Harvest tab
+            models.append({"key": key, "title": spec["title"], "does": spec["does"], "counts": self.store.counts(key, task),
+                           "classes": safe_classes(self.paths, key), "help": CLASS_HELP.get(key, {}), "labeller_only": True})
         return {"task": task, "collected": True if task is None else self.store.is_collected(task, COLLECT_VERSION),
                 "protected": bool(task and task in load_protected(self.paths)),
                 "has_video": None if task is None else task_video(self.paths, task) is not None,
@@ -245,7 +248,7 @@ class HarvestApp:
 
     # ── the Labeller: every picture of a folder, one model, a clean dataset at the end ──
     def labeller_status(self, model: str, task: str | None = None) -> dict:
-        if model not in MODELS:
+        if not known_model(model):
             raise KeyError(model)
         task = self._task(task)
         return {"model": model, "task": task, "job": dict(self._labeller),
@@ -271,7 +274,7 @@ class HarvestApp:
 
     def labeller_scan(self, model: str, folder: str) -> dict:
         """List every picture under a folder in the background; poll labeller_status for the result."""
-        if model not in MODELS:
+        if not known_model(model):
             raise KeyError(model)
         if not folder or not Path(folder).is_dir():
             raise ValueError(f"not a folder: {folder!r}")
@@ -281,7 +284,7 @@ class HarvestApp:
     def labeller_suggest(self, model: str, task: str, n: int = 40, heads: bool = False, plates: bool = False) -> dict:
         """Pre-draw the deployed model's boxes (and, when asked, first-guess blur areas over heads and plates) on the next pictures."""
         task = self._task(task)
-        if model not in MODELS or task is None:
+        if not known_model(model) or task is None:
             raise ValueError("a model and a folder are needed")
         return {"suggested": folders.suggest_batch(self.paths, self.store, model, task, max(1, min(int(n), 200)),
                                                     heads=bool(heads), plates=bool(plates))}
@@ -290,7 +293,7 @@ class HarvestApp:
         """Turn "send each picture right away" on (a destination) or off (no destination) for one folder.
         Off returns the totals so far (and writes report.json)."""
         task = self._task(task)
-        if model not in MODELS or task is None:
+        if not known_model(model) or task is None:
             raise ValueError("a model and a folder are needed")
         if not dest:
             exporter = self._live.pop(f"{model}:{task}", None)
@@ -304,7 +307,7 @@ class HarvestApp:
     def labeller_export(self, model: str, task: str, dest: str, move: bool = True) -> dict:
         """Write the clean dataset to [dest] and move the finished pictures there, in the background."""
         task = self._task(task)
-        if model not in MODELS or task is None:
+        if not known_model(model) or task is None:
             raise ValueError("a model and a folder are needed")
         if not dest or not Path(dest).is_absolute():
             raise ValueError("choose the folder to move the finished pictures to (a full path)")
@@ -387,7 +390,7 @@ def make_server(app: HarvestApp, port: int = 8765, token: str | None = None) -> 
                 if method == "GET" and path.startswith("/img/"):
                     _, _, model, name = path.split("/", 3)
                     item_id = name.removesuffix(".jpg")
-                    if model not in MODELS or not ID_RE.match(item_id):
+                    if not known_model(model) or not ID_RE.match(item_id):
                         return self._json(404, {"error": "not found"})
                     f = app.store.image_path(model, item_id)
                     if not f.exists():
