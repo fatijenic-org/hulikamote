@@ -143,6 +143,7 @@ def _build_pipeline():
     from engine.pipeline import DecoupledPipeline
     pipeline = DecoupledPipeline(str(CONFIG_PATH))
     pipeline.show_paths = True          # live evidence photos of Crossing a solid line carry the path the vehicle drove
+    pipeline.release_early = True       # live: the ticket of a parked vehicle is made while it stands there, not when it leaves (ledger.release_early)
     if _rules_off:
         pipeline.set_active_rules([k for k in pipeline.setup_violations if k not in _rules_off])
     if _stabilizer_settings:
@@ -415,6 +416,19 @@ from engine.hls_broadcaster import get_broadcaster as _get_broadcaster
 PICTURE_MODE = os.environ.get("HK_PICTURE_MODE", "synced").strip().lower()
 PICTURE_MAX_WIDTH = 960
 PICTURE_JPEG_QUALITY = 72
+# The picture quality the operator chose in the live setup ("quality_mode" in the config): how big the picture the whole pipeline works on is
+# (the detector, the evidence photos and the plate crops are cut from it), and how big and how compressed the picture sent to the screen is
+# (the saved run keeps that one). "fast" is the speed-first default; "sharp" is for a serious plate check: slower, with clearer plates.
+QUALITY_PROFILES = {
+    "fast": {"proc_h": MAX_PROCESSING_HEIGHT, "pic_w": PICTURE_MAX_WIDTH, "q": PICTURE_JPEG_QUALITY, "hires": False},
+    # sharp: the screen gets a 1920 px picture at JPEG 88; and the vehicle crops that the plate is read from (and the wider clean crops) are cut
+    # from the ORIGINAL picture (4K stays 4K), not from the shrunk one the models work on: a plate is a few dozen pixels there, a few hundred here.
+    "sharp": {"proc_h": 1080, "pic_w": 1920, "q": 88, "hires": True},
+}
+
+
+def quality_profile(config) -> dict:
+    return QUALITY_PROFILES.get(str((config or {}).get("quality_mode") or "fast"), QUALITY_PROFILES["fast"])
 
 
 # The violations whose overlay objects (signs, painted crosswalks and lines) are NOT drawn on the live picture: the Live Monitor's
@@ -465,17 +479,18 @@ def _picture_b64_timed(frame, pipeline=None, detections=()) -> str:
     """_picture_b64 with its time kept (it runs in a worker thread, started as soon as the picture is read). With a `pipeline` the overlay
     objects of the set-up violations are painted on the picture first."""
     t0 = time.perf_counter()
-    out = _picture_b64(_with_overlays(frame, pipeline, detections))
+    prof = quality_profile(getattr(pipeline, "config", None))
+    out = _picture_b64(_with_overlays(frame, pipeline, detections), prof["pic_w"], prof["q"])
     TIMER.add("encode", time.perf_counter() - t0)
     return out
 
 
-def _picture_b64(frame) -> str:
-    """The frame as a small JPEG (same shape, at most PICTURE_MAX_WIDTH wide) in base64, for the 'synced' mode."""
+def _picture_b64(frame, width: int = PICTURE_MAX_WIDTH, quality: int = PICTURE_JPEG_QUALITY) -> str:
+    """The frame as a JPEG (same shape, at most `width` wide) in base64, for the 'synced' mode."""
     h, w = frame.shape[:2]
-    if w > PICTURE_MAX_WIDTH:
-        frame = cv2.resize(frame, (PICTURE_MAX_WIDTH, max(1, round(h * PICTURE_MAX_WIDTH / w))), interpolation=cv2.INTER_AREA)
-    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, PICTURE_JPEG_QUALITY])
+    if w > width:
+        frame = cv2.resize(frame, (width, max(1, round(h * width / w))), interpolation=cv2.INTER_AREA)
+    ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
     return base64.b64encode(buf.tobytes()).decode("ascii") if ok else ""
 
 
@@ -1098,6 +1113,10 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
     next_due = None          # overlap mode, files: when the next picture is due (a steady pace that catches up after a slow one)
     ahead = None             # overlap mode, files: the read of the next picture, started before this one is judged and sent
     n_read = 0               # files: how many pictures were read (a picture's time on the video is n_read / fps)
+    quality = quality_profile(getattr(pipeline, "config", None))
+    proc_height = quality["proc_h"]          # the size every picture is shrunk to before the models see it (see QUALITY_PROFILES)
+    hires = bool(quality.get("hires"))       # sharp: the original picture goes along to the evidence crops (see DecoupledPipeline._capture_evidence_frame)
+    print(f"[Stream] Picture quality: {(getattr(pipeline, 'config', None) or {}).get('quality_mode') or 'fast'} (work at {proc_height} px tall, screen {quality['pic_w']} px, JPEG {quality['q']})")
 
     def fetch():
         """Read the next picture and shrink it: (item, small picture, its time on the video in seconds), or (None, None, None) when nothing
@@ -1129,9 +1148,9 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
         # encode) become significantly faster on the smaller array.
         fh, fw = big.shape[:2]
         small = big
-        if fh > MAX_PROCESSING_HEIGHT:
-            scale_down = MAX_PROCESSING_HEIGHT / fh
-            small = cv2.resize(big, (int(fw * scale_down), MAX_PROCESSING_HEIGHT), interpolation=cv2.INTER_LINEAR)
+        if fh > proc_height:
+            scale_down = proc_height / fh
+            small = cv2.resize(big, (int(fw * scale_down), proc_height), interpolation=cv2.INTER_LINEAR)
         TIMER.add("prep", time.perf_counter() - t0)
         return got, small, when
 
@@ -1563,14 +1582,14 @@ async def _real_loop(websocket: WebSocket, start_s: float = 0.0):
                 # (The IoU tracker and ONNX session are NOT thread-safe: max_workers=1 prevents concurrent frame processing races.)
                 if run_inference:
                     _picture, last_yolo_results = await loop.run_in_executor(
-                        _PIPELINE_EXECUTOR, pipeline.process_frame, frame, frame_idx, frame_time
+                        _PIPELINE_EXECUTOR, pipeline.process_frame, frame, frame_idx, frame_time, (item.image if hires and item.image is not frame else None)
                     )
                     await save_tickets(pipeline.ledger_manager.drain_tickets())
                     await mock_violations(frame)
                 await emit(frame, encoding, t_pic)
             elif run_inference:
                 # Stage A of this picture starts now, in its own thread; meanwhile the picture before it is finished here.
-                fut = loop.run_in_executor(_DETECT_EXECUTOR, pipeline.detect_stage, frame, frame_idx, frame_time)
+                fut = loop.run_in_executor(_DETECT_EXECUTOR, pipeline.detect_stage, frame, frame_idx, frame_time, (item.image if hires and item.image is not frame else None))
                 if pending is not None:
                     await finish(pending)
                 pending = {"fut": fut, "frames": [(frame, encoding, t_pic)]}

@@ -138,7 +138,7 @@ def in_trailing_body(vehicle: list, head: tuple, person: list) -> bool:
     return along <= TRAILING_S                                      # +1 = leading edge, -1 = trailing edge
 
 
-def outside_position(vehicle: list, person: list, head: tuple | None = None) -> str | None:
+def outside_position(vehicle: list, person: list, head: tuple | None = None, roof: bool = True) -> str | None:
     """
     'roof' | 'hanging' | 'rear' | None for a person on a bus / jeepney / truck / car.
       roof     feet in the top 35% of the vehicle (or just above it), head at or above its roof line
@@ -155,7 +155,7 @@ def outside_position(vehicle: list, person: list, head: tuple | None = None) -> 
     if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0 or ph < ROOF_MIN_SHARE * vh:
         return None
     foot_x, foot_y = px + pw / 2, py + ph
-    if vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.35 * vh and py <= vy + 0.05 * ph:
+    if roof and vx <= foot_x <= vx + vw and vy - 0.1 * vh <= foot_y <= vy + 0.35 * vh and py <= vy + 0.05 * ph:
         return "roof"                   # also the passenger on the far back step of a jeepney that drives toward the camera: only the upper body shows over the roof
     if ph < 0.2 * vh:
         return None
@@ -173,8 +173,8 @@ def outside_position(vehicle: list, person: list, head: tuple | None = None) -> 
 
 
 ROOF_MIN_SHARE = 0.08      # the smallest person box (share of the vehicle's height) that can be on the roof or the far back step
-REAR_TALL = 0.55          # a person standing on the back step is at least this tall (share of the vehicle's height)
-REAR_FEET = 0.82          # ... with the feet in the bottom 18% of the vehicle's box
+REAR_TALL = 0.5           # a person standing on the back step is at least this tall (share of the vehicle's height)
+REAR_FEET = 0.80          # ... with the feet in the bottom 18% of the vehicle's box
 
 
 # ─── who sits where, without person track numbers ────────────────────────────
@@ -189,6 +189,16 @@ ATTACH_MIN_LOOKS = 2      # ... on at least this many earlier looks
 ATTACH_TRAVEL = 0.2       # the vehicle moved at least this share of its size since then (a pedestrian standing by it is left behind)
 HITS_NEEDED = 6           # looks with a passenger outside ...  (a rider that follows a vehicle closely can fake a few looks, not six)
 HITS_WINDOW_S = 4.0       # ... within this many seconds flag the vehicle
+
+
+def reasonable_box(vehicle: list, person: list) -> bool:
+    """Is this a box a person on the vehicle could really have? A person is a little taller than wide (even half hidden), and next to a
+    jeepney or a bus it is neither a speck nor as wide as the vehicle itself. Boxes that are not are merged people, or a rider behind."""
+    vx, vy, vw, vh = vehicle
+    px, py, pw, ph = person
+    if pw <= 0 or ph <= 0 or vw <= 0 or vh <= 0:
+        return False
+    return 0.04 * vw <= pw <= 0.5 * vw and 0.7 <= ph / pw <= 3.8 and ph <= 0.75 * vh
 
 
 def place_on(vehicle: list, person: list) -> tuple[float, float]:
@@ -214,6 +224,25 @@ def attached_here(memory: dict, t: float, vehicle: list, place: tuple[float, flo
         return False
     age, scx, scy = max(matched)
     return age >= ATTACH_MIN_S and math.hypot(cx - scx, cy - scy) / size >= ATTACH_TRAVEL
+
+
+RIDER_TOL = 0.08          # somebody seen on a bike at this place on the vehicle (within this share of its size) is a rider ...
+RIDER_MEMORY_S = 2.0      # ... for this long, even when the bike is hidden on the next looks (a rider close behind a jeepney)
+
+
+def remember_riders(memory: dict, t: float, vehicle: list, places: list) -> None:
+    """Keep where people who sit on a bike were seen around this vehicle."""
+    from collections import deque
+    seen = memory.setdefault("riders", deque())
+    for place in places:
+        seen.append((t, place))
+    while seen and t - seen[0][0] > RIDER_MEMORY_S:
+        seen.popleft()
+
+
+def was_rider_here(memory: dict, t: float, place: tuple[float, float]) -> bool:
+    """True when somebody was seen on a bike at this place on the vehicle a moment ago."""
+    return any(0 <= t - seen_t <= RIDER_MEMORY_S and math.hypot(place[0] - u, place[1] - v) <= RIDER_TOL for seen_t, (u, v) in memory.get("riders", ()))
 
 
 def remember_places(memory: dict, t: float, vehicle: list, places: list) -> None:

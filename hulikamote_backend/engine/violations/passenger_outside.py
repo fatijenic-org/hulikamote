@@ -34,10 +34,12 @@ from engine import marks
 from engine.violations.base import Violation
 from engine.violations.geometry import STOP_SPEED, heading
 from engine.violations.onboard import (attached_here, claimed_by_motorcycles, claimed_by_small_vehicles, count_hit, in_trailing_body,
-                                       on_body, outside_position, place_on, remember_places)
+                                       on_body, outside_position, place_on, reasonable_box, remember_places, remember_riders,
+                                       was_rider_here)
 
 BED_CLASSES = ("truck", "pickup")
 ROOF_CLASSES = ("bus", "jeepney", "truck", "pickup", "car", "tricycle")      # roof, side or back step (every class but the motorcycle)
+NO_ROOF_CLASSES = ("car", "tricycle")   # nobody rides on a car's or a tricycle's roof: a head over its roof line is the rider of the bike behind it
 OUTSIDE_LABELS = {"roof": "on roof or back", "hanging": "hanging on", "rear": "on back step"}
 KULIGLIG_CLASSES = ("kuliglig",)
 MIN_SPEED_PX_S = 2 * STOP_SPEED       # "while the vehicle is in motion"
@@ -54,7 +56,9 @@ class PassengerOutside(Violation):
     def check_frame(self, pipe, detections):
         mgr = pipe.ledger_manager
         cfg = getattr(pipe, "config", None) or {}
-        people = [d for d in detections if d.cls == "person"]          # tracked or not: a weak person on a vehicle has no stable number
+        everybody = [d for d in detections if d.cls == "person"]       # tracked or not: a weak person on a vehicle has no stable number
+        people = [d for d in everybody if not getattr(d, "on_bike", False)]    # one the people search saw on a bike is a rider
+        riders = [d for d in everybody if getattr(d, "on_bike", False)]
         moto_claimed = claimed_by_motorcycles(detections, people)
         small_claimed = claimed_by_small_vehicles(detections, people)
         for det in detections:
@@ -66,13 +70,18 @@ class PassengerOutside(Violation):
             if head is None or ledger.get_speed() < MIN_SPEED_PX_S:
                 continue                                    # not moving: nothing to judge (and nothing remembered)
 
+            t = ledger.history[-1][0]
+            memory = ledger.onboard
+            remember_riders(memory, t, det.bbox, [place_on(det.bbox, r.bbox) for r in riders])
             found = []                                      # (person box, label)
             for person in people:
                 key = id(person.bbox)
+                if not reasonable_box(det.bbox, person.bbox) or was_rider_here(memory, t, place_on(det.bbox, person.bbox)):
+                    continue                                # not a box a passenger has, or a rider that was just seen on its bike
                 if cls in BED_CLASSES and key not in moto_claimed and in_trailing_body(det.bbox, head, person.bbox):
                     found.append((person.bbox, "passenger"))
                 elif cls in ROOF_CLASSES and key not in small_claimed:
-                    where = outside_position(det.bbox, person.bbox, head)
+                    where = outside_position(det.bbox, person.bbox, head, roof=cls not in NO_ROOF_CLASSES)
                     if where:
                         found.append((person.bbox, OUTSIDE_LABELS[where]))
                 elif cls in KULIGLIG_CLASSES and key not in moto_claimed and on_body(det.bbox, person.bbox):
@@ -88,8 +97,6 @@ class PassengerOutside(Violation):
                 allowed = int(cfg.get("kuliglig_passengers_allowed", 0))
 
             # Only those who keep the same place on the vehicle count: a pedestrian or a rider passing by is left behind.
-            t = ledger.history[-1][0]
-            memory = ledger.onboard
             places = [place_on(det.bbox, box) for box, _ in found]
             counted = [f for f, place in zip(found, places) if attached_here(memory, t, det.bbox, place)]
             remember_places(memory, t, det.bbox, places)

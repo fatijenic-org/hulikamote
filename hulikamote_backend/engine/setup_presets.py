@@ -18,7 +18,7 @@ MAX_NAME = 80
 # What a saved setup keeps (the live setup's keys without the road markings).
 KEYS = (
     "active_violations", "per_violation_configs", "tracker", "plate_model", "plate_method", "plate_format",
-    "ocr_engine", "enhancement", "primary_model", "use_sahi", "flag_sensitivity", "evidence_gap", "blur_privacy",
+    "ocr_engine", "enhancement", "primary_model", "use_sahi", "flag_sensitivity", "evidence_gap", "blur_privacy", "judge_incoming_two_wheelers",
 )
 
 

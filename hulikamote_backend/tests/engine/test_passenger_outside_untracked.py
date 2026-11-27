@@ -45,9 +45,13 @@ def test_a_seated_passenger_seen_through_the_back_is_not_outside():
 
 
 def test_every_class_but_the_motorcycle_is_judged():
-    for cls in ("bus", "jeepney", "truck", "pickup", "car", "tricycle"):
-        ledger = run(cls, lambda i, y: [Det(-1, [1090, y - 40, 40, 80], "person")])
+    for cls in ("bus", "jeepney", "truck", "pickup"):
+        ledger = run(cls, lambda i, y: [Det(-1, [1090, y - 40, 40, 80], "person")])      # on the roof
         assert "passenger_outside" in ledger.violations, cls
+    ledger = run("car", lambda i, y: [Det(-1, [1200, y + 90, 40, 100], "person")], size=(220, 200))      # hanging off the side of a car
+    assert "passenger_outside" in ledger.violations
+    for cls in ("car", "tricycle"):                                      # a head over the roof is the rider of the bike behind it
+        assert "passenger_outside" not in run(cls, lambda i, y: [Det(-1, [1090, y - 40, 40, 80], "person")]).violations, cls
     assert "passenger_outside" not in run("motorcycle", lambda i, y: [Det(-1, [1090, y - 40, 40, 80], "person")]).violations
 
 
@@ -95,6 +99,7 @@ def test_people_near_looks_around_every_vehicle_but_the_motorcycle():
         return np.array([box]), np.array([0.6]), np.array([4])
 
     yolo._people_in = fake
+    yolo._people_session = None                               # no COCO people model in this test: the fake stands in for the people search
     frame = np.zeros((1000, 1000, 3), np.uint8)
     found = [YoloDetection("jeepney", 0.9, [100, 300, 300, 400], "jeepney"), YoloDetection("motorcycle", 0.9, [600, 600, 100, 150], "motorcycle"),
              YoloDetection("car", 0.9, [500, 100, 200, 200], "car"), YoloDetection("person", 0.9, [110, 310, 40, 80], "person")]
@@ -103,3 +108,36 @@ def test_people_near_looks_around_every_vehicle_but_the_motorcycle():
     assert all(p.cls == "person" and p.track_id == -1 for p in people)
     assert len(people) == 1                                   # the known person is not added twice; the car's person is new
     assert seen[0][1] == 300 - int(0.45 * 400)                # the cut starts well above the roof
+
+
+# ─── riders behind or ahead of a vehicle are no passengers ───────────────────
+
+def test_a_person_the_people_search_saw_on_a_bike_is_never_a_passenger():
+    def rider(i, y):
+        d = Det(-1, [1090, y - 40, 40, 80], "person")
+        d.on_bike = True
+        return [d]
+    assert "passenger_outside" not in run("jeepney", rider).violations
+
+
+def test_a_rider_seen_on_its_bike_a_moment_ago_stays_a_rider_when_the_bike_is_hidden():
+    def rider(i, y):
+        d = Det(-1, [1090, y - 40, 40, 80], "person")
+        d.on_bike = i < 22                                   # the bike is seen for a while, then the jeepney's roof hides it
+        return [d]
+    assert "passenger_outside" not in run("jeepney", rider, frames=34).violations
+
+
+def test_on_bike_reads_the_boxes():
+    from yolo_inference import _on_bike
+    assert _on_bike([100, 100, 40, 90], [90, 150, 70, 60])            # seated on it
+    assert not _on_bike([100, 100, 40, 90], [300, 150, 70, 60])       # a bike elsewhere
+
+
+def test_a_box_a_passenger_could_not_have_is_dropped():
+    from engine.violations.onboard import reasonable_box
+    jeepney = [1000, 700, 500, 700]
+    assert reasonable_box(jeepney, [1300, 640, 70, 120])
+    assert not reasonable_box(jeepney, [1100, 600, 400, 150])         # wider than a person, nearly as wide as the vehicle
+    assert not reasonable_box(jeepney, [1100, 600, 100, 40])          # lying flat: not a person
+    assert not reasonable_box(jeepney, [1100, 600, 150, 600])         # as tall as the vehicle itself

@@ -21,6 +21,8 @@ from routers.trimmer import local_only
 from engine.pipeline import DecoupledPipeline
 from yolo_inference import get_inference
 
+_live_previews: dict[str, bytes] = {}        # task id -> newest preview picture (JPEG); kept only for a few tasks
+
 router = APIRouter(prefix="/api/forensic", tags=["Forensic"])
 log = logging.getLogger("root.forensic")
 
@@ -965,6 +967,8 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
         out = SegmentedVideoWriter(output_dir, fps, (width, height), on_part_closed=_save_boxes_part)
 
         releaser = _TicketReleaser(task_id, config, output_dir, written, save_violation)
+        # "Show the live view" of the benchmark: a small picture with the boxes, about twice a second (cheap next to the analysis itself)
+        preview_every = max(1, int(round(fps * 0.5))) if config.get("live_preview") else 0
         frame_idx = 0
         stop_asked = None
         while cap.isOpened():
@@ -998,6 +1002,18 @@ def forensic_processing_task(task_id: str, video_path: Path, output_dir: Path, c
             # Vehicles that left the scene are judged: hand them on, the operator can open their tickets at once
             if frame_idx % RELEASE_EVERY == 0:
                 releaser.submit(pipeline.ledger_manager.drain_tickets())
+
+            if preview_every and frame_idx % preview_every == 0:
+                try:
+                    shown = pipeline.annotate_frame_fast(frame.copy(), detections)
+                    ph, pw = shown.shape[:2]
+                    ok_jpg, jpg = cv2.imencode(".jpg", cv2.resize(shown, (640, max(1, int(ph * 640 / pw)))), [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    if ok_jpg:
+                        if task_id not in _live_previews and len(_live_previews) >= 4:
+                            _live_previews.pop(next(iter(_live_previews)))     # keep only the newest few tasks
+                        _live_previews[task_id] = jpg.tobytes()
+                except Exception:
+                    pass                                                     # a missed picture is not worth stopping the analysis
 
             # Update progress (scale to 90% to leave room for FFmpeg compression)
             if frame_idx % 15 == 0:
@@ -1403,6 +1419,15 @@ async def video_clock(file_path: str, video_start: str = "", trim_start: float =
         raise HTTPException(status_code=400, detail="That does not look like a video file")
     clock = await asyncio.to_thread(resolve_clock, source, start_text=video_start, trim_start=max(trim_start, 0.0))
     return clock.to_dict()
+
+
+@router.get('/preview/{task_id}')
+async def live_preview(task_id: str):
+    """The newest small picture (with boxes) of an analysis started with `live_preview` (the benchmark's live view)."""
+    data = _live_previews.get(task_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="No picture yet")
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
 @router.post('/scene-preview', dependencies=[Depends(local_only)])
