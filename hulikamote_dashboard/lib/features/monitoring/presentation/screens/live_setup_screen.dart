@@ -78,6 +78,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
   bool _applying = false;
   String? _videoHash;             // the fingerprint of the video in use (null: a camera): saved setups and roads are matched on it
   String? _videoName;
+  String _quality = 'fast';       // the picture quality of the live run: 'fast' (speed first) or 'sharp' (a serious plate check, slower)
   bool _saveRun = false;          // "Save this run": every picture and its boxes go to a folder, to replay later like a forensic run
   String _saveDir = '';
   late bool _clearTickets = widget.chooseFrame;   // a fresh start clears the tickets of earlier monitoring; changing the rules of a running feed keeps them
@@ -189,8 +190,10 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     s.enhancement = pick('enhancement', const ['realesrgan', 'lanczos', 'lapsrn', 'none'], s.enhancement);
     if (saved['use_sahi'] is bool) s.useSahi = saved['use_sahi'] as bool;
     if (saved['blur_privacy'] is bool) s.blurPrivacy = saved['blur_privacy'] as bool;
+    if (saved['judge_incoming_two_wheelers'] is bool) s.judgeIncomingTwoWheelers = saved['judge_incoming_two_wheelers'] as bool;
     if (saved['flag_sensitivity'] is num) s.flagSensitivity = (saved['flag_sensitivity'] as num).round().clamp(1, 7);
     if (saved['evidence_gap'] is num) s.evidenceGap = (saved['evidence_gap'] as num).round().clamp(1, 5);
+    if (saved['quality_mode'] == 'sharp' || saved['quality_mode'] == 'fast') _quality = saved['quality_mode'] as String;
 
     final offered = {for (final v in ViolationCatalog.selectable) v.key};
     final per = saved['per_violation_configs'];
@@ -301,6 +304,7 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
     }
     if (!mounted) return;
     final config = _draft.buildConfig(activePlateModel: _models.active('plate'));
+    config['quality_mode'] = _quality;
     if (widget.deferApply) {
       Navigator.of(context).pop(LiveSetupPending(config, _draft.selection.length, clearTickets: _clearTickets));
       return;
@@ -506,6 +510,33 @@ class _LiveSetupScreenState extends State<LiveSetupScreen> {
                   _clearTickets
                       ? 'Every ticket the Live Monitor made before is deleted (the list, the photos). Forensic analyses are not touched.'
                       : 'The tickets from before stay in the list, with the new ones.',
+                  style: Fx.caption(context),
+                ),
+              ]),
+            ),
+            const SizedBox(height: Fx.s12),
+            FxCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('PICTURE QUALITY', style: Fx.label(context)),
+                const SizedBox(height: Fx.s8),
+                SegmentedButton<String>(
+                  key: const ValueKey('live-quality'),
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: 'fast', icon: Icon(Icons.speed, size: 18), label: Text('Faster')),
+                    ButtonSegment(value: 'sharp', icon: Icon(Icons.hd_outlined, size: 18), label: Text('Sharp: check plates seriously')),
+                  ],
+                  selected: {_quality},
+                  onSelectionChanged: _applying ? null : (v) => setState(() => _quality = v.first),
+                ),
+                const SizedBox(height: Fx.s8),
+                Text(
+                  _quality == 'sharp'
+                      ? 'The monitor works on a 1080-pixel picture, the screen and the saved run get a 1920-pixel picture, and the vehicle pictures the plate is '
+                          'read from are cut from the ORIGINAL video picture (4K stays 4K). Plates and far vehicles are much clearer. It is slower: the delay grows. '
+                          'Use it when the plates matter more than the speed.'
+                      : 'The monitor works on a 720-pixel picture and sends a smaller, more compressed picture to the screen. Faster, with a smaller delay, but plates '
+                          'and far vehicles have fewer pixels.',
                   style: Fx.caption(context),
                 ),
               ]),

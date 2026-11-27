@@ -72,6 +72,60 @@ class TrimmerApi {
     return _jobs(r);
   }
 
+  /// The benchmark labeller: every labelled slice becomes its own clip in the benchmark folder, with its events and settings in the
+  /// registry. [slices] are all the labelled slices of the video; the ones with `export: false` are only counted as events.
+  Future<BenchStart> startBenchmark(String path, List<Map<String, dynamic>> slices, {double pad = 3, String? setupId, bool reverseCounterflow = false, bool incomingTwoWheelers = false, int? overloadingMaxRiders}) async {
+    final r = await _call(
+      () => _client.post(_u('/benchmark'), headers: _json, body: jsonEncode({'file_path': path, 'slices': slices, 'pad': pad, 'setup_id': setupId, 'reverse_counterflow': reverseCounterflow, 'incoming_two_wheelers': incomingTwoWheelers, 'overloading_max_riders': overloadingMaxRiders})),
+      'Starting the benchmark export',
+      ok: const {200, 202},
+    );
+    final body = _map(r);
+    return BenchStart(
+      jobs: _jobs(r),
+      skipped: [for (final s in (body['skipped'] as List? ?? const [])) '$s'],
+      folder: '${body['folder'] ?? ''}',
+      needsZone: [for (final s in (body['needs_zone'] as List? ?? const [])) '$s'],
+      clipIds: [for (final s in (body['clip_ids'] as List? ?? const [])) '$s'],
+    );
+  }
+
+  /// What the benchmark folder holds, per violation (clips, events, seconds, plates, clean clips).
+  Future<BenchStats> benchStats() async {
+    final r = await _call(() => _client.get(_u('/benchmark/stats')), 'Counting the benchmark clips');
+    return BenchStats.fromJson(_map(r));
+  }
+
+  /// The saved setups (zones, signs and settings of a camera view), newest first.
+  Future<List<SavedSetup>> setups() async {
+    final r = await _call(() => _client.get(_u('/setups')), 'Reading the saved setups');
+    return [for (final s in (_map(r)['setups'] as List? ?? const [])) SavedSetup.fromJson(Map<String, dynamic>.from(s as Map))];
+  }
+
+  /// Starts the benchmark on these clips (the Benchmark tab shows the progress and the report). Throws with the reason, for example
+  /// when another run is already going.
+  Future<void> startScoring(List<String> clipIds, {String label = 'labeller'}) async {
+    await _call(
+      () => _client.post(Uri.parse('$baseUrl/api/benchmark/run'), headers: _json, body: jsonEncode({'label': label, 'clips': clipIds})),
+      'Starting the benchmark',
+      ok: const {200, 202},
+    );
+  }
+
+  /// What to PLAY for [path]: the video itself when it is light, else a small copy the backend makes once (state 'working' until
+  /// it is 'ready'). The cuts always come from the original.
+  Future<TrimPreview> preview(String path) async {
+    final r = await _call(() => _client.get(_u('/preview', {'file_path': path})), 'Preparing the preview');
+    final b = _map(r);
+    return TrimPreview(
+      state: '${b['state'] ?? 'failed'}',
+      path: '${b['path'] ?? path}',
+      progress: (b['progress'] as num?)?.toDouble() ?? 0,
+      error: '${b['error'] ?? ''}',
+      copy: b['copy'] == true,
+    );
+  }
+
   Future<List<TrimJob>> jobs() async => _jobs(await _call(() => _client.get(_u('/jobs')), 'Checking the exports'));
 
   Future<void> cancel(String jobId) async {

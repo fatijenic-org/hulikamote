@@ -3,19 +3,21 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart';
 
 import '../../domain/time_format.dart';
 import '../../domain/timeline_geometry.dart';
 import '../../domain/trim_session.dart';
 import 'package:hulikamote_dashboard/core/theme/light_mode.dart';
+import 'label_palette.dart' show labelColor;
 
 /// Colours of the clips. Every clip also shows its number, so colour is never the only sign.
 const clipColors = [
   Color(0xFF4C8DFF), Color(0xFF3CCB8C), Color(0xFFFFB454), Color(0xFFB57CFF), Color(0xFFFF6B8B), Color(0xFF3CC4D8),
 ];
 
-Color clipColor(TrimClip c) => clipColors[(c.id - 1) % clipColors.length];
+Color clipColor(TrimClip c) => c.labels.isNotEmpty ? labelColor(c.labels) : clipColors[(c.id - 1) % clipColors.length];
 
 /// The strip under the video. Drag the left or right edge of a clip to trim it, drag its middle to slide it, drag on an
 /// empty spot to make a new clip, click to move the playhead. Locked clips only select. Ctrl + mouse wheel zooms.
@@ -30,10 +32,14 @@ class TrimTimeline extends StatefulWidget {
     this.zoom = 1,
     this.onZoom,
     this.height = 112,
+    this.playing,
   });
 
   final TrimSession session;
   final ValueListenable<double> position;
+
+  /// Whether the video is playing: the red line then glides between the player's position reports instead of jumping.
+  final ValueListenable<bool>? playing;
   final void Function(double seconds) onSeek;
 
   /// Called when the pointer touches the timeline, so the screen takes back the keyboard from any box being typed in.
@@ -67,6 +73,39 @@ class _TrimTimelineState extends State<TrimTimeline> {
   double _anchor = 0;          // create drag: where it began
   double _viewport = 1;
 
+  // Two fingers must never edit: they scroll. A touch screen's second finger, and a trackpad's two-finger swipe, are not a drag on a clip.
+  int _pointers = 0;
+  bool _sawMulti = false;
+  final ValueNotifier<double?> _scrubbing = ValueNotifier<double?>(null);   // while dragging along the ruler the red line follows the pointer
+
+  void _pointerDown(PointerDownEvent e) {
+    _pointers++;
+    if (_pointers == 1) {
+      _sawMulti = false;
+    } else {
+      _sawMulti = true;
+      _drag = _Drag.none;                                   // a second finger came while one was dragging: stop editing
+      _clipId = null;
+    }
+  }
+
+  void _pointerUp(PointerEvent e) {
+    _pointers = math.max(0, _pointers - 1);
+  }
+
+  void _panZoomStart(PointerPanZoomStartEvent e) {
+    _sawMulti = true;
+    _drag = _Drag.none;
+    _clipId = null;
+  }
+
+  /// Two fingers on a trackpad: slide the timeline sideways (when zoomed in) instead of making a clip.
+  void _panZoomUpdate(PointerPanZoomUpdateEvent e) {
+    if (_scroll.hasClients) {
+      _scroll.jumpTo((_scroll.offset - e.panDelta.dx).clamp(0.0, _scroll.position.maxScrollExtent));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -86,6 +125,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
   void dispose() {
     widget.position.removeListener(_followPlayhead);
     _scroll.dispose();
+    _scrubbing.dispose();
     super.dispose();
   }
 
@@ -117,6 +157,10 @@ class _TrimTimelineState extends State<TrimTimeline> {
   }
 
   void _onPanStart(DragStartDetails d) {
+    if (_sawMulti) {
+      _drag = _Drag.none;
+      return;
+    }
     final hit = _down;
     final clip = hit.clip;
     if (_downY < _rulerHeight) {
@@ -144,6 +188,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
   }
 
   void _onPanUpdate(DragUpdateDetails d) {
+    if (_sawMulti) return;
     final t = _geo.tOf(d.localPosition.dx);
     final id = _clipId;
     switch (_drag) {
@@ -162,6 +207,7 @@ class _TrimTimelineState extends State<TrimTimeline> {
         final lo = math.min(_anchor, _snap(t)), hi = math.max(_anchor, _snap(t));
         _s.setRange(clip.id, lo, math.min(_s.duration, math.max(hi, lo + TrimSession.minLength)));
       case _Drag.scrub:
+        _scrubbing.value = t;
         widget.onSeek(t);
       case _Drag.none:
         break;
@@ -169,11 +215,13 @@ class _TrimTimelineState extends State<TrimTimeline> {
   }
 
   void _onPanEnd([Object? _]) {
+    _scrubbing.value = null;
     _drag = _Drag.none;
     _clipId = null;
   }
 
   void _onTapUp(TapUpDetails d) {
+    if (_sawMulti) return;                 // a two-finger touch is not a click
     final hit = _geo.hit(d.localPosition.dx, _s.clips, _s.selected);
     final t = _geo.tOf(d.localPosition.dx);
     if (d.localPosition.dy < _rulerHeight) {
@@ -205,6 +253,11 @@ class _TrimTimelineState extends State<TrimTimeline> {
       _geo = TimelineGeometry(width: width, duration: _s.duration);
       return Listener(
         onPointerSignal: _onPointerSignal,
+        onPointerDown: _pointerDown,
+        onPointerUp: _pointerUp,
+        onPointerCancel: _pointerUp,
+        onPointerPanZoomStart: _panZoomStart,
+        onPointerPanZoomUpdate: _panZoomUpdate,
         child: Scrollbar(
           controller: _scroll,
           child: SingleChildScrollView(
@@ -240,9 +293,13 @@ class _TrimTimelineState extends State<TrimTimeline> {
                         painter: _ClipsPainter(session: _s, geo: _geo, rulerHeight: _rulerHeight, textColor: Theme.of(context).colorScheme.onSurface),
                       ),
                     ),
-                    ValueListenableBuilder<double>(
-                      valueListenable: widget.position,
-                      builder: (context, position, _) => CustomPaint(painter: PlayheadPainter(x: _geo.xOf(position), height: widget.height)),
+                    SmoothPlayhead(
+                      position: widget.position,
+                      playing: widget.playing,
+                      scrubbing: _scrubbing,
+                      duration: _s.duration,
+                      xOf: _geo.xOf,
+                      height: widget.height,
                     ),
                   ]),
                 ),
@@ -369,4 +426,94 @@ class PlayheadPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(PlayheadPainter old) => old.x != x || old.height != height;
+}
+
+/// The red line. The player reports its position a few times a second, which makes a plain line jump; while the video plays this one
+/// keeps moving with every screen frame from the last report (never more than half a second ahead of it, so a stall does not run on),
+/// and while dragging along the ruler it follows the pointer.
+class SmoothPlayhead extends StatefulWidget {
+  const SmoothPlayhead({
+    super.key,
+    required this.position,
+    required this.playing,
+    required this.scrubbing,
+    required this.duration,
+    required this.xOf,
+    required this.height,
+  });
+
+  final ValueListenable<double> position;
+  final ValueListenable<bool>? playing;
+  final ValueListenable<double?> scrubbing;
+  final double duration;
+  final double Function(double seconds) xOf;
+  final double height;
+
+  @override
+  State<SmoothPlayhead> createState() => _SmoothPlayheadState();
+}
+
+class _SmoothPlayheadState extends State<SmoothPlayhead> with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker(_onTick);
+  final _shown = ValueNotifier<double>(0);
+  double _base = 0;                       // the player's last report
+  Duration _baseAt = Duration.zero;       // when it came (ticker time)
+  Duration _now = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _base = _shown.value = widget.position.value;
+    widget.position.addListener(_reported);
+    widget.playing?.addListener(_playingChanged);
+    widget.scrubbing.addListener(_reported);
+    _playingChanged();
+  }
+
+  @override
+  void dispose() {
+    widget.position.removeListener(_reported);
+    widget.playing?.removeListener(_playingChanged);
+    widget.scrubbing.removeListener(_reported);
+    _ticker.dispose();
+    _shown.dispose();
+    super.dispose();
+  }
+
+  void _playingChanged() {
+    if (widget.playing?.value == true) {
+      if (!_ticker.isActive) _ticker.start();
+    } else {
+      _ticker.stop();
+      _now = Duration.zero;
+      _baseAt = Duration.zero;
+      _shown.value = widget.scrubbing.value ?? widget.position.value;
+    }
+  }
+
+  void _reported() {
+    _base = widget.position.value;
+    _baseAt = _now;
+    _shown.value = widget.scrubbing.value ?? _base;
+  }
+
+  void _onTick(Duration elapsed) {
+    _now = elapsed;
+    final scrub = widget.scrubbing.value;
+    if (scrub != null) {
+      _shown.value = scrub;
+      return;
+    }
+    final ahead = (elapsed - _baseAt).inMicroseconds / 1e6;
+    final next = _base + ahead.clamp(0.0, 0.5);
+    _shown.value = widget.duration > 0 ? next.clamp(0.0, widget.duration) : next;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: _shown,
+      builder: (context, t, _) => CustomPaint(painter: PlayheadPainter(x: widget.xOf(t), height: widget.height)),
+    );
+  }
 }

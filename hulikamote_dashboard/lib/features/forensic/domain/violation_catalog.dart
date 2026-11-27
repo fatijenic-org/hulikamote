@@ -335,6 +335,17 @@ class ViolationCatalog {
         selectable: false,
       );
 
+  /// A short number for a violation (its place in [all], from 1): the Live Monitor's boxes show "V3" instead of the long name.
+  static int codeOf(ViolationInfo v) => all.indexOf(v) + 1;
+
+  /// The violation a box label line names ("ILLEGAL PARKING" = key `illegal_parking`), or null for any other line (a plate, a class ...).
+  static ViolationInfo? byBoxLine(String line) {
+    for (final v in all) {
+      if (v.key.replaceAll('_', ' ').toUpperCase() == line) return v;
+    }
+    return null;
+  }
+
   static List<ViolationInfo> get selectable =>
       all.where((v) => v.selectable).toList();
 

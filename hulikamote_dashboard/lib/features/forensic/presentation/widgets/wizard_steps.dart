@@ -696,6 +696,20 @@ class SettingsStep extends StatelessWidget {
                 },
               ),
             ),
+            _row(
+              context,
+              'Judge incoming motorcycles and tricycles too (demo)',
+              'Off (normal): a motorcycle, tricycle or kuliglig that comes toward the camera is left out, because no plate shows from the front, '
+                  'so no ticket could name its owner. On: they are judged like every other vehicle. Use it for a demo only.',
+              Switch(
+                key: const ValueKey('judge-incoming-switch'),
+                value: s.judgeIncomingTwoWheelers,
+                onChanged: (v) {
+                  s.judgeIncomingTwoWheelers = v;
+                  draft.touch();
+                },
+              ),
+            ),
           ]),
         ],
       ),
@@ -728,6 +742,7 @@ class SettingsStep extends StatelessWidget {
         'a photo every ${s.evidenceGap} frame${s.evidenceGap == 1 ? '' : 's'}',
         s.keepInputVideo ? 'video kept' : 'video deleted after',
         s.blurPrivacy ? 'privacy blur on' : 'PRIVACY BLUR OFF',
+        if (s.judgeIncomingTwoWheelers) 'incoming bikes judged (demo)',
       ].join(' · ');
 
   Widget _group(

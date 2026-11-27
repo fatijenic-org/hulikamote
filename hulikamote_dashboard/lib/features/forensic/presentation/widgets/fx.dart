@@ -174,7 +174,12 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    // Scrolls when the space is too short for everything (a narrow side list), instead of overflowing.
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: box.hasBoundedHeight ? box.maxHeight : 0),
+          child: Center(
       child: Padding(
         padding: const EdgeInsets.all(Fx.s24),
         child: ConstrainedBox(
@@ -193,6 +198,9 @@ class EmptyState extends StatelessWidget {
             ],
             if (action != null) ...[const SizedBox(height: Fx.s16), action!],
           ]),
+        ),
+      ),
+    ),
         ),
       ),
     );

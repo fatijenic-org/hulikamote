@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/services/backend_control.dart';
 import '../../../forensic/data/forensic_api.dart';
 import '../../../forensic/domain/forensic_models.dart';
 import '../../../forensic/presentation/widgets/fx.dart';
@@ -41,17 +42,30 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   ReportDetail? _report;
   String? _reportError;
   Timer? _timer;
+  final BackendControl _backend = BackendControl.instance;
 
   @override
   void initState() {
     super.initState();
     _load();
+    if (BackendControl.pollsByDefault) {
+      _backend.watch();                                  // when the backend comes up, the list loads by itself
+      _backend.addListener(_backendChanged);
+    }
   }
 
   @override
   void dispose() {
+    if (BackendControl.pollsByDefault) {
+      _backend.removeListener(_backendChanged);
+      _backend.unwatch();
+    }
     _timer?.cancel();
     super.dispose();
+  }
+
+  void _backendChanged() {
+    if (mounted && _error != null && _backend.state == BackendState.running) _load();
   }
 
   void _toast(String message) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -78,8 +92,9 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
       }
     } on BenchmarkApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Cannot reach the backend: $e');
+    } catch (_) {
+      // the backend is off or not reachable: say so, with the buttons to start it
+      if (mounted) setState(() => _error = 'The backend is not answering. Start it, then the list loads by itself.');
     }
   }
 
@@ -175,13 +190,13 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
   Future<void> _startRun() async {
     final o = _overview;
     if (o == null) return;
-    final label = await showDialog<String>(
+    final choice = await showDialog<({String label, bool preview})>(
       context: context,
       builder: (_) => _RunDialog(clips: o.clips.length, seconds: o.totalSeconds),
     );
-    if (label == null) return;
+    if (choice == null) return;
     try {
-      await _api.startRun(label: label);
+      await _api.startRun(label: choice.label, preview: choice.preview);
       await _load();
     } on BenchmarkApiException catch (e) {
       _toast(e.message);
@@ -240,7 +255,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
               ]),
               const SizedBox(height: Fx.s16),
               if (_error != null) ...[
-                FxBanner(message: _error!, action: TextButton(onPressed: _load, child: const Text('Retry'))),
+                _errorBanner(),
                 const SizedBox(height: Fx.s16),
               ],
               if (o == null && _error == null)
@@ -250,6 +265,45 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// The error with what to do about it: start the backend (when it is off), restart it (when it hangs), or try again.
+  Widget _errorBanner() {
+    return ListenableBuilder(
+      listenable: _backend,
+      builder: (context, _) {
+        final state = _backend.state;
+        final working = state == BackendState.starting || state == BackendState.stopping || _backend.busy;
+        final off = state == BackendState.offline || state == BackendState.failed || state == BackendState.unknown;
+        final note = switch (state) {
+          BackendState.starting => '  The backend is starting: the models load for about a minute.',
+          BackendState.stopping => '  The backend is restarting…',
+          BackendState.failed => '  ${_backend.error ?? 'The backend did not come up.'}',
+          _ => '',
+        };
+        return FxBanner(
+          key: const Key('benchmark-error'),
+          message: '${_error!}$note',
+          action: Wrap(spacing: Fx.s8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            if (working) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            if (off)
+              FilledButton.icon(
+                key: const Key('error-start-backend'),
+                onPressed: working ? null : () => _backend.start(),
+                icon: const Icon(Icons.play_arrow, size: 18),
+                label: const Text('Start the backend'),
+              ),
+            OutlinedButton.icon(
+              key: const Key('error-restart-backend'),
+              onPressed: working ? null : () => _backend.restart(),
+              icon: const Icon(Icons.restart_alt, size: 18),
+              label: const Text('Restart'),
+            ),
+            TextButton(key: const Key('error-retry'), onPressed: _load, child: const Text('Retry')),
+          ]),
+        );
+      },
     );
   }
 
@@ -297,6 +351,10 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> {
         ),
         const SizedBox(height: Fx.s4),
         Text('This is slow: about 10 times the length of the clips. Keep the Live Monitor and other analyses off meanwhile.', style: Fx.caption(context)),
+        if (run.preview && run.taskId != null) ...[
+          const SizedBox(height: Fx.s12),
+          _LiveView(key: ValueKey('live-${run.taskId}'), api: _api, taskId: run.taskId!),
+        ],
       ]),
     );
   }
@@ -436,6 +494,7 @@ class _RunDialog extends StatefulWidget {
 
 class _RunDialogState extends State<_RunDialog> {
   final _label = TextEditingController(text: 'baseline');
+  bool _preview = false;
 
   @override
   void dispose() {
@@ -466,15 +525,79 @@ class _RunDialogState extends State<_RunDialog> {
             isDense: true,
           ),
         ),
+        const SizedBox(height: Fx.s8),
+        SwitchListTile(
+          key: const Key('run-preview'),
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          value: _preview,
+          onChanged: (v) => setState(() => _preview = v),
+          title: const Text('Show the live view while it runs'),
+          subtitle: const Text('A small picture with the boxes, twice a second. Costs very little. Good for showing the panel.'),
+        ),
       ]),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(
           key: const Key('start-run'),
-          onPressed: () => Navigator.pop(context, _label.text.trim().isEmpty ? 'baseline' : _label.text.trim()),
+          onPressed: () => Navigator.pop(context, (label: _label.text.trim().isEmpty ? 'baseline' : _label.text.trim(), preview: _preview)),
           child: const Text('Start'),
         ),
       ],
+    );
+  }
+}
+
+/// The picture of what the analysis sees right now (boxes, zones), refreshed twice a second while a benchmark runs with the live view on.
+class _LiveView extends StatefulWidget {
+  const _LiveView({super.key, required this.api, required this.taskId});
+
+  final BenchmarkApi api;
+  final String taskId;
+
+  @override
+  State<_LiveView> createState() => _LiveViewState();
+}
+
+class _LiveViewState extends State<_LiveView> {
+  Timer? _timer;
+  int _tick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 600), (_) {
+      if (mounted) setState(() => _tick++);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(Fx.radiusSm),
+            child: ColoredBox(
+              color: Colors.black,
+              child: Image.network(
+                widget.api.previewUrl(widget.taskId, _tick),
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => const Center(child: Text('Waiting for the first picture…', style: TextStyle(color: Colors.white70))),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

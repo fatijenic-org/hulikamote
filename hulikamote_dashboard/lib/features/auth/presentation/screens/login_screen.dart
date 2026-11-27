@@ -20,8 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     await Future.delayed(const Duration(milliseconds: 600)); // Mock network delay
     if (!mounted) return;
-    // An officer starts on the Overview; the full view keeps going straight to Video Analysis.
-    context.go(OfficerMode.enabled.value ? '/overview' : '/offline-video');
+    // An officer starts in the Live Monitor; the full view keeps going straight to Video Analysis.
+    context.go(OfficerMode.enabled.value ? '/' : '/offline-video');
   }
 
   @override

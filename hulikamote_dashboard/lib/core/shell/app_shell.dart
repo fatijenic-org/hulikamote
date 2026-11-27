@@ -17,8 +17,11 @@ class AppShell extends StatefulWidget {
   @visibleForTesting
   static int get navCount => _AppShellState._items.length;
 
-  /// Where an officer lands: the Overview page (the last branch, shown first in the menu).
+  /// The Overview page (the last branch, shown first in the developer menu).
   static int get overviewIndex => _AppShellState._items.indexWhere((e) => e.path == '/overview');
+
+  /// Where an officer lands: the Live Monitor (the officer menu has only that, for now).
+  static int get officerHomeIndex => _AppShellState._items.indexWhere((e) => e.path == '/');
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -40,11 +43,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   /// Switching to the officer view while on a developer tab would leave the officer on a page they cannot navigate
-  /// back to, so go to the Overview.
+  /// back to, so go to the Live Monitor.
   void _officerChanged() {
     if (!mounted) return;
     final current = widget.navigationShell.currentIndex;
-    if (OfficerMode.enabled.value && !_items[current].officer) widget.navigationShell.goBranch(AppShell.overviewIndex);
+    if (OfficerMode.enabled.value && !_items[current].officer) widget.navigationShell.goBranch(AppShell.officerHomeIndex);
     setState(() {});
   }
 
@@ -60,8 +63,10 @@ class _AppShellState extends State<AppShell> {
     // Demerit Points, so the officer menu has no Inbox and no Violations.
     _NavItem(icon: Icons.inbox_outlined, label: 'Inbox', path: '/inbox', group: 'Review'),
     _NavItem(icon: Icons.list_alt_outlined, label: 'Violations', path: '/violations', group: 'Review'),
-    _NavItem(icon: Icons.balance_outlined, label: 'Demerit Points', path: '/demerit', officer: true, group: 'Records'),
-    _NavItem(icon: Icons.contact_mail_outlined, label: 'Motorists', path: '/registry', officer: true, group: 'Records'),
+    // Developer view only (for now the officer menu is just the Live Monitor): Demerit Points, Motorists, Appeals and the Overview are kept,
+    // not shown to the officer. Put `officer: true` back on an entry to show it in the officer view again.
+    _NavItem(icon: Icons.balance_outlined, label: 'Demerit Points', path: '/demerit', group: 'Records'),
+    _NavItem(icon: Icons.contact_mail_outlined, label: 'Motorists', path: '/registry', group: 'Records'),
     _NavItem(icon: Icons.model_training, label: 'Models', path: '/model'),
     _NavItem(icon: Icons.settings_outlined, label: 'Settings', path: '/settings'),
     _NavItem(icon: Icons.handyman_outlined, label: 'Utilities', path: '/utilities'),
@@ -73,9 +78,9 @@ class _AppShellState extends State<AppShell> {
         separatorBefore: true, opensOnSelect: _OpenKind.progressReport),
     _NavItem(icon: Icons.school_outlined, label: 'Visualizer', path: '/visualizer', opensOnSelect: _OpenKind.visualizer),
     _NavItem(icon: Icons.photo_library_outlined, label: 'Datasets', path: '/datasets'),
-    _NavItem(icon: Icons.space_dashboard_outlined, label: 'Overview', path: '/overview', officer: true, first: true),
+    _NavItem(icon: Icons.space_dashboard_outlined, label: 'Overview', path: '/overview', first: true),
     _NavItem(icon: Icons.label_outline, label: 'Labeller', path: '/labeller'),
-    _NavItem(icon: Icons.gavel_outlined, label: 'Appeals', path: '/appeals', officer: true, group: 'Records'),
+    _NavItem(icon: Icons.gavel_outlined, label: 'Appeals', path: '/appeals', group: 'Records'),
   ];
 
   Future<void> _openExternal(_OpenKind kind) async {

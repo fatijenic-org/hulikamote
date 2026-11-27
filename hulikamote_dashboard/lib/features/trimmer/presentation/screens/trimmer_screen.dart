@@ -9,10 +9,13 @@ import '../../../forensic/presentation/widgets/fx.dart';
 import '../../domain/time_format.dart';
 import '../../domain/trim_session.dart';
 import '../../domain/trimmer_controller.dart';
+import '../widgets/bench_stats_panel.dart';
 import '../widgets/clip_panel.dart';
+import '../widgets/label_palette.dart';
 import '../widgets/jobs_panel.dart';
 import '../widgets/trim_player.dart';
 import '../widgets/trim_timeline.dart';
+import '../widgets/video_zoom.dart';
 
 Future<String?> pickVideoFile() async => (await FilePicker.pickFile(type: FileType.video))?.path;
 
@@ -115,6 +118,11 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
       _c.clearError();
       _toast(problem);
     }
+    final note = _c.notice;
+    if (note != null) {
+      _c.clearNotice();
+      _toast(note);
+    }
     if (_c.active != _shown) _show(_c.active);
   }
 
@@ -194,6 +202,15 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
     if (s == null || !s.ready) return KeyEventResult.ignored;
     final key = event.logicalKey;
     final shift = HardwareKeyboard.instance.isShiftPressed;
+    final ctrl = HardwareKeyboard.instance.isControlPressed || HardwareKeyboard.instance.isMetaPressed;
+    if (ctrl && key == LogicalKeyboardKey.keyZ) {
+      shift ? _redo(s) : _undo(s);                                      // Ctrl+Z undoes, Ctrl+Shift+Z redoes
+      return KeyEventResult.handled;
+    }
+    if (ctrl && key == LogicalKeyboardKey.keyY) {
+      _redo(s);
+      return KeyEventResult.handled;
+    }
     final one = s.selectedClips.length == 1 ? s.selectedClips.first : null;
     final now = _player.position.value;
     if (key == LogicalKeyboardKey.space) {
@@ -214,12 +231,53 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
       s.setEnd(one.id, now);
     } else if (key == LogicalKeyboardKey.keyL && s.selected.isNotEmpty) {
       s.lockSelected(!s.selectedClips.every((c) => c.locked));
+    } else if (_c.benchmarkMode && key == LogicalKeyboardKey.bracketLeft) {
+      s.markIn = now;                                                  // "[": the slice starts here
+      s.refresh();
+      _toast('Slice starts at ${formatClock(now)}. Press ] where it ends.');
+    } else if (_c.benchmarkMode && key == LogicalKeyboardKey.bracketRight) {
+      final from = s.markIn;
+      if (from == null || now - from < TrimSession.minLength) {
+        _toast('Press [ where the slice starts, then ] where it ends.');
+      } else {
+        s.markIn = null;
+        s.addClip(from, now);                                          // the new slice is selected: pick its label next
+      }
+    } else if (_c.benchmarkMode && key == LogicalKeyboardKey.keyC && !HardwareKeyboard.instance.isControlPressed) {
+      _label(s, cleanLabel);
+    } else if (_c.benchmarkMode && _digit(key) != null && _digit(key)! <= quickLabelKeys.length) {
+      _label(s, quickLabelKeys[_digit(key)! - 1]);
     } else if (key == LogicalKeyboardKey.delete || key == LogicalKeyboardKey.backspace) {
       if (s.removeSelected() == 0 && s.selected.isNotEmpty) _toast('Locked clips stay. Unlock to delete.');
     } else {
       return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
+  }
+
+  void _undo(TrimSession s) {
+    if (!s.undo()) _toast('Nothing to undo.');
+  }
+
+  void _redo(TrimSession s) {
+    if (!s.redo()) _toast('Nothing to redo.');
+  }
+
+  static int? _digit(LogicalKeyboardKey key) {
+    const keys = [
+      LogicalKeyboardKey.digit1, LogicalKeyboardKey.digit2, LogicalKeyboardKey.digit3, LogicalKeyboardKey.digit4, LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6, LogicalKeyboardKey.digit7, LogicalKeyboardKey.digit8, LogicalKeyboardKey.digit9,
+    ];
+    final i = keys.indexOf(key);
+    return i < 0 ? null : i + 1;
+  }
+
+  void _label(TrimSession s, String key) {
+    if (s.selected.isEmpty) {
+      _toast('Click a slice on the timeline first, then pick its label.');
+    } else if (s.toggleLabel(key) == 0) {
+      _toast('Those slices are locked or already exported.');
+    }
   }
 
   @override
@@ -248,7 +306,19 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
   Widget _header(BuildContext context) {
     return Row(children: [
       if (widget.onBack != null) IconButton(tooltip: 'Back to the tools', icon: const Icon(Icons.arrow_back), onPressed: widget.onBack),
-      Text('Video trimmer', style: Fx.title(context)),
+      Text(_c.benchmarkMode ? 'Benchmark labelling' : 'Video trimmer', style: Fx.title(context)),
+      const SizedBox(width: Fx.s12),
+      SegmentedButton<bool>(
+        key: const ValueKey('trimmer-mode'),
+        showSelectedIcon: false,
+        style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        segments: const [
+          ButtonSegment(value: false, icon: Icon(Icons.content_cut, size: 16), label: Text('Trim')),
+          ButtonSegment(value: true, icon: Icon(Icons.label_outline, size: 16), label: Text('Label for benchmark')),
+        ],
+        selected: {_c.benchmarkMode},
+        onSelectionChanged: (v) => _c.setBenchmarkMode(v.first),
+      ),
       const SizedBox(width: Fx.s16),
       Expanded(
         child: SingleChildScrollView(
@@ -302,16 +372,21 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
               child: ColoredBox(
                 color: Colors.black,
                 child: Stack(fit: StackFit.expand, children: [
-                  _player.view(),
+                  VideoZoom(key: ValueKey('zoom-${session.path}'), child: _player.view()),
                   ValueListenableBuilder<double>(
                     valueListenable: _player.duration,
                     builder: (context, length, _) => length > 0 || _player.openedPath != session.path
                         ? const SizedBox.shrink()
-                        : const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: Fx.s12),
-                            Text('Opening the video…', style: TextStyle(color: Colors.white70)),
-                          ])),
+                        : Center(
+                            child: ValueListenableBuilder<String?>(
+                              valueListenable: trimPreviewStatus,
+                              builder: (context, status, _) => Column(mainAxisSize: MainAxisSize.min, children: [
+                                const CircularProgressIndicator(),
+                                const SizedBox(height: Fx.s12),
+                                Text(status ?? 'Opening the video…', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                              ]),
+                            ),
+                          ),
                   ),
                 ]),
               ),
@@ -328,6 +403,7 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
                   key: ValueKey(session.path),
                   session: session,
                   position: _player.position,
+                  playing: _player.playing,
                   onSeek: _seek,
                   onInteract: _focus.requestFocus,
                   zoom: _zoom,
@@ -347,31 +423,82 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
           ),
           const SizedBox(height: Fx.s4),
           Text(
-            'Drag an edge to trim · drag the middle to slide · drag on empty space for a new clip · Space plays · I / O set the start / end · L locks · A adds a clip',
+            _c.benchmarkMode
+                ? 'Drag on the timeline (or press [ and ]) to slice · click a slice, then a label (or press 1-9, C) · Space plays · I / O trim the slice · Delete removes it'
+                : 'Drag an edge to trim · drag the middle to slide · drag on empty space for a new clip · Space plays · I / O set the start / end · L locks · A adds a clip',
             style: Fx.caption(context),
           ),
         ]),
       ),
       const SizedBox(width: Fx.s16),
-      SizedBox(
-        width: 400,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(
-            child: ClipPanel(
-              session: session,
-              controller: _c,
-              position: _player.position,
-              onSeek: _seek,
-              onPlayClip: _playClip,
-              pickFolder: widget.pickFolder,
-              onMessage: _toast,
-            ),
+      SizedBox(width: 300, child: ListenableBuilder(listenable: session, builder: (context, _) => _sidebar(session))),
+    ]);
+  }
+
+  /// The right sidebar: the whole column scrolls, and each part is a dropdown section that can be folded away.
+  Widget _sidebar(TrimSession session) {
+    ClipPanel clipPanel(ClipPart part) => ClipPanel(
+          part: part,
+          session: session,
+          controller: _c,
+          position: _player.position,
+          onSeek: _seek,
+          onPlayClip: _playClip,
+          pickFolder: widget.pickFolder,
+          onMessage: _toast,
+        );
+    return ListView(padding: const EdgeInsets.only(right: 4), children: [
+      if (_c.benchmarkMode)
+        _SideSection(
+          key: const ValueKey('section-labels'),
+          title: 'Labels',
+          subtitle: session.selected.isEmpty ? 'click a slice' : '${session.selected.length} selected',
+          child: ListenableBuilder(
+            listenable: session,
+            builder: (context, _) => session.selected.isEmpty
+                ? Padding(padding: const EdgeInsets.all(Fx.s12), child: Text('Click a slice on the timeline to label it.', style: Fx.caption(context)))
+                : SizedBox(height: 420, child: LabelPanel(session: session, onMessage: _toast)),
           ),
-          const Divider(height: Fx.s24),
-          JobsPanel(controller: _c, reveal: widget.reveal, onMessage: _toast),
-        ]),
+        ),
+      _SideSection(
+        key: const ValueKey('section-slices'),
+        title: 'Slices',
+        subtitle: '${session.clips.length}',
+        child: clipPanel(ClipPart.list),
+      ),
+      _SideSection(
+        key: const ValueKey('section-export'),
+        title: _c.benchmarkMode ? 'Export to benchmark' : 'Export',
+        child: clipPanel(ClipPart.footer),
+      ),
+      if (_c.benchmarkMode)
+        _SideSection(
+          key: const ValueKey('section-stats'),
+          title: 'Benchmark folder',
+          subtitle: _c.stats == null ? null : '${_c.stats!.clips} clips',
+          child: BenchStatsPanel(controller: _c),
+        ),
+      _SideSection(
+        key: const ValueKey('section-jobs'),
+        title: 'Exports',
+        subtitle: _c.activeJobCount > 0 ? '${_c.activeJobCount} running' : null,
+        child: JobsPanel(controller: _c, reveal: widget.reveal, onMessage: _toast),
       ),
     ]);
+  }
+
+  /// One small button that moves the playhead by [seconds] (negative = back). Left / Right arrows move 1 s, with Shift 10 s.
+  Widget _jump(int seconds) {
+    final back = seconds < 0;
+    return Tooltip(
+      message: back ? 'Back ${-seconds} seconds' : 'Forward $seconds seconds',
+      child: TextButton(
+        key: ValueKey('jump-$seconds'),
+        style: TextButton.styleFrom(minimumSize: const Size(34, 34), padding: const EdgeInsets.symmetric(horizontal: 4), visualDensity: VisualDensity.compact),
+        onPressed: () => _seek(_player.position.value + seconds),
+        child: Text(back ? '−${-seconds}' : '+$seconds', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+      ),
+    );
   }
 
   Widget _transport(BuildContext context, TrimSession session) {
@@ -384,8 +511,10 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
           onPressed: _togglePlay,
         ),
       ),
-      IconButton(tooltip: 'Back 1 second (Left arrow)', icon: const Icon(Icons.replay_5), onPressed: () => _seek(_player.position.value - 1)),
-      IconButton(tooltip: 'Forward 1 second (Right arrow)', icon: const Icon(Icons.forward_5), onPressed: () => _seek(_player.position.value + 1)),
+      IconButton(tooltip: 'Undo (Ctrl+Z)', icon: const Icon(Icons.undo), onPressed: session.canUndo ? () => _undo(session) : null),
+      IconButton(tooltip: 'Redo (Ctrl+Y)', icon: const Icon(Icons.redo), onPressed: session.canRedo ? () => _redo(session) : null),
+      for (final step in const [8, 5, 3]) _jump(-step),
+      for (final step in const [3, 5, 8]) _jump(step),
       ValueListenableBuilder<double>(
         valueListenable: _player.position,
         builder: (context, position, _) => Text('${formatClock(position)} / ${formatClock(session.duration)}', style: Fx.plate.copyWith(fontSize: 14)),
@@ -401,5 +530,37 @@ class _TrimmerScreenState extends State<TrimmerScreen> {
       SizedBox(width: 44, child: Text('×${_zoom.toStringAsFixed(_zoom < 10 ? 1 : 0)}', textAlign: TextAlign.center, style: Fx.caption(context))),
       IconButton(tooltip: 'Zoom in (Ctrl + mouse wheel)', icon: const Icon(Icons.zoom_in), onPressed: () => setState(() => _zoom = math.min(80, _zoom * 1.5))),
     ]);
+  }
+}
+
+/// One dropdown part of the sidebar: a title row that folds the part away, open at first.
+class _SideSection extends StatelessWidget {
+  const _SideSection({super.key, required this.title, required this.child, this.subtitle});
+
+  final String title;
+  final String? subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Fx.s8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(border: Border.all(color: Fx.border(context)), borderRadius: BorderRadius.circular(Fx.radiusSm)),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: true,
+            maintainState: true,
+            dense: true,
+            tilePadding: const EdgeInsets.symmetric(horizontal: Fx.s12),
+            childrenPadding: const EdgeInsets.fromLTRB(Fx.s8, 0, Fx.s8, Fx.s8),
+            title: Text(title.toUpperCase(), style: Fx.label(context)),
+            subtitle: subtitle == null ? null : Text(subtitle!, style: Fx.caption(context)),
+            children: [child],
+          ),
+        ),
+      ),
+    );
   }
 }
