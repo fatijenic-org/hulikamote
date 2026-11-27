@@ -50,6 +50,8 @@ class ClipIn(BaseModel):
 class RunIn(BaseModel):
     label: str = "baseline"
     clips: Optional[list[str]] = None
+    folder: Optional[str] = None        # only the clips whose video lies in this folder
+    preview: bool = False               # keep a small live picture of the analysis for the dashboard
     overrides: dict = {}
 
 
@@ -65,7 +67,7 @@ def _fail(e: Exception):
 def _registry() -> registry.Registry:
     f = service.BENCH / "registry.yaml"
     try:
-        return registry.load(f) if f.exists() else registry.Registry(dict(registry.DEFAULTS), [])
+        return registry.load(f, only_folder=registry.CLIP_FOLDER) if f.exists() else registry.Registry(dict(registry.DEFAULTS), [])
     except Exception as e:                                             # a hand-edit slip (bad YAML, unknown violation...)
         raise HTTPException(status_code=400, detail=f"benchmarks/registry.yaml cannot be read: {e}")
 
@@ -146,7 +148,8 @@ def _worker(state: dict, clips: list, defaults: dict, base_url: str, overrides: 
                 return
             state.update(current=c.id, stage="starting")
             meta = runner.probe(c.file)
-            out = runner.run_clip(c, base_url, overrides, log=lambda m: state.update(stage=str(m).strip()))
+            out = runner.run_clip(c, base_url, overrides, log=lambda m: state.update(stage=str(m).strip()),
+                                  on_task=lambda tid: state.update(task_id=tid))
             frame = (meta["width"], meta["height"]) if meta["width"] and meta["height"] else None
             res = scoring.score_clip(c, out["tickets"], defaults["tolerance_s"], meta["seconds"], frame, service.EVIDENCE_DIR)
             results.append(res)
@@ -163,7 +166,7 @@ def _worker(state: dict, clips: list, defaults: dict, base_url: str, overrides: 
 @router.post("/run", status_code=202)
 def start_run(body: RunIn, request: Request):
     reg = _registry()
-    clips = [c for c in reg.clips if body.clips is None or c.id in body.clips]
+    clips = [c for c in reg.clips if (body.clips is None or c.id in body.clips) and (not body.folder or service.in_folder(c.file, body.folder))]
     if not clips:
         raise HTTPException(status_code=400, detail="No clips to score. Add a clip first.")
     blocking = [p for p in registry.problems(reg)
@@ -175,10 +178,11 @@ def start_run(body: RunIn, request: Request):
             raise HTTPException(status_code=409, detail="A benchmark is already running.")
         state = {"id": uuid.uuid4().hex[:12], "status": "running", "label": body.label.strip() or "baseline",
                  "clips_total": len(clips), "clips_done": 0, "current": None, "stage": "", "error": None,
-                 "report": None, "results": [], "started": time.time(), "cancel": False}
+                 "report": None, "results": [], "started": time.time(), "cancel": False, "preview": bool(body.preview), "task_id": None}
         _RUNS[state["id"]] = state
     base_url = str(request.base_url).rstrip("/")
-    threading.Thread(target=_worker, args=(state, clips, reg.defaults, base_url, body.overrides), daemon=True).start()
+    overrides = {**body.overrides, **({"live_preview": True} if body.preview else {})}
+    threading.Thread(target=_worker, args=(state, clips, reg.defaults, base_url, overrides), daemon=True).start()
     return {"run_id": state["id"]}
 
 

@@ -99,9 +99,9 @@ NEEDS: list[Need] = [
          "A truck stays inside the banned road or lane zone for 1 s or more.",
          "Cars, buses and motorcycles in the same zone; a truck outside the zone.",
          "Fixed view where the zone and the vehicle type can be told apart.",
-         "Draw the banned road or lane; the banned types default to truck.",
-         "No clock: for a ban that applies only at certain hours, film those hours. The stock detector may call a "
-         "pickup or van a car. The legal basis still has to be confirmed."),
+         "No zone needed: with none drawn the whole picture is a road closed to trucks. Draw one only to limit the ban to a road or lane.",
+         "With no ban hours set the ban holds all day. With hours set the clip needs a known time of day (else the ticket says \"time not "
+         "confirmed\"). The stock detector may call a pickup or van a car. The legal basis still has to be confirmed."),
     Need("tricycle_on_highway", "Tricycle on a national highway", "zone rule",
          "A tricycle stays inside the highway zone for 1 s or more.",
          "Motorcycles, cars and buses on the same highway; a tricycle on a street outside the zone.",

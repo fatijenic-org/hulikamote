@@ -106,6 +106,9 @@ def clean_events(raw_events) -> list[dict]:
     return out
 
 
+in_folder = registry.in_folder
+
+
 def upsert_clip(raw: dict, clip_id: str, note: str, clean: bool, events) -> dict:
     """Add the clip to the raw registry, or change its note / clean flag / events. Returns the entry."""
     clip_id = safe_name(clip_id, "The clip name")

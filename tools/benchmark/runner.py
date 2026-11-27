@@ -43,7 +43,7 @@ def check_backend(base_url: str, client) -> None:
 
 
 def run_clip(clip: Clip, base_url: str = DEFAULT_URL, overrides: dict | None = None, client=None,
-             poll_s: float = 2.0, timeout_s: float = 7200.0, log=print) -> dict:
+             poll_s: float = 2.0, timeout_s: float = 7200.0, log=print, on_task=None) -> dict:
     """Upload the clip with its saved wizard settings, wait for the analysis, return {task_id, tickets, wall_s}."""
     if client is None:
         import requests as client
@@ -58,6 +58,8 @@ def run_clip(clip: Clip, base_url: str = DEFAULT_URL, overrides: dict | None = N
                         data={"config_json": json.dumps(config)}, timeout=600)
     r.raise_for_status()
     task_id = r.json()["task_id"]
+    if on_task is not None:
+        on_task(task_id)                            # the dashboard asks for this task's live picture
     last = -1
     while True:
         s = client.get(f"{base_url}/api/forensic/status/{task_id}", timeout=30).json()
